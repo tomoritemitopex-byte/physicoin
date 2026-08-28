@@ -17,7 +17,7 @@ const jetbrains = JetBrains_Mono({
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://physicoin.vercel.app";
 const title = "PHYSI — A live student timetable, built together";
 const description =
-  "PHYSI Research Preview — a real-time calendar made by students: share lectures and venues, confirm what's real, stay in sync. The more students who use it, the more accurate it gets. TEST-PHYSI test points only, no cash value. Advisory only.";
+  "PHYSI pilot — a live timetable built by the students who use it. No one knows next week's lectures and venues — especially freshers and JAMBites finding their way around campus. Share what you hear, confirm what you see. The more of us who use it, the more accurate it gets. TEST-PHYSI points have no cash value. Advisory only — always check with your department.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),

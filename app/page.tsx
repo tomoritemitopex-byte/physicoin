@@ -50,12 +50,12 @@ function parseTab(raw: string | null): TabId {
 }
 
 const MODULES = [
-  { title: "Profile", desc: "Your student identity. Programme, level, and nickname — one profile each.", meta: "Ready", dot: "bg-emerald-400" },
-  { title: "Roadmap", desc: "From “someone posted it” to “many confirmed it.” See how a lecture becomes trusted.", meta: "Live", dot: "bg-blue-400" },
-  { title: "Live Timetable", desc: "The shared calendar. Every posted lecture with how many students confirmed it. Advisory — not official.", meta: "Live", dot: "bg-blue-400" },
-  { title: "Daily Check-in", desc: "Pop in once a day. Earn TEST-PHYSI test points (no cash value) — more useful as more students join.", meta: "Live", dot: "bg-emerald-400" },
-  { title: "Confirm", desc: "Simple Yes / No / Skip. When many students agree, a lecture shows as confirmed.", meta: "Live", dot: "bg-blue-400" },
-  { title: "History", desc: "See who posted what, who confirmed, and what changed — all traceable.", meta: "Planned", dot: "bg-white/40" },
+  { idx: "01", title: "Profile", desc: "Your student identity. Programme, level, and nickname — one profile each.", meta: "Ready", dot: "bg-emerald-400" },
+  { idx: "02", title: "Roadmap", desc: "From “someone posted it” to “many confirmed it.” See how a lecture becomes trusted.", meta: "Live", dot: "bg-blue-400" },
+  { idx: "03", title: "Live Timetable", desc: "The shared calendar. Every posted lecture with how many students confirmed it. Advisory — not official.", meta: "Live", dot: "bg-blue-400" },
+  { idx: "04", title: "Daily Check-in", desc: "Pop in once a day. Earn TEST-PHYSI test points (no cash value) — more useful as more students join.", meta: "Live", dot: "bg-emerald-400" },
+  { idx: "05", title: "Confirm", desc: "Simple Yes / No / Skip. When many students agree, a lecture shows as confirmed.", meta: "Live", dot: "bg-blue-400" },
+  { idx: "06", title: "History", desc: "See who posted what, who confirmed, and what changed — all traceable.", meta: "Planned", dot: "bg-white/40" },
 ];
 
 function AuthBadge() {
@@ -260,8 +260,8 @@ function HomeInner() {
           <div className="flex items-center gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-[9px] bg-white text-[10px] font-black tracking-[-0.04em] text-slate-900">PHYSI</div>
             <div className="hidden sm:block leading-none">
-              <p className="font-mono text-[10.5px] font-medium uppercase tracking-[0.14em] text-slate-500">Research Preview</p>
-              <p className="mt-0.5 text-[12.5px] font-medium tracking-tight text-slate-300">Not canonical · TEST-PHYSI, no value</p>
+              <p className="font-mono text-[10.5px] font-medium uppercase tracking-[0.14em] text-slate-500">Pilot — testing now</p>
+              <p className="mt-0.5 text-[12.5px] font-medium tracking-tight text-slate-300">Not official · TEST-PHYSI, no cash value</p>
             </div>
             <span className="hidden lg:inline-flex items-center gap-1.5 rounded-full border border-white/[0.06] bg-white/[0.03] px-2.5 py-1 font-mono text-[10.5px] font-medium tracking-wide text-slate-500">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400/70" /> Preview
@@ -333,8 +333,8 @@ function HomeInner() {
                 <div className="max-w-[720px]">
                   <div className="inline-flex items-center gap-2 rounded-full border border-white/[0.06] bg-white/[0.03] px-3 py-1">
                     <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
-                    <span className="font-mono text-[10.5px] font-medium uppercase tracking-[0.12em] text-slate-400">Research Preview</span>
-                    <span className="hidden sm:inline font-mono text-[10.5px] text-slate-600">— Not canonical · TEST-PHYSI, no value</span>
+                    <span className="font-mono text-[10.5px] font-medium uppercase tracking-[0.12em] text-slate-400">Pilot — testing now</span>
+                    <span className="hidden sm:inline font-mono text-[10.5px] text-slate-600">— Not official · TEST-PHYSI, no cash value</span>
                   </div>
 
                   <h1 className="mt-6 text-[34px] font-[720] leading-[0.94] tracking-[-0.035em] text-white sm:text-[40px] lg:text-[48px]" style={{ fontFeatureSettings: '"cv01","ss03"' }}>
@@ -395,16 +395,20 @@ function HomeInner() {
                     Official timetables are slow. WhatsApp groups are noisy. PHYSI sits in the middle — fast like a group chat, but every event earns trust through verification.
                   </p>
                 </div>
-                <div className="mt-7 grid gap-5 sm:grid-cols-3">
+                <div className="mt-7 grid gap-4 sm:grid-cols-3">
                   {[
-                    { Icon: Radio, title: "Real-time, not official", desc: "Anyone in the pilot can pitch an event — guest lecture, room change, workshop. It appears instantly in the advisory feed.", accent: "text-emerald-400" },
-                    { Icon: Users, title: "Verified by the cohort", desc: "Classmates vote YES / NO / Skip. When consensus tips, the event gets a green-check. Only those who were there decide.", accent: "text-blue-400" },
-                    { Icon: BadgeCheck, title: "Advisory, not canonical", desc: "Green-check is the strongest signal we have — but always check the official source before you travel.", accent: "text-slate-300" },
+                    { idx: "§01", Icon: Radio, title: "Real-time, not official", desc: "Anyone in the pilot can pitch an event — guest lecture, room change, workshop. It appears instantly in the advisory feed.", accent: "text-emerald-400" },
+                    { idx: "§02", Icon: Users, title: "Verified by the cohort", desc: "Classmates vote YES / NO / Skip. When consensus tips, the event gets a green-check. Only those who were there decide.", accent: "text-blue-400" },
+                    { idx: "§03", Icon: BadgeCheck, title: "Advisory, not canonical", desc: "Green-check is the strongest signal we have — but always check the official source before you travel.", accent: "text-slate-300" },
                   ].map((c) => (
-                    <div key={c.title} className="rounded-module border border-white/[0.06] bg-white/[0.03] p-6 shadow-soft" style={{ borderRadius: "var(--radius-module)" }}>
-                      <c.Icon size={18} strokeWidth={1.8} className={c.accent} />
+                    <div key={c.title} className="physi-index-card group">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-mono text-[10px] font-bold tracking-[0.14em] text-slate-500">{c.idx}</span>
+                        <c.Icon size={14} strokeWidth={1.8} className={c.accent} />
+                      </div>
                       <h3 className="mt-3 text-[14px] font-semibold tracking-tight text-white">{c.title}</h3>
-                      <p className="mt-2 text-[13.5px] leading-6 text-slate-400">{c.desc}</p>
+                      <div className="physi-rule my-3" />
+                      <p className="text-[13.5px] leading-6 text-slate-400">{c.desc}</p>
                     </div>
                   ))}
                 </div>
@@ -454,21 +458,22 @@ function HomeInner() {
                     </div>
                   </div>
 
-                  <div className="space-y-6">
-                    <div className="rounded-card border border-white/[0.07] bg-white/[0.03] p-6 shadow-card" style={{ borderRadius: "var(--radius-card)" }}>
-                      <div className="flex items-center gap-4">
-                        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-[10px] font-black tracking-tighter text-slate-900">PHYSI</div>
+                  <div className="space-y-4">
+                    <div className="physi-index-card">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white text-[10px] font-black tracking-tighter text-slate-900">PHYSI</div>
                         <div>
-                          <p className="text-[14px] font-semibold tracking-tight text-white">PHYSI Protocol</p>
-                          <p className="font-mono text-xs tracking-wide text-slate-500">Event-driven · Green-check canonical · Advisory</p>
+                          <p className="text-[13px] font-semibold tracking-tight text-white">PHYSI Protocol</p>
+                          <p className="font-mono text-[10px] tracking-wide text-slate-500">Event-driven · Green-check canonical · Advisory</p>
                         </div>
                       </div>
-                      <p className="mt-4 text-[13px] leading-5 text-slate-400">
+                      <div className="physi-rule my-3" />
+                      <p className="text-[13px] leading-5 text-slate-400">
                         Every event is traceable — who pitched it, who verified it, when consensus was reached. The audit trail is the feature.
                       </p>
                     </div>
 
-                    <div id="profile" className="scroll-mt-28 rounded-card border border-white/[0.07] bg-white/[0.03] p-6 lg:p-7 shadow-card" style={{ borderRadius: "var(--radius-card)" }}>
+                    <div id="profile" className="physi-panel scroll-mt-28 p-6 lg:p-7">
                       <div className="mb-5 flex items-center justify-between gap-3">
                         <p className="font-mono text-[10.5px] font-medium uppercase tracking-[0.14em] text-slate-500">Pilot access · Login</p>
                         <span className="font-mono text-[10.5px] tracking-wide text-slate-600">Programme · Level · Handle</span>
@@ -482,22 +487,23 @@ function HomeInner() {
                 </div>
               </section>
 
-              {/* ── MODULES ── */}
+              {/* ── MODULES — bespoke PHYSI index strip ── */}
               <section>
                 <div className="flex items-baseline justify-between gap-4">
-                  <h2 className="font-mono text-[10.5px] font-medium uppercase tracking-[0.14em] text-slate-500">Modules</h2>
-                  <span className="font-mono text-[11px] tracking-wide text-slate-600">6 · 3 × 2</span>
+                  <h2 className="font-mono text-[10.5px] font-medium uppercase tracking-[0.14em] text-slate-500">Modules · PHYSI index</h2>
+                  <span className="font-mono text-[11px] tracking-wide text-slate-600">06 · rule + mono</span>
                 </div>
-                <div className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {MODULES.map((mod) => (
-                    <div key={mod.title} className="rounded-module group border border-white/[0.06] bg-white/[0.03] p-6 shadow-soft transition hover:border-white/[0.09] hover:bg-white/[0.05]" style={{ borderRadius: "var(--radius-module)" }}>
+                    <div key={mod.title} className="physi-index-card group transition hover:border-white/10">
                       <div className="flex items-center justify-between gap-3">
-                        <h3 className="text-[14px] font-semibold tracking-tight text-white">{mod.title}</h3>
-                        <span className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.06] bg-white/[0.04] px-2.5 py-1 font-mono text-[10.5px] font-medium tracking-wide text-slate-400">
+                        <span className="font-mono text-[11px] font-bold tracking-[0.12em] text-slate-500">{mod.idx} — {mod.title}</span>
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.06] bg-white/[0.04] px-2 py-1 font-mono text-[10px] font-medium tracking-wide text-slate-400">
                           <span className={`h-1.5 w-1.5 rounded-full ${mod.dot}`} /> {mod.meta}
                         </span>
                       </div>
-                      <p className="mt-3 text-[13.5px] leading-6 text-slate-400">{mod.desc}</p>
+                      <div className="physi-rule my-3" />
+                      <p className="text-[13.5px] leading-6 text-slate-400">{mod.desc}</p>
                     </div>
                   ))}
                 </div>
@@ -575,7 +581,7 @@ function HomeInner() {
 
       <footer className="mx-auto max-w-[1240px] px-6 pb-24 pt-8 lg:px-8 lg:pb-10">
         <div className="border-t border-white/[0.06] pt-6 text-center font-mono text-[11px] leading-6 tracking-wide text-slate-600">
-          PHYSI · Research Preview · Not canonical · TEST-PHYSI — test points only, no cash value · Advisory — always confirm official venues with your department
+          PHYSI · Pilot — testing now · Not official · TEST-PHYSI — test points only, no cash value · Advisory — always confirm official venues with your department
         </div>
       </footer>
     </div>

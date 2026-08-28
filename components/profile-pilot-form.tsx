@@ -80,7 +80,7 @@ export function ProfilePilotForm() {
           <p className="mt-1 text-[12.5px] leading-5 text-slate-500">30 seconds — programme, level, and a nickname. That&apos;s it. <span className="text-slate-400">TEST-PHYSI points have no cash value.</span></p>
         </div>
         <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 font-mono text-[11px] font-medium tracking-wide text-slate-500">
-          Research Preview · Advisory only
+          Pilot · Not official · Advisory only
         </span>
       </div>
 

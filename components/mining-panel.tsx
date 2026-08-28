@@ -282,36 +282,39 @@ export function MiningPanel({ initialNickname = "" }: { initialNickname?: string
 
   return (
     <section
-      className={`relative overflow-hidden rounded-card border border-white/10 bg-white/[0.06] p-6 shadow-2xl backdrop-blur ${shake ? "animate-[shake_0.42s_ease]" : ""}`}
+      className={`physi-mint ${shake ? "animate-[shake_0.42s_ease]" : ""}`}
     >
-      {/* ambient glow */}
-      <div className="pointer-events-none absolute -top-28 -right-28 h-72 w-72 rounded-full bg-amber-400/10 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-24 -left-24 h-64 w-64 rounded-full bg-sky-500/10 blur-3xl" />
-
-      {/* header */}
-      <div className="relative flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.32em] text-amber-300">Daily check-in</p>
-          <h3 className="mt-2 flex items-center gap-2 text-2xl font-black text-white">
-            Daily check-in
-            <span className="rounded-full bg-white px-2.5 py-0.5 text-[10px] font-black tracking-widest text-slate-900">DAILY</span>
-          </h3>
-          <p className="mt-1 text-sm text-slate-400">Daily bonus · 24h cooldown · Cap: ~12 / day · Points have no cash value</p>
+      {/* PHYSI mint head — bespoke vault index, not generic rounded-card header */}
+      <div className="flex items-center justify-between gap-3 border-b border-amber-400/10 bg-white/[0.02] px-5 py-4 sm:px-6">
+        <div className="flex items-center gap-3">
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-amber-400/20 bg-amber-400/10 font-mono text-[10px] font-bold text-amber-300">◈</span>
+          <div>
+            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-300">PHYSI · Vault — Daily Check-in</p>
+            <h3 className="text-[16px] font-semibold tracking-tight text-white">Daily check-in <span className="font-mono text-[10px] font-bold tracking-widest text-slate-500">/ 24H · 10 base · × level</span></h3>
+          </div>
         </div>
-        <div className="flex flex-col items-end gap-2">
+        <div className="hidden sm:flex flex-col items-end gap-1.5">
           <span
-            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-black tracking-wide ${showGreenPulse ? "border-emerald-400/30 bg-emerald-400/15 text-emerald-300" : remainingMs > 0 ? "border-amber-400/25 bg-amber-400/10 text-amber-300" : "border-white/10 bg-white/5 text-slate-300"}`}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[11px] font-semibold tracking-wide ${showGreenPulse ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-300" : remainingMs > 0 ? "border-amber-400/20 bg-amber-400/10 text-amber-300" : "border-white/10 bg-white/5 text-slate-400"}`}
           >
-            <span className={`h-2 w-2 rounded-full ${showGreenPulse ? "bg-emerald-400 animate-pulse" : remainingMs > 0 ? "bg-amber-400" : "bg-slate-400"}`} />
-            {showGreenPulse ? "Ready to check in" : remainingMs > 0 ? "Cooling down" : hasActiveCohort ? "Enter nickname" : "Cohort empty — be first"}
+            <span className={`h-1.5 w-1.5 rounded-full ${showGreenPulse ? "bg-emerald-400 animate-pulse" : remainingMs > 0 ? "bg-amber-400" : "bg-slate-500"}`} />
+            {showGreenPulse ? "Ready to check in" : remainingMs > 0 ? "Cooling down" : hasActiveCohort ? "Enter nickname" : "Cohort empty"}
           </span>
           {data && (
-            <span className={`inline-flex items-center gap-1.5 rounded-full border bg-gradient-to-br px-3 py-1 text-xs font-black ${tier.cls}`}>
-              <span className="text-[10px]">{tier.icon}</span> {tier.label} · {authorityMultiplier}
+            <span className={`inline-flex items-center gap-1 rounded-full border bg-gradient-to-br px-2.5 py-1 font-mono text-[11px] font-bold ${tier.cls}`}>
+              {tier.icon} {tier.label} · {authorityMultiplier}
             </span>
           )}
         </div>
       </div>
+      <div className="px-5 py-5 sm:px-6">
+      <div className="flex sm:hidden items-center gap-2">
+        <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[11px] font-semibold ${showGreenPulse ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-300" : remainingMs > 0 ? "border-amber-400/20 bg-amber-400/10 text-amber-300" : "border-white/10 bg-white/5 text-slate-400"}`}>
+          <span className={`h-1.5 w-1.5 rounded-full ${showGreenPulse ? "bg-emerald-400 animate-pulse" : remainingMs > 0 ? "bg-amber-400" : "bg-slate-500"}`} />{showGreenPulse ? "Ready" : remainingMs > 0 ? "Cooling" : "Enter nickname"}
+        </span>
+        {data && <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 font-mono text-[11px] font-bold ${tier.cls}`}>{tier.icon} {tier.label}</span>}
+      </div>
+      <p className="mt-3 font-mono text-[11px] tracking-wide text-slate-500 sm:mt-0">Daily bonus · 24h cooldown · Cap ~12/day · Points have no cash value</p>
 
       {/* auth-aware nickname: when global auth exists, no duplicate input — show pill */}
       {authedNick ? (
@@ -348,45 +351,45 @@ export function MiningPanel({ initialNickname = "" }: { initialNickname?: string
         </div>
       )}
 
-      {/* hero: balance + coin */}
-      <div className="relative mt-6 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-        {/* balance card */}
-        <div className="rounded-card border border-white/10 bg-slate-900/70 p-5 backdrop-blur">
+      {/* hero: balance + mint — bespoke vault ledger */}
+      <div className="mt-6 grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+        {/* balance ledger */}
+        <div className="rounded-[16px] border border-white/6 bg-white/[0.02] p-5">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Balance</p>
-            <span className="rounded-full bg-white/5 px-2.5 py-1 text-[11px] font-bold text-slate-300">PHYSI</span>
+            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Balance — PHYSI vault</p>
+            <span className="rounded-full border border-white/8 bg-white/[0.03] px-2.5 py-1 font-mono text-[10px] font-semibold tracking-wide text-slate-400">PHYSI</span>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <p className="text-4xl font-black tabular-nums tracking-tight text-white">
+            <p className="font-mono text-[34px] font-bold tabular-nums tracking-tight text-white">
               {displayBalance === "--" ? "--" : displayBalance}
             </p>
-            <span className="text-sm font-black text-amber-300">PHYSI</span>
+            <span className="font-mono text-xs font-bold tracking-wide text-amber-300">PHYSI</span>
           </div>
-          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
+          <div className="mt-3 h-1 overflow-hidden rounded-full bg-white/8">
             <div
               className="h-full rounded-full bg-gradient-to-r from-amber-300 to-orange-500 transition-all duration-700"
               style={{ width: `${data ? Math.min(100, (data.balance / 500) * 100) : 0}%` }}
             />
           </div>
-          <p className="mt-2 text-xs font-medium text-slate-500">
+          <p className="mt-2 font-mono text-[11px] tracking-wide text-slate-500">
             {data ? `${data.history.length} taps · next +${expectedReward} PHYSI` : "Load profile to see balance ticker"}
           </p>
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Level</p>
-              <p className="mt-1 text-lg font-black text-white">{authorityMultiplier}</p>
-              <p className="text-xs font-semibold text-sky-300">bonus</p>
+          <div className="mt-4 physi-ledger-table">
+            <div className="physi-ledger-cell">
+              <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Level</p>
+              <p className="mt-1 font-mono text-[16px] font-bold text-white">{authorityMultiplier}</p>
+              <p className="font-mono text-[11px] font-medium text-sky-300">bonus</p>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Next Reward</p>
-              <p className="mt-1 text-lg font-black text-white">{expectedReward}</p>
-              <p className="text-xs font-semibold text-emerald-300">Daily bonus</p>
+            <div className="physi-ledger-cell">
+              <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Next Reward</p>
+              <p className="mt-1 font-mono text-[16px] font-bold text-white">{expectedReward}</p>
+              <p className="font-mono text-[11px] font-medium text-emerald-300">Daily bonus</p>
             </div>
           </div>
         </div>
 
-        {/* coin + ring */}
-        <div className="flex flex-col items-center justify-center rounded-card border border-white/10 bg-gradient-to-br from-slate-900/80 to-slate-950/80 p-6">
+        {/* mint ring — bespoke, not generic card */}
+        <div className="flex flex-col items-center justify-center rounded-[16px] border border-amber-400/10 bg-gradient-to-br from-white/[0.03] to-transparent p-6">
           <div className="relative flex h-[170px] w-[170px] items-center justify-center">
             {/* cooldown ring */}
             <svg className="absolute inset-0 h-full w-full -rotate-90" viewBox="0 0 160 160">
@@ -557,6 +560,7 @@ export function MiningPanel({ initialNickname = "" }: { initialNickname?: string
         @keyframes floatUp { 0%{transform:translateY(0);opacity:1} 100%{transform:translateY(-18px);opacity:0} }
         @keyframes shake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-4px)} 40%{transform:translateX(4px)} 60%{transform:translateX(-3px)} 80%{transform:translateX(3px)} }
       `}</style>
+      </div>
     </section>
   );
 }

@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 
 export const runtime = "edge";
-export const alt = "PHYSI — Event truth, verified by the cohort";
+export const alt = "PHYSI — A live timetable, built by the students who use it";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -38,8 +38,8 @@ export default function OpengraphImage() {
             PHYSI
           </div>
           <div style={{ display: "flex", flexDirection: "column" }}>
-            <span style={{ fontSize: 13, letterSpacing: 4, color: "#64748b", fontWeight: 600 }}>RESEARCH PREVIEW</span>
-            <span style={{ fontSize: 14, color: "#94a3b8" }}>FUHSI Lab · Not canonical</span>
+            <span style={{ fontSize: 13, letterSpacing: 4, color: "#64748b", fontWeight: 600 }}>PILOT — TESTING NOW</span>
+            <span style={{ fontSize: 14, color: "#94a3b8" }}>Not official · TEST-PHYSI, no cash value</span>
           </div>
           <div
             style={{
@@ -62,13 +62,13 @@ export default function OpengraphImage() {
 
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <div style={{ fontSize: 64, fontWeight: 800, color: "white", lineHeight: 1, letterSpacing: -2 }}>
-            Event truth,
+            A live timetable,
           </div>
           <div style={{ fontSize: 64, fontWeight: 800, color: "#94a3b8", lineHeight: 1, letterSpacing: -2 }}>
-            verified by the cohort.
+            built by the students who use it.
           </div>
           <div style={{ fontSize: 20, color: "#64748b", maxWidth: 640, marginTop: 8 }}>
-            Pitch events, verify, stay in sync. Advisory by design; green-check is canonical.
+            Share what you hear, confirm what you see. The more of us who use it, the more accurate it gets.
           </div>
         </div>
 
@@ -78,7 +78,7 @@ export default function OpengraphImage() {
           <span>× LEVEL</span>
           <span>·</span>
           <span>24H</span>
-          <span style={{ marginLeft: "auto", letterSpacing: 1 }}>PHYSI · FUHSI Lab Pilot</span>
+          <span style={{ marginLeft: "auto", letterSpacing: 1 }}>PHYSI · Pilot · Advisory only</span>
         </div>
       </div>
     ),
