@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useAuth } from "@/components/auth-context";
 
 type MiningHistory = {
   id: string;
@@ -75,7 +76,13 @@ function useCountUp(target: number, duration = 900) {
 }
 
 export function MiningPanel({ initialNickname = "" }: { initialNickname?: string }) {
-  const [nickname, setNickname] = useState(initialNickname);
+  const { auth } = useAuth();
+  const authedNick = (auth?.nickname ?? "").trim();
+  const [localNickname, setLocalNickname] = useState(initialNickname);
+  const effectiveNickname = (authedNick || localNickname.trim());
+  // keep legacy nickname alias for internal fetch handlers
+  const nickname = effectiveNickname;
+  const setNickname = setLocalNickname;
   const [data, setData] = useState<MiningState | null>(null);
   const [remainingMs, setRemainingMs] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -160,9 +167,16 @@ export function MiningPanel({ initialNickname = "" }: { initialNickname?: string
     };
   }, [remainingMs, data?.canMine, nickname, fetchMining]);
 
+  // Auto-load when global auth changes; fallback to initialNickname
   useEffect(() => {
-    if (initialNickname.trim()) fetchMining(initialNickname.trim());
-  }, [initialNickname, fetchMining]);
+    const nick = authedNick || initialNickname.trim();
+    if (nick) fetchMining(nick);
+    else {
+      setData(null);
+      setRemainingMs(0);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authedNick, initialNickname]);
 
   async function handleMine() {
     if (!nickname.trim()) {
@@ -285,26 +299,40 @@ export function MiningPanel({ initialNickname = "" }: { initialNickname?: string
         </div>
       </div>
 
-      {/* nickname */}
-      <div className="relative mt-6 flex gap-3">
-        <div className="relative flex-1">
-          <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500">@</span>
-          <input
-            value={nickname}
-            onChange={(e) => setNickname(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && fetchMining(nickname)}
-            placeholder="Enter nickname"
-            className="w-full rounded-2xl border border-white/10 bg-slate-950/70 py-3 pl-8 pr-4 text-sm font-semibold text-white outline-none placeholder:text-slate-500 focus:border-amber-400/40 focus:bg-slate-950"
-          />
+      {/* auth-aware nickname: when global auth exists, no duplicate input — show pill */}
+      {authedNick ? (
+        <div className="relative mt-6 flex flex-wrap items-center gap-3 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3">
+          <span className="inline-flex items-center gap-2 rounded-full bg-emerald-400 px-3 py-1 text-xs font-black text-slate-900">◆ @{authedNick}</span>
+          <span className="text-sm font-semibold text-emerald-100">{auth?.fullName ?? authedNick} · mining as global profile</span>
+          <button
+            onClick={() => fetchMining(authedNick)}
+            disabled={fetching}
+            className="ml-auto rounded-2xl bg-white px-5 py-2 text-sm font-black text-slate-950 shadow disabled:opacity-50"
+          >
+            {fetching ? "…" : "↻ Refresh"}
+          </button>
         </div>
-        <button
-          onClick={() => fetchMining(nickname)}
-          disabled={fetching || !nickname.trim()}
-          className="rounded-2xl bg-white px-5 py-3 text-sm font-black text-slate-950 shadow-lg shadow-black/20 transition hover:bg-slate-100 active:scale-[0.98] disabled:opacity-40"
-        >
-          {fetching ? "…" : "Load"}
-        </button>
-      </div>
+      ) : (
+        <div className="relative mt-6 flex gap-3">
+          <div className="relative flex-1">
+            <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500">@</span>
+            <input
+              value={localNickname}
+              onChange={(e) => setLocalNickname(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && fetchMining(localNickname)}
+              placeholder="Enter nickname (or create profile above)"
+              className="w-full rounded-2xl border border-white/10 bg-slate-950/70 py-3 pl-8 pr-4 text-sm font-semibold text-white outline-none placeholder:text-slate-500 focus:border-amber-400/40 focus:bg-slate-950"
+            />
+          </div>
+          <button
+            onClick={() => fetchMining(localNickname)}
+            disabled={fetching || !localNickname.trim()}
+            className="rounded-2xl bg-white px-5 py-3 text-sm font-black text-slate-950 shadow-lg shadow-black/20 transition hover:bg-slate-100 active:scale-[0.98] disabled:opacity-40"
+          >
+            {fetching ? "…" : "Load"}
+          </button>
+        </div>
+      )}
 
       {/* hero: balance + coin */}
       <div className="relative mt-6 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">

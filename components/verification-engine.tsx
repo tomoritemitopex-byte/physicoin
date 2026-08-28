@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useAuth } from "@/components/auth-context";
 
 type PhysiEvent = {
   id: string;
@@ -16,41 +17,32 @@ type PhysiEvent = {
 
 type Vote = "YES" | "NO" | "CANCEL";
 
-const FALLBACK_POOL: PhysiEvent[] = [
-  { id: "evt_1", title: "FUHSI Clinical Skills Workshop", venue: "Skills Lab A", event_date: "2026-09-02", event_time: "10:00", scope_type: "programme", scope_value: "Medicine" },
-  { id: "evt_2", title: "Anatomy Dept Seminar – Neuroanatomy", venue: "LT 1", event_date: "2026-09-03", event_time: "13:00", scope_type: "faculty", scope_value: "FUHSI" },
-  { id: "evt_3", title: "Nursing Council Accreditation Visit", venue: "Admin Block", event_date: "2026-09-04", event_time: "09:00", scope_type: "university", scope_value: "FUHSI" },
-  { id: "evt_4", title: "Pharmacology Quiz Series", venue: "LT 3", event_date: "2026-09-05", event_time: "15:30", scope_type: "personal", scope_value: null },
-];
-
 export function VerificationEngine() {
+  const { auth } = useAuth();
+  const nickname = auth?.nickname ?? "";
+
   const [events, setEvents] = useState<PhysiEvent[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(true);
   const [active, setActive] = useState<PhysiEvent | null>(null);
   const [open, setOpen] = useState(false);
-  const [nickname, setNickname] = useState("");
   const [busy, setBusy] = useState<Vote | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"success" | "error" | "info">("info");
   const [toast, setToast] = useState<{ type: "success" | "error" | "info"; msg: string } | null>(null);
   const [stats, setStats] = useState({ verified: 0, yes: 0, no: 0 });
-  const [autoOn, setAutoOn] = useState(true);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchEvents = useCallback(async () => {
     setLoadingEvents(true);
     try {
       const res = await fetch("/api/events", { cache: "no-store" });
       const data = await res.json();
-      if (res.ok && data.ok && Array.isArray(data.events) && data.events.length > 0) {
+      if (res.ok && data.ok && Array.isArray(data.events)) {
         setEvents(data.events);
-      } else if (data.events?.length === 0) {
-        setEvents(FALLBACK_POOL);
       } else {
-        setEvents((prev) => (prev.length ? prev : FALLBACK_POOL));
+        setEvents([]);
       }
     } catch {
-      setEvents((prev) => (prev.length ? prev : FALLBACK_POOL));
+      setEvents([]);
     } finally {
       setLoadingEvents(false);
     }
@@ -60,40 +52,22 @@ export function VerificationEngine() {
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 3000); return () => clearTimeout(t); }, [toast]);
 
   const pickRandom = useCallback(() => {
-    const pool = events.length > 0 ? events : FALLBACK_POOL;
-    if (pool.length === 0) return;
-    const ev = pool[Math.floor(Math.random() * pool.length)];
+    if (events.length === 0) {
+      setToast({ type: "info", msg: "No events to verify — create one in Roadmap first." });
+      return;
+    }
+    const ev = events[Math.floor(Math.random() * events.length)];
     setActive(ev);
     setOpen(true);
     setMessage(null);
-    // subtle haptic
     try { if ("vibrate" in navigator) navigator.vibrate(12); } catch {}
   }, [events]);
-
-  const scheduleRandom = useCallback(() => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    if (!autoOn) return;
-    const delay = 12000 + Math.random() * 23000;
-    timerRef.current = setTimeout(() => {
-      // don't stack if already open
-      setOpen((isOpen) => {
-        if (!isOpen) pickRandom();
-        return isOpen;
-      });
-      scheduleRandom();
-    }, delay);
-  }, [pickRandom, autoOn]);
-
-  useEffect(() => {
-    scheduleRandom();
-    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [scheduleRandom]);
 
   async function handleVote(vote: Vote) {
     if (!active) return;
     if (!nickname.trim()) {
       setTone("error");
-      const msg = "Enter your nickname first — it must match a physi_users row to persist.";
+      const msg = "Create your profile first — verification needs your global nickname.";
       setMessage(msg);
       setToast({ type: "error", msg });
       try { if ("vibrate" in navigator) navigator.vibrate([40,30,40]); } catch {}
@@ -153,13 +127,16 @@ export function VerificationEngine() {
         <div className="relative flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-[11px] font-black uppercase tracking-[0.32em] text-amber-300">Verification Engine · Authority-weighted</p>
-            <h3 className="mt-2 flex items-center gap-2 text-2xl font-black text-white">Random in-app verification <span className="rounded-full bg-white px-2.5 py-0.5 text-[10px] font-black tracking-widest text-slate-900">POPUP</span></h3>
-            <p className="mt-1 max-w-xl text-sm leading-6 text-slate-400">Popup picks a random <span className="font-mono text-xs text-sky-300">physi_events</span> row (live from <span className="font-mono text-xs text-amber-300">/api/events</span>) and asks you to vote <b className="text-white">YES / NO / CANCEL</b>. Weighted by <span className="font-mono text-xs text-emerald-300">authority_final</span>.</p>
+            <h3 className="mt-2 flex items-center gap-2 text-2xl font-black text-white">Manual verification <span className="rounded-full bg-white px-2.5 py-0.5 text-[10px] font-black tracking-widest text-slate-900">BELL</span></h3>
+            <p className="mt-1 max-w-xl text-sm leading-6 text-slate-400">Tap <b className="text-white">🔔 Bell</b> to pull a random <span className="font-mono text-xs text-sky-300">physi_events</span> row from <span className="font-mono text-xs text-amber-300">/api/events</span> and vote <b className="text-white">YES / NO / CANCEL</b>. Weighted by <span className="font-mono text-xs text-emerald-300">authority_final</span>.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold ${autoOn ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300" : "border-white/10 bg-white/5 text-slate-400"}`}><span className={`h-2 w-2 rounded-full ${autoOn ? "bg-emerald-400 animate-pulse" : "bg-slate-500"}`} /> {autoOn ? "Auto-popup on" : "Auto-popup off"}</span>
-            <button onClick={() => setAutoOn((v) => !v)} className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-bold text-white hover:bg-white/10">{autoOn ? "Pause" : "Resume"}</button>
             <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-xs font-bold text-amber-300">{loadingEvents ? "Loading…" : `${events.length} events`}</span>
+            {nickname ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs font-bold text-emerald-300"><span className="h-2 w-2 rounded-full bg-emerald-400" /> @{nickname}</span>
+            ) : (
+              <span className="rounded-full border border-rose-400/20 bg-rose-400/10 px-3 py-1 text-xs font-bold text-rose-300">No profile · create above</span>
+            )}
           </div>
         </div>
 
@@ -169,23 +146,17 @@ export function VerificationEngine() {
           <div className="rounded-2xl border border-rose-400/20 bg-rose-400/10 p-4"><p className="text-xs font-bold uppercase tracking-widest text-rose-300">NO votes</p><p className="mt-1 text-3xl font-black tabular-nums text-white">{stats.no}</p><p className="text-xs text-rose-200/70">−0.01 authority</p></div>
         </div>
 
-        <div className="relative mt-6 rounded-2xl border border-white/10 bg-slate-950/60 p-4 backdrop-blur">
-          <label className="grid gap-2 text-sm font-semibold text-slate-200">Verifier nickname <span className="font-normal text-slate-500">(must exist in physi_users — create profile first)</span>
-            <div className="flex gap-2">
-              <div className="relative flex-1"><span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500">@</span><input value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder="Tope" className="w-full rounded-2xl border border-white/10 bg-slate-900/60 py-3 pl-8 pr-4 text-sm font-semibold text-white outline-none placeholder:text-slate-500 focus:border-amber-400/40" /></div>
-              <button onClick={fetchEvents} className="shrink-0 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-xs font-black text-white hover:bg-white/10">↻ Refresh</button>
-            </div>
-          </label>
-          <p className="mt-2 text-xs text-slate-500">Votes hit <span className="font-mono text-sky-300">POST /api/verify</span> with <span className="font-mono text-amber-300">authority_weight</span>; CANCEL skips without penalty.</p>
+        <div className="relative mt-6 flex flex-wrap items-center gap-3">
+          <button onClick={pickRandom} disabled={loadingEvents || events.length===0} className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-black text-slate-950 shadow-lg transition hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50">
+            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-900 text-base">🔔</span> Bell — trigger verification
+          </button>
+          <button onClick={fetchEvents} className="rounded-full border border-white/15 bg-transparent px-5 py-3 text-sm font-black text-white hover:bg-white/5">↻ Refresh pool</button>
+          <span className="self-center text-xs font-medium text-slate-500">Manual only — no auto popup spam. Bell pulls one random live event.</span>
         </div>
 
-        <div className="relative mt-4 flex flex-wrap gap-2">
-          <button onClick={pickRandom} disabled={loadingEvents} className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-black text-slate-950 shadow-lg transition hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60">
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-900 text-amber-400">◆</span> Trigger verification now
-          </button>
-          <button onClick={() => { if (timerRef.current) clearTimeout(timerRef.current); setToast({ type: "info", msg: "Auto-popup rescheduled (12–35s)" }); scheduleRandom(); }} className="rounded-full border border-white/15 bg-transparent px-5 py-2.5 text-sm font-black text-white hover:bg-white/5">Reschedule random</button>
-          <span className="self-center text-xs font-medium text-slate-500">Popup also fires automatically every 12–35s when enabled.</span>
-        </div>
+        {!nickname && (
+          <p className="relative mt-3 rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm font-semibold text-amber-200">⚠️ Create your profile (Overview → ProfilePilot) first — verification uses your global <b className="text-white">@{`nickname`}</b> from auth, no duplicate input.</p>
+        )}
 
         {message && <p className={`relative mt-4 rounded-2xl border px-4 py-3 text-sm font-semibold leading-6 ${tone==="success" ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-200" : tone==="error" ? "border-rose-400/30 bg-rose-400/10 text-rose-200" : "border-sky-400/30 bg-sky-400/10 text-sky-200"}`}>{message}</p>}
 
@@ -210,7 +181,7 @@ export function VerificationEngine() {
               ))}
             </div>
           )}
-          <p className="mt-3 text-xs text-slate-500">Live contracts: <span className="font-mono text-amber-300">physi_events</span> + <span className="font-mono text-emerald-300">physi_verifications</span> + <span className="font-mono text-sky-300">physi_users.authority_final</span></p>
+          <p className="mt-3 text-xs text-slate-500">Live contracts: <span className="font-mono text-amber-300">physi_events</span> + <span className="font-mono text-emerald-300">physi_verifications</span> + <span className="font-mono text-sky-300">physi_users.authority_final</span> · no mocks.</p>
         </div>
       </section>
 
@@ -231,12 +202,13 @@ export function VerificationEngine() {
               {active.created_by_nickname ? <p className="text-xs text-slate-500">by <b className="text-slate-300">{active.created_by_nickname}</b></p> : null}
             </div>
             <p className="relative mt-4 rounded-2xl border border-white/10 bg-white/5 p-3 text-sm leading-6 text-slate-300 backdrop-blur">Did this event really happen as listed? Your vote is weighted by your authority. <b className="text-emerald-300">YES</b> +0.02 · <b className="text-rose-300">NO</b> −0.01 · <b className="text-slate-300">CANCEL</b> skip.</p>
+            {!nickname && <p className="relative mt-2 rounded-xl border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-xs font-bold text-rose-200">Create profile first — voting needs global auth.</p>}
             <div className="relative mt-6 grid grid-cols-3 gap-3">
-              <button onClick={() => handleVote("YES")} disabled={!!busy} className="rounded-2xl bg-emerald-400 px-4 py-3 text-sm font-black text-slate-950 shadow-lg shadow-emerald-500/20 transition hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60">{busy==="YES" ? <span className="inline-flex items-center gap-2"><span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-900 border-t-transparent" />…</span> : "YES"}</button>
-              <button onClick={() => handleVote("NO")} disabled={!!busy} className="rounded-2xl bg-rose-400 px-4 py-3 text-sm font-black text-slate-950 shadow-lg shadow-rose-500/20 transition hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60">{busy==="NO" ? "…" : "NO"}</button>
-              <button onClick={() => handleVote("CANCEL")} disabled={!!busy} className="rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-sm font-black text-white transition hover:bg-white/10 disabled:opacity-60">{busy==="CANCEL" ? "…" : "CANCEL"}</button>
+              <button onClick={() => handleVote("YES")} disabled={!!busy || !nickname} className="rounded-2xl bg-emerald-400 px-4 py-3 text-sm font-black text-slate-950 shadow-lg shadow-emerald-500/20 transition hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60">{busy==="YES" ? <span className="inline-flex items-center gap-2"><span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-900 border-t-transparent" />…</span> : "YES"}</button>
+              <button onClick={() => handleVote("NO")} disabled={!!busy || !nickname} className="rounded-2xl bg-rose-400 px-4 py-3 text-sm font-black text-slate-950 shadow-lg shadow-rose-500/20 transition hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60">{busy==="NO" ? "…" : "NO"}</button>
+              <button onClick={() => handleVote("CANCEL")} disabled={!!busy || !nickname} className="rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-sm font-black text-white transition hover:bg-white/10 disabled:opacity-60">{busy==="CANCEL" ? "…" : "CANCEL"}</button>
             </div>
-            <p className="relative mt-3 text-center text-xs text-slate-500">Posts to <span className="font-mono text-sky-300">POST /api/verify</span> · authority-weighted · glass popup</p>
+            <p className="relative mt-3 text-center text-xs text-slate-500">Posts to <span className="font-mono text-sky-300">POST /api/verify</span> · @{nickname || "—"} · authority-weighted</p>
           </div>
         </div>
       ) : null}

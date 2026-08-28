@@ -46,19 +46,59 @@ type PhysiEvent = {
 };
 
 const roadmapSteps = [
-  { n: "01", label: "Idea pitched", desc: "Student proposes campus event", color: "from-amber-400 to-orange-500", detail: "Anyone can pitch an idea. Title, venue, date/time are captured and scoped. Entry point of the pipeline — no verification yet." },
-  { n: "02", label: "Scope picked", desc: "Personal / Programme / Level / Global", color: "from-sky-400 to-blue-500", detail: "Choose how broad the event is. Personal stays private; faculty/university/global will be considered for canonical promotion." },
-  { n: "03", label: "Venue locked", desc: "Hall, lab, or field confirmed", color: "from-emerald-400 to-teal-500", detail: "Venue is required for duplicate guard and timetable sync. Same title+date+venue is blocked." },
-  { n: "04", label: "Date & time set", desc: "Fixed on timetable feed", color: "from-violet-400 to-purple-600", detail: "Pinned to the calendar. Powers green/yellow/red timetable confidence states." },
-  { n: "05", label: "Personal bubble", desc: "Appears in creator roadmap", color: "from-pink-400 to-rose-500", detail: "New events land here first as a personal bubble visible only to the creator's roadmap." },
-  { n: "06", label: "Duplicate check", desc: "Title + date + venue guard", color: "from-red-400 to-orange-500", detail: "API rejects duplicates (lower(title)+event_date+lower(venue)). Returns 409 + duplicate_warning." },
-  { n: "07", label: "Scope review", desc: "Is it broad enough to promote?", color: "from-cyan-400 to-sky-600", detail: "Personal/programme/level remain personal. Faculty/university/global auto-promote to canonical." },
-  { n: "08", label: "Verification queue", desc: "Random yes / no / cancel", color: "from-lime-400 to-emerald-600", detail: "Verification Engine pops a random physi_events row for votes. Authority-weighted signals accumulate." },
-  { n: "09", label: "Authority weight", desc: "Rep & admin votes matter more", color: "from-amber-300 to-yellow-500", detail: "Higher authority users have more weight in promotion and mining rewards." },
-  { n: "10", label: "Canonical promo", desc: "Promoted to shared calendar", color: "from-indigo-400 to-violet-600", detail: "Once promoted, status becomes canonical and appears in the shared/pipeline canonical lane." },
-  { n: "11", label: "Timetable sync", desc: "Green / yellow / red states", color: "from-teal-400 to-cyan-600", detail: "Synced to the live timetable with confidence coloring for students and admins." },
-  { n: "12", label: "Mining reward", desc: "Authority-weighted PHYSI earn", color: "from-amber-400 via-yellow-400 to-amber-500", detail: "Daily tap-to-mine loop pays out based on verified participation and authority." },
+  { n: "01", label: "Idea pitched", desc: "Student proposes campus event", color: "from-amber-400 to-orange-500", ring: "ring-amber-400", dot: "bg-amber-400", detail: "Anyone can pitch an idea. Title, venue, date/time are captured and scoped. Entry point of the pipeline — no verification yet." },
+  { n: "02", label: "Scope picked", desc: "Personal / Programme / Level / Global", color: "from-sky-400 to-blue-500", ring: "ring-sky-400", dot: "bg-sky-400", detail: "Choose how broad the event is. Personal stays private; faculty/university/global will be considered for canonical promotion." },
+  { n: "03", label: "Venue locked", desc: "Hall, lab, or field confirmed", color: "from-emerald-400 to-teal-500", ring: "ring-emerald-400", dot: "bg-emerald-400", detail: "Venue is required for duplicate guard and timetable sync. Same title+date+venue is blocked." },
+  { n: "04", label: "Date & time set", desc: "Fixed on timetable feed", color: "from-violet-400 to-purple-600", ring: "ring-violet-400", dot: "bg-violet-400", detail: "Pinned to the calendar. Powers green/yellow/red timetable confidence states." },
+  { n: "05", label: "Personal bubble", desc: "Appears in creator roadmap", color: "from-pink-400 to-rose-500", ring: "ring-pink-400", dot: "bg-pink-400", detail: "New events land here first as a personal bubble visible only to the creator's roadmap." },
+  { n: "06", label: "Duplicate check", desc: "Title + date + venue guard", color: "from-red-400 to-orange-500", ring: "ring-red-400", dot: "bg-red-400", detail: "API rejects duplicates (lower(title)+event_date+lower(venue)). Returns 409 + duplicate_warning." },
+  { n: "07", label: "Scope review", desc: "Is it broad enough to promote?", color: "from-cyan-400 to-sky-600", ring: "ring-cyan-400", dot: "bg-cyan-400", detail: "Personal/programme/level remain personal. Faculty/university/global auto-promote to canonical." },
+  { n: "08", label: "Verification queue", desc: "Random yes / no / cancel", color: "from-lime-400 to-emerald-600", ring: "ring-lime-400", dot: "bg-lime-400", detail: "Verification Engine pops a random physi_events row for votes. Authority-weighted signals accumulate." },
+  { n: "09", label: "Authority weight", desc: "Rep & admin votes matter more", color: "from-amber-300 to-yellow-500", ring: "ring-amber-300", dot: "bg-amber-300", detail: "Higher authority users have more weight in promotion and mining rewards." },
+  { n: "10", label: "Canonical promo", desc: "Promoted to shared calendar", color: "from-indigo-400 to-violet-600", ring: "ring-indigo-400", dot: "bg-indigo-400", detail: "Once promoted, status becomes canonical and appears in the shared/pipeline canonical lane." },
+  { n: "11", label: "Timetable sync", desc: "Green / yellow / red states", color: "from-teal-400 to-cyan-600", ring: "ring-teal-400", dot: "bg-teal-400", detail: "Synced to the live timetable with confidence coloring for students and admins." },
+  { n: "12", label: "Mining reward", desc: "Authority-weighted PHYSI earn", color: "from-amber-400 via-yellow-400 to-amber-500", ring: "ring-amber-400", dot: "bg-amber-400", detail: "Daily tap-to-mine loop pays out based on verified participation and authority." },
 ];
+
+// candy road geometry — 12 nodes alternating left/right in a 360px wide svg, 1240 tall
+const ROAD_W = 360;
+const ROAD_H = 1240;
+const NODE_POS: { x: number; y: number }[] = roadmapSteps.map((_, i) => {
+  const y = 72 + i * 102;
+  // alternate left/right with slight middle bias every 3rd to make S-curve less rigid
+  const leftX = 88;
+  const rightX = ROAD_W - 88;
+  const centerX = ROAD_W / 2;
+  // pattern: L,R,L,R... but add subtle wobble for organic feel
+  const baseX = i % 2 === 0 ? leftX : rightX;
+  // add a tiny center-lean on nodes 3,6,9 for more winding
+  const wobble = i % 3 === 2 ? (i % 2 === 0 ? 18 : -18) : 0;
+  const x = i === 5 || i === 6 ? centerX + (i % 2 === 0 ? -42 : 42) : baseX + wobble;
+  return { x, y };
+});
+
+function buildWindingPath(points: { x: number; y: number }[]) {
+  if (points.length === 0) return "";
+  let d = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i];
+    const p1 = points[i + 1];
+    const midY = (p0.y + p1.y) / 2;
+    // control points create a smooth S-curve
+    const dx = p1.x - p0.x;
+    // horizontal pull for curve — bigger offset = more bulge
+    const pull = 62;
+    const c1x = p0.x + (dx > 0 ? pull : -pull) * 0.55;
+    const c1y = p0.y + 42;
+    const c2x = p1.x + (dx > 0 ? -pull : pull) * 0.55;
+    const c2y = p1.y - 42;
+    // alternate via cubic bezier; for center-shifted nodes use mid control
+    d += ` C ${c1x} ${c1y}, ${c2x} ${c2y}, ${p1.x} ${p1.y}`;
+    // inject a soft mid control for very long vertical if needed (already handled)
+    void midY;
+  }
+  return d;
+}
 
 export function EventRoadmap() {
   const [events, setEvents] = useState<PhysiEvent[]>([]);
@@ -75,11 +115,13 @@ export function EventRoadmap() {
   const [scopeValue, setScopeValue] = useState("");
   const [nickname, setNickname] = useState("");
 
-  // flowchart interactivity
-  const [selected, setSelected] = useState<number>(4); // default on Personal bubble
+  const [selected, setSelected] = useState<number>(4);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const windingD = useMemo(() => buildWindingPath(NODE_POS), []);
+  // dashed progress along path — compute partial path length approximation by segments up to selected
+  const progressPct = ((selected + 1) / roadmapSteps.length) * 100;
 
   const scopeValueOptions = useMemo(() => {
     if (scopeType === "programme") return programmeOptions;
@@ -116,7 +158,6 @@ export function EventRoadmap() {
     fetchEvents();
   }, []);
 
-  // auto-dismiss toast
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 3200);
@@ -156,7 +197,6 @@ export function EventRoadmap() {
       setToast({ type: "success", msg });
       setTitle("");
       setVenue("");
-      // keep date/time/scope for rapid entry
       setDrawerOpen(false);
       fetchEvents();
     } catch (err) {
@@ -168,12 +208,6 @@ export function EventRoadmap() {
     }
   }
 
-  function scrollBy(dir: number) {
-    scrollRef.current?.scrollBy({ left: dir * 320, behavior: "smooth" });
-  }
-
-  const progressPct = ((selected + 1) / roadmapSteps.length) * 100;
-
   return (
     <section className="mt-8 space-y-6">
       {/* Header */}
@@ -183,7 +217,7 @@ export function EventRoadmap() {
             <p className="text-xs font-bold uppercase tracking-[0.3em] text-amber-300">Event Roadmap</p>
             <h2 className="mt-2 text-3xl font-black leading-tight text-white">PHYSI Event Roadmap Flowchart</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-              12-step scoped promotion pipeline — from personal bubble to canonical timetable. Tap any node for detail. Create opens as a drawer.
+              12-step Candy Crush winding road — from personal bubble to canonical timetable. Tap any level node for detail. Create opens as a drawer.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -199,7 +233,7 @@ export function EventRoadmap() {
           </div>
         </div>
 
-        {/* Progress indicator */}
+        {/* Progress */}
         <div className="mt-6">
           <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-widest text-slate-400">
             <span>Progress • step {String(selected + 1).padStart(2, "0")} / 12 — {roadmapSteps[selected].label}</span>
@@ -214,125 +248,147 @@ export function EventRoadmap() {
             ))}
           </div>
         </div>
+      </div>
 
-        {/* Flowchart: horizontal scroll on mobile, SVG arrows */}
-        <div className="relative mt-6">
-          {/* scroll controls - desktop */}
-          <button
-            aria-label="Scroll left"
-            onClick={() => scrollBy(-1)}
-            className="absolute left-0 top-1/2 z-20 hidden -translate-y-1/2 rounded-full border border-white/10 bg-slate-900 p-2 text-white shadow-xl hover:bg-slate-800 md:flex"
-          >
-            ‹
-          </button>
-          <button
-            aria-label="Scroll right"
-            onClick={() => scrollBy(1)}
-            className="absolute right-0 top-1/2 z-20 hidden -translate-y-1/2 rounded-full border border-white/10 bg-slate-900 p-2 text-white shadow-xl hover:bg-slate-800 md:flex"
-          >
-            ›
-          </button>
-
-          <div
-            ref={scrollRef}
-            className="flex gap-3 overflow-x-auto scroll-smooth pb-3 pt-2 [scrollbar-width:thin] snap-x snap-mandatory md:gap-3"
-            style={{ scrollbarColor: "#fbbf24 #0f172a" }}
-          >
-            {roadmapSteps.map((step, idx) => {
-              const isActive = idx === selected;
-              const isCompleted = idx < selected;
-              const isFuture = idx > selected;
-              return (
-                <div key={step.n} className="relative flex shrink-0 snap-start items-stretch gap-3">
-                  <button
-                    onClick={() => setSelected(idx)}
-                    className={`group relative flex w-[185px] flex-col overflow-hidden rounded-3xl border p-[1.5px] text-left shadow-xl transition-all duration-200 sm:w-[200px] ${
-                      isActive
-                        ? "scale-[1.03] border-amber-300/50 bg-gradient-to-br " + step.color
-                        : isCompleted
-                        ? "border-emerald-400/20 bg-gradient-to-br " + step.color + " opacity-95"
-                        : "border-white/10 bg-gradient-to-br from-slate-800 to-slate-900 opacity-60 hover:opacity-90"
-                    }`}
-                  >
-                    <div
-                      className={`flex h-full flex-col rounded-[1.35rem] p-4 backdrop-blur ${
-                        isActive ? "bg-slate-950/85" : isCompleted ? "bg-slate-950/80" : "bg-slate-950/70"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div
-                          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br text-sm font-black shadow ${
-                            isActive ? step.color + " text-slate-900 ring-2 ring-white/40" : step.color + " text-slate-900"
-                          }`}
-                        >
-                          {step.n}
-                        </div>
-                        <span
-                          className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-widest ${
-                            isActive
-                              ? "border-amber-300/40 bg-amber-300/15 text-amber-200"
-                              : isCompleted
-                              ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
-                              : "border-white/10 bg-white/5 text-slate-400"
-                          }`}
-                        >
-                          {isActive ? "● Active" : isCompleted ? "✓ Done" : "○ Dim"}
-                        </span>
-                      </div>
-                      <h4 className={`mt-3 text-sm font-black leading-tight ${isActive ? "text-white" : isFuture ? "text-slate-300" : "text-white"}`}>
-                        {step.label}
-                      </h4>
-                      <p className={`mt-1 line-clamp-2 text-xs leading-5 ${isActive ? "text-slate-300" : "text-slate-400"}`}>{step.desc}</p>
-                      <div className="mt-3 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-amber-300/90">
-                        <span>Tap for detail</span>
-                        <span className="transition group-hover:translate-x-0.5">→</span>
-                      </div>
-                    </div>
-                    {/* active glow line */}
-                    {isActive && <div className={`absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r ${step.color}`} />}
-                  </button>
-
-                  {/* SVG connecting arrow between nodes */}
-                  {idx < roadmapSteps.length - 1 && (
-                    <div className="flex w-[44px] shrink-0 items-center justify-center self-center">
-                      <svg width="44" height="24" viewBox="0 0 44 24" fill="none" className="overflow-visible" aria-hidden>
-                        <path
-                          d="M2 12 H34"
-                          stroke={isCompleted || isActive ? "#fbbf24" : "rgba(255,255,255,0.18)"}
-                          strokeWidth="2.2"
-                          strokeLinecap="round"
-                          strokeDasharray={isFuture ? "4 4" : "0"}
-                          className="transition-colors"
-                        />
-                        <path
-                          d="M30 7 L38 12 L30 17"
-                          fill="none"
-                          stroke={isCompleted || isActive ? "#fbbf24" : "rgba(255,255,255,0.18)"}
-                          strokeWidth="2.2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                        {/* pulse dot for active edge */}
-                        {isCompleted && <circle cx="34" cy="12" r="3" fill="#fbbf24" opacity="0.9" />}
-                      </svg>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+      {/* WINDING ROAD MAP — vertical Candy Crush style */}
+      <div className="rounded-[2rem] border border-white/10 bg-gradient-to-b from-slate-900/70 via-slate-900/40 to-slate-950/80 p-4 shadow-2xl backdrop-blur sm:p-6">
+        <div className="flex flex-col items-center gap-2">
+          <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-400">Candy Road • 12 Levels • alternating left / right</p>
+          <div className="flex items-center gap-2 text-[11px] font-semibold text-amber-300/90">
+            <span className="animate-bounce">↓</span> Scroll to explore <span className="hidden sm:inline">• tap any level circle</span>
+            <span className="sm:hidden">• tap a node</span>
           </div>
-          <p className="mt-1 text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 md:hidden">⟷ Horizontal scroll • tap any node</p>
         </div>
 
-        {/* Detail panel for tapped node */}
-        <div className="mt-4 rounded-3xl border border-amber-400/20 bg-gradient-to-br from-slate-900/80 to-slate-950/80 p-5 backdrop-blur">
+        {/* horizontal scroll hint + container: road is centered but scrollable on small screens */}
+        <div className="relative mt-4">
+          {/* hint bar */}
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center sm:hidden">
+            <span className="rounded-full border border-white/10 bg-slate-900/90 px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-slate-400 shadow">⟷ Horizontal scroll • pinch to zoom</span>
+          </div>
+
+          <div className="overflow-x-auto overflow-y-hidden pb-2 [scrollbar-width:thin] [&::-webkit-scrollbar]:h-2" style={{ scrollbarColor: "#fbbf24 #0f172a" }}>
+            <div className="relative mx-auto" style={{ width: ROAD_W, height: ROAD_H }}>
+              {/* SVG winding road */}
+              <svg width={ROAD_W} height={ROAD_H} viewBox={`0 0 ${ROAD_W} ${ROAD_H}`} className="absolute inset-0 overflow-visible" aria-hidden>
+                <defs>
+                  <linearGradient id="roadGrad" x1="0" y1="0" x2="1" y2="0" gradientUnits="objectBoundingBox">
+                    <stop offset="0%" stopColor="#d6a65a" />
+                    <stop offset="100%" stopColor="#b45309" />
+                  </linearGradient>
+                  <filter id="roadShadow" x="-20%" y="-20%" width="140%" height="140%">
+                    <feDropShadow dx="0" dy="4" stdDeviation="6" floodColor="#000" floodOpacity="0.35" />
+                  </filter>
+                </defs>
+
+                {/* outer road stroke (border) */}
+                <path d={windingD} fill="none" stroke="#3f2a14" strokeWidth={42} strokeLinecap="round" strokeLinejoin="round" opacity={0.95} filter="url(#roadShadow)" />
+                {/* main road */}
+                <path d={windingD} fill="none" stroke="url(#roadGrad)" strokeWidth={30} strokeLinecap="round" strokeLinejoin="round" />
+                {/* inner highlight */}
+                <path d={windingD} fill="none" stroke="rgba(255,255,255,0.16)" strokeWidth={30} strokeLinecap="round" strokeLinejoin="round" style={{ mixBlendMode: "overlay" as any }} />
+                {/* dashed center line */}
+                <path d={windingD} fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth={1.6} strokeLinecap="round" strokeDasharray="10 14" opacity={0.95} />
+                {/* progress tint up to selected node */}
+                {/* subtle glow along completed segment */}
+                <path
+                  d={buildWindingPath(NODE_POS.slice(0, selected + 1))}
+                  fill="none"
+                  stroke="#fbbf24"
+                  strokeWidth={30}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  opacity={0.18}
+                />
+              </svg>
+
+              {/* nodes */}
+              {roadmapSteps.map((step, idx) => {
+                const pos = NODE_POS[idx];
+                const isActive = idx === selected;
+                const isCompleted = idx < selected;
+                const isFuture = idx > selected;
+                const side = idx % 2 === 0 ? "left" : "right";
+                return (
+                  <div
+                    key={step.n}
+                    className="absolute flex flex-col items-center"
+                    style={{ left: pos.x, top: pos.y, transform: "translate(-50%, -50%)" }}
+                  >
+                    {/* connector label card alternating */}
+                    <div
+                      className={`absolute top-1/2 hidden flex-col gap-1 sm:flex ${side === "left" ? "left-[74px]" : "right-[74px] items-end text-right"}`}
+                      style={{ transform: "translateY(-50%)", width: 118 }}
+                    >
+                      <span className={`text-[11px] font-black uppercase tracking-widest ${isActive ? "text-amber-300" : isCompleted ? "text-emerald-300" : "text-slate-400"}`}>
+                        {isActive ? "● Active" : isCompleted ? "✓ Done" : "○ Locked"}
+                      </span>
+                      <span className={`text-xs font-black leading-tight ${isActive ? "text-white" : isFuture ? "text-slate-400" : "text-slate-200"}`}>{step.label}</span>
+                      <span className="line-clamp-2 text-[11px] leading-4 text-slate-400">{step.desc}</span>
+                    </div>
+
+                    {/* tappable circle */}
+                    <button
+                      onClick={() => setSelected(idx)}
+                      aria-label={`Level ${step.n} ${step.label}`}
+                      className={`group relative flex h-[62px] w-[62px] items-center justify-center rounded-full border-[3.5px] bg-slate-950 shadow-xl transition-all duration-200 hover:scale-[1.04] active:scale-[0.98] ${
+                        isActive
+                          ? "scale-[1.08] border-white bg-gradient-to-br " + step.color + " shadow-[0_0_0_6px_rgba(251,191,36,0.22),0_10px_28px_rgba(0,0,0,0.5)] ring-2 ring-amber-300"
+                          : isCompleted
+                          ? "border-emerald-300/70 bg-gradient-to-br " + step.color + " opacity-100 shadow-[0_6px_18px_rgba(0,0,0,0.4)]"
+                          : "border-white/15 bg-slate-800 opacity-60 hover:opacity-85"
+                      }`}
+                    >
+                      {/* inner circle */}
+                      <span
+                        className={`flex h-[52px] w-[52px] items-center justify-center rounded-full bg-gradient-to-br text-[15px] font-black tracking-tight shadow-inner ${
+                          isActive ? step.color + " text-slate-900" : isCompleted ? step.color + " text-slate-900" : "from-slate-700 to-slate-800 text-slate-300"
+                        }`}
+                      >
+                        {isCompleted ? (
+                          <span className="text-lg leading-none">✓</span>
+                        ) : isFuture ? (
+                          <span className="text-[11px]">◯</span>
+                        ) : (
+                          step.n
+                        )}
+                      </span>
+                      {/* level number badge */}
+                      <span
+                        className={`absolute -bottom-1.5 rounded-full border px-1.5 py-0.5 text-[10px] font-black leading-none shadow ${isActive ? "border-amber-300 bg-amber-300 text-slate-900" : isCompleted ? "border-emerald-300 bg-emerald-400 text-slate-900" : "border-white/10 bg-slate-900 text-slate-400"}`}
+                      >
+                        {isFuture ? `LV ${step.n}` : `LV ${step.n}`}
+                      </span>
+                      {/* pulse ring for active */}
+                      {isActive && <span className="pointer-events-none absolute inset-0 animate-ping rounded-full border-2 border-amber-300/40" style={{ animationDuration: "1.8s" }} />}
+                    </button>
+
+                    {/* mobile label under circle */}
+                    <div className="mt-3 flex max-w-[108px] flex-col items-center text-center sm:hidden">
+                      <span className={`text-[11px] font-black leading-tight ${isActive ? "text-white" : isCompleted ? "text-slate-200" : "text-slate-400"}`}>{step.label}</span>
+                      <span className={`mt-0.5 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest ${isActive ? "bg-amber-400 text-slate-900" : isCompleted ? "bg-emerald-400/15 text-emerald-300 border border-emerald-400/20" : "bg-white/5 text-slate-500 border border-white/10"}`}>
+                        {isActive ? "Active" : isCompleted ? "Done" : "Locked"}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <p className="mt-1 text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+            ⟷ Horizontal scroll on small screens • tap any circle for detail
+          </p>
+        </div>
+
+        {/* Detail panel for selected node */}
+        <div className="mt-5 rounded-3xl border border-amber-400/20 bg-gradient-to-br from-slate-900/80 to-slate-950/80 p-5 backdrop-blur">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="flex gap-3">
               <div className={`flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br ${roadmapSteps[selected].color} text-base font-black text-slate-900 shadow`}>
                 {roadmapSteps[selected].n}
               </div>
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-300">Step {roadmapSteps[selected].n} • active</p>
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-300">Level {roadmapSteps[selected].n} • {selected < 4 ? "Early" : selected < 8 ? "Mid road" : "Final stretch"}</p>
                 <h3 className="text-lg font-black text-white">{roadmapSteps[selected].label}</h3>
                 <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-300">{roadmapSteps[selected].detail}</p>
                 <p className="mt-1 text-xs text-slate-400">{roadmapSteps[selected].desc}</p>
@@ -358,9 +414,8 @@ export function EventRoadmap() {
         </div>
       </div>
 
-      {/* Pipeline cards: personal → canonical */}
+      {/* Pipeline cards: personal → canonical (kept) */}
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Personal lane */}
         <div className="rounded-[2rem] border border-white/10 bg-slate-950/60 p-6 shadow-2xl backdrop-blur">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -370,13 +425,11 @@ export function EventRoadmap() {
             </div>
             <span className="rounded-full border border-sky-400/20 bg-sky-400/10 px-3 py-1 text-xs font-bold text-sky-300">○ Personal</span>
           </div>
-          {/* pipeline track */}
           <div className="mt-4 flex items-center gap-2">
             <div className="h-1.5 flex-1 rounded-full bg-sky-400/20" />
             <span className="rounded-full bg-sky-400 px-2 py-1 text-[10px] font-black text-slate-900">→</span>
             <div className="h-1.5 flex-1 rounded-full bg-white/10" />
           </div>
-
           <div className="mt-5 grid gap-3">
             {loadingEvents ? (
               <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center text-sm text-slate-400">Loading events…</div>
@@ -407,7 +460,6 @@ export function EventRoadmap() {
           </div>
         </div>
 
-        {/* Canonical lane */}
         <div className="rounded-[2rem] border border-emerald-400/20 bg-gradient-to-br from-emerald-400/[0.06] to-slate-950/60 p-6 shadow-2xl backdrop-blur">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -422,7 +474,6 @@ export function EventRoadmap() {
             <span className="rounded-full bg-emerald-400 px-2 py-1 text-[10px] font-black text-slate-900">✓</span>
             <div className="h-1.5 flex-1 rounded-full bg-emerald-400/30" />
           </div>
-
           <div className="mt-5 grid gap-3">
             {loadingEvents ? (
               <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center text-sm text-slate-400">Loading events…</div>

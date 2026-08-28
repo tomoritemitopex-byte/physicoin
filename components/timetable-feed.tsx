@@ -60,6 +60,22 @@ export function TimetableFeed() {
   const [source, setSource] = useState<string>("");
   const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [metrics, setMetrics] = useState<{ users: number; events: number; verifications: number; upcoming: number } | null>(null);
+
+  const fetchStats = useCallback(async () => {
+    try {
+      const r = await fetch("/api/stats", { cache: "no-store" });
+      const d = await r.json();
+      if (d.ok && d.metrics) {
+        setMetrics({
+          users: d.metrics.users ?? d.counts?.physi_users ?? 0,
+          events: d.metrics.events ?? d.counts?.physi_events ?? 0,
+          verifications: d.metrics.verifications ?? d.counts?.physi_verifications ?? 0,
+          upcoming: d.metrics.upcoming_events ?? 0,
+        });
+      }
+    } catch {}
+  }, []);
 
   const fetchTimetable = useCallback(async (showToast = false) => {
     setError(null);
@@ -83,7 +99,7 @@ export function TimetableFeed() {
     }
   }, []);
 
-  useEffect(() => { fetchTimetable(); }, [fetchTimetable]);
+  useEffect(() => { fetchTimetable(); fetchStats(); }, [fetchTimetable, fetchStats]);
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 2800); return () => clearTimeout(t); }, [toast]);
 
   const filtered = useMemo(() => filter === "all" ? slots : slots.filter((s) => s.confidence === filter), [slots, filter]);
@@ -110,7 +126,7 @@ export function TimetableFeed() {
           <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-slate-900/60 px-3 py-1 text-xs font-semibold text-slate-300">
             <span className={`h-2 w-2 rounded-full ${syncing ? "bg-amber-400 animate-pulse" : "bg-emerald-400"}`} /> Last sync: {lastSync}
           </span>
-          <button onClick={() => fetchTimetable(true)} disabled={syncing || loading} className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-2 text-xs font-black text-slate-950 shadow-lg transition hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60">
+          <button onClick={() => { fetchTimetable(true); fetchStats(); }} disabled={syncing || loading} className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-2 text-xs font-black text-slate-950 shadow-lg transition hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60">
             {syncing ? <><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-900 border-t-transparent" /> Syncing…</> : "↻ Sync now"}
           </button>
         </div>
@@ -145,7 +161,7 @@ export function TimetableFeed() {
           ))}
         </div>
       </div>
-      {source && <p className="relative mt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Source: <span className="text-slate-300">{source}</span> · tap a pill to filter · sync pulls fresh confidence</p>}
+      {source && <p className="relative mt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Source: <span className="text-slate-300">{source}</span> · tap a pill to filter · sync pulls fresh confidence{metrics ? <span> · <span className="text-emerald-300">{metrics.users} users</span> · <span className="text-sky-300">{metrics.events} events</span> · <span className="text-amber-300">{metrics.upcoming} upcoming</span> via /api/stats</span> : null}</p>}
 
       {/* feed */}
       <div className="relative mt-6 grid gap-3">
@@ -158,7 +174,7 @@ export function TimetableFeed() {
           <div className="rounded-2xl border border-rose-400/20 bg-rose-400/10 p-6 text-center">
             <p className="text-sm font-bold text-rose-200">Couldn&apos;t load timetable</p>
             <p className="mt-1 text-xs text-rose-300/80">{error}</p>
-            <button onClick={() => fetchTimetable(true)} className="mt-3 rounded-full bg-white px-4 py-2 text-xs font-black text-slate-900">Retry</button>
+            <button onClick={() => { fetchTimetable(true); fetchStats(); }} className="mt-3 rounded-full bg-white px-4 py-2 text-xs font-black text-slate-900">Retry</button>
           </div>
         ) : filtered.length === 0 ? <EmptyIllustration filter={filter} /> : (
           filtered.map((c) => (

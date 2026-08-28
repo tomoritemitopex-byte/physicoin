@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { AuthProvider, useAuth } from "@/components/auth-context";
 import { MiningPanel } from "@/components/mining-panel";
 import { EventRoadmap } from "@/components/event-roadmap";
 import { TimetableFeed } from "@/components/timetable-feed";
@@ -32,7 +33,17 @@ const MODULES = [
   { title: "Analytics & Audit", detail: "Track authority drift and suspicious patterns.", status: "Planned", dot: "bg-slate-500" },
 ];
 
-export default function Home() {
+function AuthBadge() {
+  const { auth } = useAuth();
+  if (!auth?.nickname) return null;
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1.5 text-xs font-bold text-amber-300">
+      @{auth.nickname}
+    </span>
+  );
+}
+
+function HomeInner() {
   const [tab, setTab] = useState<TabId>("overview");
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -52,8 +63,8 @@ export default function Home() {
         <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4 px-4 py-3.5 sm:px-6 lg:px-8">
           {/* logo block */}
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-300 via-yellow-400 to-amber-500 text-[18px] font-black text-slate-900 shadow-lg shadow-amber-500/20 ring-1 ring-white/20">
-              $
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-300 via-yellow-400 to-amber-500 text-[11px] font-black tracking-tighter text-slate-900 shadow-lg shadow-amber-500/20 ring-1 ring-white/20">
+              PHYSI
             </div>
             <div className="min-w-0 leading-none">
               <p className="truncate text-[11px] font-bold uppercase tracking-[0.28em] text-amber-300">PHYSI Enterprise</p>
@@ -89,6 +100,7 @@ export default function Home() {
 
           {/* right */}
           <div className="flex items-center gap-2">
+            <AuthBadge />
             <span className="hidden rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-300 sm:inline-flex">
               physi.vercel.app
             </span>
@@ -211,8 +223,8 @@ export default function Home() {
                   <div className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-6 shadow-2xl backdrop-blur-xl">
                     <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-amber-300">Coin identity</p>
                     <div className="mt-4 flex items-center gap-4">
-                      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 via-yellow-400 to-amber-500 text-3xl font-black text-slate-900 shadow-lg ring-1 ring-white/20">
-                        $
+                      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 via-yellow-400 to-amber-500 text-[14px] font-black tracking-tighter text-slate-900 shadow-lg ring-1 ring-white/20">
+                        PHYSI
                       </div>
                       <div>
                         <p className="text-2xl font-black">PHYSI</p>
@@ -284,7 +296,6 @@ export default function Home() {
               </div>
             </div>
           )}
-
           {tab === "mining" && (
             <div className="mx-auto max-w-3xl">
               <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -327,5 +338,13 @@ export default function Home() {
         </div>
       </footer>
     </div>
+  );
+}
+
+export default function Home() {
+  return (
+    <AuthProvider>
+      <HomeInner />
+    </AuthProvider>
   );
 }

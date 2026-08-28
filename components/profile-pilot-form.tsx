@@ -1,4 +1,5 @@
 "use client";
+import { useAuth } from "@/components/auth-context";
 
 import { useMemo, useState } from 'react';
 
@@ -19,6 +20,7 @@ const programmeOptions = [
 ];
 
 export function ProfilePilotForm() {
+  const { setAuth } = useAuth();
   const [fullName, setFullName] = useState('');
   const [nickname, setNickname] = useState('');
   const [programme, setProgramme] = useState(programmeOptions[0]);
@@ -62,6 +64,7 @@ export function ProfilePilotForm() {
 
       setState('success');
       setMessage(`Profile created: ${data.user.full_name} (${data.user.nickname})`);
+      setAuth({ nickname: data.user.nickname, fullName: data.user.full_name });
     } catch (error) {
       setState('error');
       setMessage(error instanceof Error ? error.message : 'Could not create profile');
