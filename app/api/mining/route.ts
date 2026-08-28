@@ -1,48 +1,16 @@
 import { NextResponse } from 'next/server';
-import { sql } from '@/lib/db';
+import { sql, dbUnavailableResponse } from '@/lib/db';
+import { ensureMiningLogsTable } from '@/lib/ensure';
 
-// Satoshi P0: This is a Check-In faucet, NOT PoW mining. No nonce, no hash.
-// Rename to Check-In until real PoW is implemented. Atomic INSERT+UPDATE via transaction to prevent double-mint.
 const BASE_REWARD = 10;
-const COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24h
+const COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
 // ---------- helpers ----------
 function bad(msg: string, status = 400, extra: Record<string, unknown> = {}) {
   return NextResponse.json({ ok: false, error: msg, ...extra }, { status });
 }
 function dbDown() {
-  return NextResponse.json({ ok: false, error: 'DATABASE_URL is not configured yet.', code: 'DB_NOT_CONFIGURED' }, { status: 503 });
-}
-async function ensureMiningTable() {
-  if (!sql) return;
-  await sql`CREATE EXTENSION IF NOT EXISTS pgcrypto;`;
-  await sql`
-    CREATE TABLE IF NOT EXISTS physi_users (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      full_name TEXT NOT NULL,
-      nickname TEXT NOT NULL,
-      programme TEXT NOT NULL,
-      level TEXT NOT NULL,
-      statuses JSONB NOT NULL DEFAULT '[]'::jsonb,
-      authority_base NUMERIC(3,2) NOT NULL DEFAULT 1.00,
-      authority_final NUMERIC(3,2) NOT NULL DEFAULT 1.00,
-      mining_balance NUMERIC(14,2) NOT NULL DEFAULT 0,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `;
-  await sql`CREATE UNIQUE INDEX IF NOT EXISTS physi_users_nickname_lower_uidx ON physi_users (lower(nickname));`;
-  await sql`
-    CREATE TABLE IF NOT EXISTS physi_mining_logs (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      user_id UUID NOT NULL REFERENCES physi_users(id) ON DELETE CASCADE,
-      base_reward NUMERIC(14,2) NOT NULL,
-      authority_multiplier NUMERIC(3,2) NOT NULL,
-      earned_amount NUMERIC(14,2) NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `;
-  await sql`CREATE INDEX IF NOT EXISTS physi_mining_logs_user_created_idx ON physi_mining_logs (user_id, created_at DESC);`;
+  return NextResponse.json(dbUnavailableResponse(), { status: 503 });
 }
 
 async function resolveUser(nickname?: string, userId?: string) {
@@ -67,38 +35,34 @@ function isUUID(v: string): boolean {
 export async function POST(request: Request) {
   try {
     if (!sql) return dbDown();
-    await ensureMiningTable();
+    await ensureMiningLogsTable();
 
     const body = await request.json().catch(() => null);
-    if (!body || typeof body !== 'object') return bad('Invalid JSON body.', 400);
+    if (!body || typeof body !== 'object') return bad('Invalid JSON body.', 400, { code: 'INVALID_JSON' });
 
     const nickname = String((body as Record<string, unknown>).nickname ?? '').trim() || undefined;
     const userId = String((body as Record<string, unknown>).user_id ?? (body as Record<string, unknown>).userId ?? '').trim() || undefined;
 
-    if (!nickname && !userId) return bad('nickname or user_id is required.', 400);
-    if (userId && !isUUID(userId)) return bad('user_id must be a valid UUID.', 400);
-    if (nickname && (nickname.length < 2 || nickname.length > 30)) return bad('nickname must be 2–30 chars.', 400);
+    if (!nickname && !userId) return bad('nickname or user_id is required.', 400, { code: 'MISSING_PARAM' });
+    if (userId && !isUUID(userId)) return bad('user_id must be a valid UUID.', 400, { code: 'INVALID_ID' });
+    if (nickname && (nickname.length < 2 || nickname.length > 30)) return bad('nickname must be 2–30 chars.', 400, { code: 'INVALID_FIELD' });
 
     const user = await resolveUser(nickname, userId);
-    if (!user) return bad('User not found. Create a profile first.', 404);
+    if (!user) return bad('User not found. Create a profile first.', 404, { code: 'NOT_FOUND' });
 
     const userIdResolved: string = String(user.id);
     const authorityFinal = Number(user.authority_final ?? 1);
     if (Number.isNaN(authorityFinal) || authorityFinal < 0.5 || authorityFinal > 2.0) {
-      return bad('User authority_final is invalid — contact support.', 500);
+      return bad('User authority_final is invalid — contact support.', 500, { code: 'INVALID_AUTHORITY' });
     }
 
     const earned = Number((BASE_REWARD * authorityFinal).toFixed(2));
     const nextMineAt = new Date(Date.now() + COOLDOWN_MS).toISOString();
 
-    // Atomic transactional INSERT+UPDATE to prevent double-mint (TOCTOU).
-    // Cooldown check and balance update happen inside the same transaction with SELECT ... FOR UPDATE.
     const doTx = async (tx: any) => {
-      // Lock user row
       const [lockedUser] = await (tx as any)`SELECT id, mining_balance FROM physi_users WHERE id = ${userIdResolved} FOR UPDATE;`;
       if (!lockedUser) throw new Error('User not found inside tx');
 
-      // Cooldown check inside tx using latest DB time
       const [lastLog] = await (tx as any)`
         SELECT created_at FROM physi_mining_logs
         WHERE user_id = ${userIdResolved}
@@ -111,7 +75,6 @@ export async function POST(request: Request) {
           if (elapsed < COOLDOWN_MS) {
             const remainingMs = lastTime + COOLDOWN_MS - Date.now();
             const nextAt = new Date(lastTime + COOLDOWN_MS).toISOString();
-            // Throw a structured error to return 429 outside
             const err: Error & { code?: string; nextMineAt?: string; remainingMs?: number } = new Error('Cooldown active');
             err.code = 'COOLDOWN';
             err.nextMineAt = nextAt;
@@ -140,17 +103,13 @@ export async function POST(request: Request) {
 
     let txResult: { log: unknown; newBalance: number };
     try {
-      // Prefer sql.begin transaction if available (neon serverless)
       const maybeBegin = (sql as unknown as { begin?: (fn: (tx: typeof sql) => Promise<unknown>) => Promise<unknown> }).begin;
       if (typeof maybeBegin === 'function') {
         txResult = (await maybeBegin(async (tx: typeof sql) => doTx(tx as typeof sql))) as typeof txResult;
       } else {
-        // Fallback: emulate transaction with single CTE that atomically checks cooldown via WHERE NOT EXISTS
-        // Insert only if no log in last 24h, and update balance in same statement
         const [lockedUser2] = await sql`SELECT mining_balance FROM physi_users WHERE id = ${userIdResolved} LIMIT 1;`;
         const currentBal2 = Number(lockedUser2?.mining_balance ?? 0);
         const newBalance2 = Number((currentBal2 + earned).toFixed(2));
-        // Check cooldown pre-insert; if active, return 429
         const [lastLogFallback] = await sql`
           SELECT created_at FROM physi_mining_logs WHERE user_id = ${userIdResolved} ORDER BY created_at DESC LIMIT 1;
         `;
@@ -174,7 +133,6 @@ export async function POST(request: Request) {
       if (e.code === 'COOLDOWN') {
         return NextResponse.json({ ok: false, error: 'Cooldown active. Try again after 24h.', code: 'COOLDOWN', nextMineAt: e.nextMineAt, remainingMs: e.remainingMs, remainingSeconds: Math.ceil((e.remainingMs ?? 0)/1000) }, { status: 429 });
       }
-      // Unique violation race double-mint
       const msg = e.message ?? String(e);
       if (msg.includes('duplicate') || msg.includes('unique')) {
         return NextResponse.json({ ok: false, error: 'Already checked in (race). Try again after cooldown.', code: 'COOLDOWN' }, { status: 429 });
@@ -191,13 +149,13 @@ export async function POST(request: Request) {
         base_reward: BASE_REWARD,
         nextMineAt,
         log: txResult.log,
-        type: 'checkin', // Satoshi P0: renamed from mining — no PoW
+        type: 'checkin',
       },
       { status: 201 }
     );
   } catch (error) {
     console.error('[checkin][POST] failed:', error);
-    return NextResponse.json({ ok: false, error: 'Could not check in right now.' }, { status: 500 });
+    return NextResponse.json({ ok: false, error: 'Could not check in right now.', code: 'MINING_ERROR' }, { status: 500 });
   }
 }
 
@@ -205,17 +163,17 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
   try {
     if (!sql) return dbDown();
-    await ensureMiningTable();
+    await ensureMiningLogsTable();
 
     const { searchParams } = new URL(request.url);
     const nickname = String(searchParams.get('nickname') ?? '').trim() || undefined;
     const userId = String(searchParams.get('user_id') ?? searchParams.get('userId') ?? '').trim() || undefined;
 
-    if (!nickname && !userId) return bad('nickname or user_id query param is required.', 400);
-    if (userId && !isUUID(userId)) return bad('user_id must be a valid UUID.', 400);
+    if (!nickname && !userId) return bad('nickname or user_id query param is required.', 400, { code: 'MISSING_PARAM' });
+    if (userId && !isUUID(userId)) return bad('user_id must be a valid UUID.', 400, { code: 'INVALID_ID' });
 
     const user = await resolveUser(nickname, userId);
-    if (!user) return bad('User not found.', 404);
+    if (!user) return bad('User not found.', 404, { code: 'NOT_FOUND' });
 
     const [fresh] = await sql`SELECT mining_balance, authority_final FROM physi_users WHERE id = ${user.id} LIMIT 1;`;
 
@@ -255,6 +213,6 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     console.error('[checkin][GET] failed:', error);
-    return NextResponse.json({ ok: false, error: 'Could not fetch check-in data.' }, { status: 500 });
+    return NextResponse.json({ ok: false, error: 'Could not fetch check-in data.', code: 'MINING_FETCH_ERROR' }, { status: 500 });
   }
 }

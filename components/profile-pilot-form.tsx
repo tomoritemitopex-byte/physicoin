@@ -72,7 +72,7 @@ export function ProfilePilotForm() {
   }
 
   return (
-    <section className="mt-8 rounded-[2rem] border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur">
+    <section className="mt-8 rounded-card border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.3em] text-amber-300">Testing action</p>

@@ -164,7 +164,7 @@ export function EventRoadmap() {
   return (
     <section className="mt-8 space-y-6">
       {/* Header — PHYSI Verification Pipeline */}
-      <div className="rounded-[2rem] border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur">
+      <div className="rounded-card border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.3em] text-slate-400">Verified Steps</p>
@@ -204,7 +204,7 @@ export function EventRoadmap() {
       </div>
 
       {/* 6-STEP LINEAR PIPELINE */}
-      <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-4 shadow-2xl backdrop-blur sm:p-6">
+      <div className="rounded-card border border-white/10 bg-white/[0.03] p-4 shadow-2xl backdrop-blur sm:p-6">
         <div className="grid gap-3">
           {roadmapSteps.map((step, idx) => {
             const isActive = idx === selected;
@@ -266,7 +266,7 @@ export function EventRoadmap() {
 
       {/* Pipeline cards: personal → canonical (kept) */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-[2rem] border border-white/10 bg-slate-950/60 p-6 shadow-2xl backdrop-blur">
+        <div className="rounded-card border border-white/10 bg-slate-950/60 p-6 shadow-2xl backdrop-blur">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.2em] text-sky-300">Lane A — Personal bubbles</p>
@@ -310,7 +310,7 @@ export function EventRoadmap() {
           </div>
         </div>
 
-        <div className="rounded-[2rem] border border-emerald-400/20 bg-gradient-to-br from-emerald-400/[0.06] to-slate-950/60 p-6 shadow-2xl backdrop-blur">
+        <div className="rounded-card border border-emerald-400/20 bg-gradient-to-br from-emerald-400/[0.06] to-slate-950/60 p-6 shadow-2xl backdrop-blur">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-300">Lane B — Canonical timetable</p>

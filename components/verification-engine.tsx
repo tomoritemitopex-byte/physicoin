@@ -120,7 +120,7 @@ export function VerificationEngine() {
         <div className={`pointer-events-none fixed bottom-6 left-1/2 z-[80] -translate-x-1/2 rounded-full border px-4 py-2.5 text-sm font-bold shadow-2xl backdrop-blur animate-[toastIn_0.35s_ease] ${toast.type==="success" ? "border-emerald-400/30 bg-emerald-400/15 text-emerald-100" : toast.type==="error" ? "border-rose-400/30 bg-rose-400/15 text-rose-100" : "border-sky-400/30 bg-sky-400/15 text-sky-100"}`}>{toast.msg}</div>
       )}
 
-      <section className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl backdrop-blur sm:p-8">
+      <section className="relative overflow-hidden rounded-card border border-white/10 bg-white/[0.06] p-6 shadow-2xl backdrop-blur sm:p-8">
         <div className="pointer-events-none absolute -top-24 -right-24 h-64 w-64 rounded-full bg-violet-500/10 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-20 -left-20 h-56 w-56 rounded-full bg-amber-500/10 blur-3xl" />
 
@@ -188,7 +188,7 @@ export function VerificationEngine() {
       {open && active ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <button aria-label="Close overlay" onClick={dismiss} className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" />
-          <div className="relative w-full max-w-lg overflow-hidden rounded-[2rem] border border-white/10 bg-slate-900 p-6 shadow-2xl animate-[popupIn_0.35s_cubic-bezier(0.16,1,0.3,1)]">
+          <div className="relative w-full max-w-lg overflow-hidden rounded-card border border-white/10 bg-slate-900 p-6 shadow-2xl animate-[popupIn_0.35s_cubic-bezier(0.16,1,0.3,1)]">
             <div className="pointer-events-none absolute -top-20 -right-20 h-56 w-56 rounded-full bg-amber-400/10 blur-3xl" />
             <div className="relative flex items-center justify-between gap-3">
               <span className="inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-xs font-bold uppercase tracking-widest text-amber-300"><span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" /> Verify this event</span>

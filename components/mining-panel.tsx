@@ -282,7 +282,7 @@ export function MiningPanel({ initialNickname = "" }: { initialNickname?: string
 
   return (
     <section
-      className={`relative overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl backdrop-blur ${shake ? "animate-[shake_0.42s_ease]" : ""}`}
+      className={`relative overflow-hidden rounded-card border border-white/10 bg-white/[0.06] p-6 shadow-2xl backdrop-blur ${shake ? "animate-[shake_0.42s_ease]" : ""}`}
     >
       {/* ambient glow */}
       <div className="pointer-events-none absolute -top-28 -right-28 h-72 w-72 rounded-full bg-amber-400/10 blur-3xl" />
@@ -351,7 +351,7 @@ export function MiningPanel({ initialNickname = "" }: { initialNickname?: string
       {/* hero: balance + coin */}
       <div className="relative mt-6 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         {/* balance card */}
-        <div className="rounded-[1.5rem] border border-white/10 bg-slate-900/70 p-5 backdrop-blur">
+        <div className="rounded-card border border-white/10 bg-slate-900/70 p-5 backdrop-blur">
           <div className="flex items-center justify-between">
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Balance</p>
             <span className="rounded-full bg-white/5 px-2.5 py-1 text-[11px] font-bold text-slate-300">PHYSI</span>
@@ -386,7 +386,7 @@ export function MiningPanel({ initialNickname = "" }: { initialNickname?: string
         </div>
 
         {/* coin + ring */}
-        <div className="flex flex-col items-center justify-center rounded-[1.5rem] border border-white/10 bg-gradient-to-br from-slate-900/80 to-slate-950/80 p-6">
+        <div className="flex flex-col items-center justify-center rounded-card border border-white/10 bg-gradient-to-br from-slate-900/80 to-slate-950/80 p-6">
           <div className="relative flex h-[170px] w-[170px] items-center justify-center">
             {/* cooldown ring */}
             <svg className="absolute inset-0 h-full w-full -rotate-90" viewBox="0 0 160 160">

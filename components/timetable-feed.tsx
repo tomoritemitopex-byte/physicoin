@@ -41,7 +41,7 @@ function Skeleton() {
 
 function EmptyIllustration({ filter }: { filter: string }) {
   return (
-    <div className="rounded-[1.5rem] border border-dashed border-white/15 bg-white/[0.03] px-8 py-12 text-center backdrop-blur">
+    <div className="rounded-card border border-dashed border-white/15 bg-white/[0.03] px-8 py-12 text-center backdrop-blur">
       <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 text-2xl shadow-inner">🗓️</div>
       <p className="mt-4 text-sm font-black text-white">{filter === "all" ? "No timetable slots yet" : `No ${filter} slots`}</p>
       <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-400">
@@ -106,7 +106,7 @@ export function TimetableFeed() {
   const counts = useMemo(() => ({ green: slots.filter((s) => s.confidence === "green").length, yellow: slots.filter((s) => s.confidence === "yellow").length, red: slots.filter((s) => s.confidence === "red").length }), [slots]);
 
   return (
-    <section className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl backdrop-blur sm:p-8">
+    <section className="relative overflow-hidden rounded-card border border-white/10 bg-white/[0.06] p-6 shadow-2xl backdrop-blur sm:p-8">
       {/* ambient */}
       <div className="pointer-events-none absolute -top-24 -right-24 h-64 w-64 rounded-full bg-sky-500/10 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-20 -left-20 h-56 w-56 rounded-full bg-emerald-500/10 blur-3xl" />

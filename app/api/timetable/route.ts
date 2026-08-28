@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
+import { ensureEventsTable } from "@/lib/ensure";
 
 type Confidence = "green" | "yellow" | "red";
 
@@ -13,38 +14,22 @@ function confidenceFor(status: string, eventDate: string): Confidence {
   return "yellow";
 }
 
+export const dynamic = 'force-dynamic';
+
 // GET /api/timetable -> derives timetable slots from physi_events + fallback mock
 export async function GET() {
   try {
     if (!sql) {
-      // No DB: return static mock via API (so frontend still fetches real endpoint)
       return NextResponse.json({
         ok: true,
         source: "mock-no-db",
         slots: mockSlots(),
         syncedAt: new Date().toISOString(),
+        banner: 'Timetable in mock mode — DATABASE_URL not configured.',
       });
     }
 
-    // Ensure events table exists
-    await sql`CREATE EXTENSION IF NOT EXISTS pgcrypto;`;
-    await sql`
-      CREATE TABLE IF NOT EXISTS physi_events (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        title TEXT NOT NULL,
-        venue TEXT NOT NULL,
-        event_date DATE NOT NULL,
-        event_time TIME NOT NULL,
-        scope_type TEXT NOT NULL,
-        scope_value TEXT,
-        status TEXT NOT NULL DEFAULT 'personal',
-        authority_points NUMERIC(10,2) NOT NULL DEFAULT 0,
-        required_points NUMERIC(10,2) NOT NULL DEFAULT 0,
-        created_by UUID REFERENCES physi_users(id) ON DELETE SET NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `;
+    await ensureEventsTable();
 
     const events = await sql`
       SELECT id, title, venue, event_date, event_time, scope_type, scope_value, status, created_at
@@ -92,7 +77,7 @@ export async function GET() {
     return NextResponse.json({ ok: true, source: "physi_events", slots, syncedAt: new Date().toISOString() });
   } catch (err) {
     console.error("timetable GET failed", err);
-    return NextResponse.json({ ok: true, source: "mock-fallback", slots: mockSlots(), syncedAt: new Date().toISOString() });
+    return NextResponse.json({ ok: true, source: "mock-fallback", slots: mockSlots(), syncedAt: new Date().toISOString(), error: 'timetable fallback due to DB error' });
   }
 }
 
