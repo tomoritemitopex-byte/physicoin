@@ -1,10 +1,20 @@
-import { NextResponse } from "next/server";
-import { sql } from "@/lib/db";
+import { NextResponse } from 'next/server';
+import { sql } from '@/lib/db';
+
+// ---------- helpers ----------
+function bad(msg: string, status = 400, extra: Record<string, unknown> = {}) {
+  return NextResponse.json({ ok: false, error: msg, ...extra }, { status });
+}
+function dbDown() {
+  return NextResponse.json({ ok: false, error: 'DATABASE_URL is not configured yet.', code: 'DB_NOT_CONFIGURED' }, { status: 503 });
+}
+function isUUID(v: string): boolean {
+  return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(v);
+}
 
 async function ensureTables() {
   if (!sql) return;
   await sql`CREATE EXTENSION IF NOT EXISTS pgcrypto;`;
-  // physi_users may already exist; ensure columns we need exist (migration-safe)
   await sql`
     CREATE TABLE IF NOT EXISTS physi_users (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -20,6 +30,7 @@ async function ensureTables() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `;
+  await sql`CREATE UNIQUE INDEX IF NOT EXISTS physi_users_nickname_lower_uidx ON physi_users (lower(nickname));`;
   await sql`
     CREATE TABLE IF NOT EXISTS physi_events (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -47,6 +58,10 @@ async function ensureTables() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `;
+  // Duplicate guard: one verifier can vote once per event (production truth)
+  await sql`CREATE UNIQUE INDEX IF NOT EXISTS physi_verifications_verifier_event_uidx ON physi_verifications (verifier_id, event_id);`;
+  await sql`CREATE INDEX IF NOT EXISTS physi_verifications_event_idx ON physi_verifications (event_id);`;
+  await sql`CREATE INDEX IF NOT EXISTS physi_verifications_verifier_idx ON physi_verifications (verifier_id);`;
 }
 
 async function resolveUser(nickname?: string, verifierId?: string) {
@@ -56,108 +71,148 @@ async function resolveUser(nickname?: string, verifierId?: string) {
     if (u) return u;
   }
   if (nickname) {
-    const [u] = await sql`SELECT id, nickname, authority_final FROM physi_users WHERE nickname = ${nickname} LIMIT 1;`;
+    const [u] = await sql`SELECT id, nickname, authority_final FROM physi_users WHERE lower(nickname) = lower(${nickname}) LIMIT 1;`;
     if (u) return u;
   }
   return null;
 }
 
-// POST /api/verify { nickname | verifier_id, event_id, vote: YES|NO|CANCEL }
-export async function POST(request: Request) {
+// ---------- GET /api/verify?event_id=xxx  (authority-weighted tally) ----------
+export async function GET(request: Request) {
   try {
-    if (!sql) {
-      return NextResponse.json({ ok: false, error: "DATABASE_URL is not configured yet." }, { status: 503 });
-    }
-
+    if (!sql) return dbDown();
     await ensureTables();
+    const { searchParams } = new URL(request.url);
+    const eventId = searchParams.get('event_id')?.trim() || searchParams.get('eventId')?.trim() || '';
 
-    const body = await request.json().catch(() => ({}));
-    const nickname = String(body.nickname ?? "").trim() || undefined;
-    const verifierIdRaw = String(body.verifier_id ?? body.verifierId ?? body.user_id ?? "").trim() || undefined;
-    const eventId = String(body.event_id ?? body.eventId ?? "").trim();
-    const voteRaw = String(body.vote ?? "").trim().toUpperCase();
+    if (!eventId) return bad('event_id query param is required.', 400);
+    if (!isUUID(eventId)) return bad('event_id must be a valid UUID.', 400);
 
-    if (!eventId || !voteRaw) {
-      return NextResponse.json({ ok: false, error: "event_id and vote are required." }, { status: 400 });
-    }
-    if (!["YES", "NO", "CANCEL"].includes(voteRaw)) {
-      return NextResponse.json({ ok: false, error: "vote must be YES, NO, or CANCEL." }, { status: 400 });
-    }
-    const vote = voteRaw as "YES" | "NO" | "CANCEL";
+    const [ev] = await sql`SELECT id, title, venue, event_date, status FROM physi_events WHERE id = ${eventId} LIMIT 1;`;
+    if (!ev) return bad('Event not found in physi_events.', 404);
 
-    if (!nickname && !verifierIdRaw) {
-      return NextResponse.json({ ok: false, error: "nickname or verifier_id is required." }, { status: 400 });
-    }
-
-    const user = await resolveUser(nickname, verifierIdRaw);
-    if (!user) {
-      // No real user: store mock is not possible (FK). Return mock success so UI still works in demo.
-      return NextResponse.json(
-        {
-          ok: true,
-          mock: true,
-          message: "No matching physi_users row; demo vote not persisted. Create a profile first.",
-          vote,
-          event_id: eventId,
-        },
-        { status: 200 }
-      );
-    }
-
-    const verifierId = String(user.id);
-    const authorityWeight = Number(user.authority_final ?? 1);
-
-    // Verify event exists (but allow mock event ids like evt_1 to still demonstrate)
-    let eventExists = false;
-    try {
-      const [ev] = await sql`SELECT id FROM physi_events WHERE id = ${eventId} LIMIT 1;`;
-      eventExists = !!ev;
-    } catch {
-      eventExists = false;
-    }
-
-    if (!eventExists) {
-      // If event_id is non-UUID mock like evt_1, treat as demo too
-      return NextResponse.json(
-        {
-          ok: true,
-          mock: true,
-          message: "Event not found in physi_events (mock id). Demo vote not persisted. Insert events to persist.",
-          vote,
-          event_id: eventId,
-          authority_weight: authorityWeight,
-        },
-        { status: 200 }
-      );
-    }
-
-    // Insert verification with authority_weight
-    const [row] = await sql`
-      INSERT INTO physi_verifications (verifier_id, event_id, vote, authority_weight)
-      VALUES (${verifierId}, ${eventId}, ${vote}, ${authorityWeight})
-      RETURNING id, verifier_id, event_id, vote, authority_weight, created_at;
+    const rows = await sql`
+      SELECT v.id, v.vote, v.authority_weight, v.created_at, u.nickname as verifier_nickname
+      FROM physi_verifications v
+      JOIN physi_users u ON u.id = v.verifier_id
+      WHERE v.event_id = ${eventId}
+      ORDER BY v.created_at DESC;
     `;
 
-    // Slightly update authority_final: YES +0.02, NO -0.01, CANCEL 0, clamp 0.50..2.00
+    // Authority-weighted totals
+    let yesW = 0,
+      noW = 0,
+      cancelW = 0;
+    for (const r of rows) {
+      const w = Number(r.authority_weight ?? 1);
+      if (r.vote === 'YES') yesW += w;
+      else if (r.vote === 'NO') noW += w;
+      else if (r.vote === 'CANCEL') cancelW += w;
+    }
+    const totalW = Number((yesW + noW + cancelW).toFixed(2));
+    const yesRatio = totalW ? Number((yesW / totalW).toFixed(3)) : 0;
+
+    return NextResponse.json({
+      ok: true,
+      event: ev,
+      counts: { total: rows.length, yes: rows.filter((r) => r.vote === 'YES').length, no: rows.filter((r) => r.vote === 'NO').length, cancel: rows.filter((r) => r.vote === 'CANCEL').length },
+      weighted: { yes: Number(yesW.toFixed(2)), no: Number(noW.toFixed(2)), cancel: Number(cancelW.toFixed(2)), total: totalW, yes_ratio: yesRatio },
+      verifications: rows,
+    });
+  } catch (error) {
+    console.error('[verify][GET] failed:', error);
+    return NextResponse.json({ ok: false, error: 'Could not fetch verifications.' }, { status: 500 });
+  }
+}
+
+// ---------- POST /api/verify { nickname|verifier_id, event_id, vote: YES|NO|CANCEL } ----------
+export async function POST(request: Request) {
+  try {
+    if (!sql) return dbDown();
+    await ensureTables();
+
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== 'object') return bad('Invalid JSON body.', 400);
+    const b = body as Record<string, unknown>;
+
+    const nickname = String(b.nickname ?? '').trim() || undefined;
+    const verifierIdRaw = String(b.verifier_id ?? b.verifierId ?? b.user_id ?? b.userId ?? '').trim() || undefined;
+    const eventId = String(b.event_id ?? b.eventId ?? '').trim();
+    const voteRaw = String(b.vote ?? '').trim().toUpperCase();
+
+    if (!eventId || !voteRaw) return bad('event_id and vote are required.', 400);
+    if (!['YES', 'NO', 'CANCEL'].includes(voteRaw)) return bad('vote must be YES, NO, or CANCEL.', 400);
+    if (eventId && !isUUID(eventId)) return bad('event_id must be a valid UUID.', 400);
+    if (verifierIdRaw && !isUUID(verifierIdRaw)) return bad('verifier_id must be a valid UUID.', 400);
+    if (!nickname && !verifierIdRaw) return bad('nickname or verifier_id is required.', 400);
+    const vote = voteRaw as 'YES' | 'NO' | 'CANCEL';
+
+    // Resolve verifier — strict 404 (no mock)
+    const user = await resolveUser(nickname, verifierIdRaw);
+    if (!user) {
+      return bad('Verifier not found in physi_users. Create a profile first.', 404, { code: 'VERIFIER_NOT_FOUND' });
+    }
+    const verifierId = String(user.id);
+    const authorityWeight = Number(user.authority_final ?? 1);
+    if (Number.isNaN(authorityWeight)) return bad('Verifier authority_final is invalid.', 500);
+
+    // Verify event exists — strict 404
+    const [ev] = await sql`SELECT id, status FROM physi_events WHERE id = ${eventId} LIMIT 1;`;
+    if (!ev) return bad('Event not found in physi_events.', 404, { code: 'EVENT_NOT_FOUND' });
+
+    // Duplicate guard: same verifier voting twice on same event => 409
+    const [dup] = await sql`SELECT id, vote FROM physi_verifications WHERE verifier_id = ${verifierId} AND event_id = ${eventId} LIMIT 1;`;
+    if (dup) {
+      return NextResponse.json(
+        { ok: false, error: 'Already voted on this event.', code: 'DUPLICATE_VOTE', existing: dup },
+        { status: 409 }
+      );
+    }
+
+    // Insert with authority_weight snapshot
+    let row;
+    try {
+      const inserted = await sql`
+        INSERT INTO physi_verifications (verifier_id, event_id, vote, authority_weight)
+        VALUES (${verifierId}, ${eventId}, ${vote}, ${authorityWeight})
+        RETURNING id, verifier_id, event_id, vote, authority_weight, created_at;
+      `;
+      row = inserted[0];
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes('duplicate') || msg.includes('physi_verifications_verifier_event_uidx') || msg.includes('unique')) {
+        return NextResponse.json({ ok: false, error: 'Already voted on this event (race).', code: 'DUPLICATE_VOTE' }, { status: 409 });
+      }
+      if (msg.includes('foreign key') || msg.includes('violates foreign key')) {
+        return bad('Foreign key violation — verifier or event does not exist.', 400);
+      }
+      throw e;
+    }
+
+    // Authority calculation: YES +0.02, NO -0.01, CANCEL 0, clamp 0.50..2.00
     let delta = 0;
-    if (vote === "YES") delta = 0.02;
-    else if (vote === "NO") delta = -0.01;
+    if (vote === 'YES') delta = 0.02;
+    else if (vote === 'NO') delta = -0.01;
 
     let nextAuthority = authorityWeight;
     if (delta !== 0) {
       nextAuthority = Math.round((authorityWeight + delta) * 100) / 100;
       nextAuthority = Math.min(2.0, Math.max(0.5, nextAuthority));
-      await sql`
-        UPDATE physi_users
-        SET authority_final = ${nextAuthority}, updated_at = NOW()
-        WHERE id = ${verifierId};
-      `;
+      await sql`UPDATE physi_users SET authority_final = ${nextAuthority}, updated_at = NOW() WHERE id = ${verifierId};`;
+    }
+
+    // Also bump event authority_points (optional weighted signal accumulation)
+    // YES adds authority_weight to event; NO subtracts half; CANCEL 0
+    let eventDelta = 0;
+    if (vote === 'YES') eventDelta = authorityWeight;
+    else if (vote === 'NO') eventDelta = -authorityWeight * 0.5;
+    if (eventDelta !== 0) {
+      await sql`UPDATE physi_events SET authority_points = authority_points + ${eventDelta}, updated_at = NOW() WHERE id = ${eventId};`;
     }
 
     return NextResponse.json(
       {
         ok: true,
-        mock: false,
         verification: row,
         authority_weight: authorityWeight,
         authority_final_before: authorityWeight,
@@ -167,7 +222,7 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (error) {
-    console.error("Verify failed:", error);
-    return NextResponse.json({ ok: false, error: "Could not record verification right now." }, { status: 500 });
+    console.error('[verify][POST] failed:', error);
+    return NextResponse.json({ ok: false, error: 'Could not record verification right now.' }, { status: 500 });
   }
 }
