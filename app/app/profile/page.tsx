@@ -68,6 +68,8 @@ export default function ProfilePage() {
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // run dice for suggestions
   const [diceSuggestions, setDiceSuggestions] = useState<string[]>(HANDLE_SUGGESTIONS);
@@ -176,7 +178,28 @@ export default function ProfilePage() {
     localStorage.removeItem("physi_profile");
     setProfile(null);
     setErr(null);
+    setConfirmDelete(false);
     setToast("cleared — pick a new handle");
+  }
+
+  async function handleDelete() {
+    if (!profile?.id) return;
+    setDeleting(true);
+    setErr(null);
+    try {
+      const r = await fetch(`/api/profile?id=${encodeURIComponent(profile.id)}`, { method: "DELETE" });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || j.ok === false) throw new Error(j.error || j.hint || "couldn't delete account");
+      localStorage.removeItem("physi_profile");
+      localStorage.removeItem("physi_mining_last");
+      setProfile(null);
+      setConfirmDelete(false);
+      setToast("account deleted — handle and votes removed permanently");
+    } catch (e: any) {
+      setErr(e.message || "delete failed — try again");
+    } finally {
+      setDeleting(false);
+    }
   }
 
   if (loadingExisting) {
@@ -260,17 +283,37 @@ export default function ProfilePage() {
               </p>
             </div>
 
-            <div className="mt-5 flex flex-wrap gap-2">
+            <div className="mt-5 flex flex-wrap items-center gap-2">
               <a href="/app/timetable" className="inline-flex items-center rounded-full bg-white px-5 py-2.5 text-[14px] font-semibold text-[#070a12] shadow-[0_4px_20px_rgba(255,255,255,0.12)] hover:bg-slate-100 transition">
                 Go to timetable →
               </a>
               <a href="/app/verify" className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-5 py-2.5 text-[14px] font-medium text-slate-200 hover:bg-white/[0.08] transition">
                 Verifygist
               </a>
-              <button onClick={clearProfile} className="ml-auto font-mono text-[11px] text-slate-500 hover:text-slate-300">
-                use another handle
-              </button>
+              <div className="ml-auto flex flex-wrap items-center gap-2">
+                <button onClick={clearProfile} className="font-mono text-[11px] text-slate-500 hover:text-slate-300">
+                  use another handle
+                </button>
+                {!confirmDelete ? (
+                  <button onClick={() => setConfirmDelete(true)} className="inline-flex items-center rounded-full border border-red-500/30 bg-red-500/10 px-4 py-2 font-mono text-[12px] font-medium text-red-300 hover:bg-red-500/20 transition">
+                    Delete account
+                  </button>
+                ) : (
+                  <span className="inline-flex flex-wrap items-center gap-2 rounded-xl border border-red-500/30 bg-red-950/40 px-3 py-2">
+                    <span className="font-mono text-[11px] text-red-200">Are you sure?</span>
+                    <button onClick={handleDelete} disabled={deleting} className="inline-flex items-center rounded-full bg-red-500 px-3 py-1.5 font-mono text-[11px] font-semibold text-white hover:bg-red-600 disabled:opacity-60 transition">
+                      {deleting ? "Deleting…" : "Yes delete"}
+                    </button>
+                    <button onClick={() => setConfirmDelete(false)} disabled={deleting} className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 font-mono text-[11px] font-medium text-slate-300 hover:bg-white/10 transition">
+                      Cancel
+                    </button>
+                  </span>
+                )}
+              </div>
             </div>
+            {confirmDelete && <p className="mt-2 font-mono text-[11px] leading-4 text-red-300/80">Warning: deletes your handle and votes permanently — your verifications and mining history will be removed.</p>}
+            {!confirmDelete && <p className="mt-2 font-mono text-[11px] leading-4 text-slate-500">Delete account deletes your handle and votes permanently.</p>}
+            {err && <div className="mt-3 rounded-xl border border-red-400/20 bg-red-400/10 px-3 py-2.5 font-mono text-[12px] leading-4 text-red-200">{err}</div>}
 
             <p className="mt-3 font-mono text-[10.5px] leading-3 text-slate-600">
               id {String(profile.id).slice(0, 8)}… · stored in this browser as <code className="rounded bg-white/10 px-1 py-0.5">physi_profile</code> — that&apos;s how timetable counts your vote

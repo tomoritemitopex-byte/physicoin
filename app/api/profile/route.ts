@@ -16,6 +16,32 @@ export async function GET(req: Request) {
   return NextResponse.json({ ok: true, user: rows[0] });
 }
 
+export async function DELETE(req: Request) {
+  if (!isDbConfigured() || !sql) return NextResponse.json(dbNotConfigured(), { status: 503 });
+  try { await ensureAllTables(); } catch {}
+  let id: string | null = new URL(req.url).searchParams.get("id");
+  if (!id) {
+    try {
+      const b = await req.json();
+      id = b?.id ?? b?.userId ?? null;
+    } catch {}
+  }
+  if (!id) return NextResponse.json({ ok: false, code: "BAD_INPUT", error: "id required (?id=UUID or JSON {id})" }, { status: 400 });
+  // explicit cleanup for tables whose FK may be SET NULL or missing CASCADE (verifications/mining_logs already CASCADE, canonical_log promoted_by is SET NULL)
+  try {
+    await sql`DELETE FROM physi_verifications WHERE verifier_id = ${id}`;
+  } catch {}
+  try {
+    await sql`DELETE FROM physi_mining_logs WHERE user_id = ${id}`;
+  } catch {}
+  try {
+    await sql`DELETE FROM physi_canonical_log WHERE promoted_by = ${id}`;
+  } catch {}
+  const rows = await sql`DELETE FROM physi_users WHERE id = ${id} RETURNING id`;
+  if (!rows.length) return NextResponse.json({ ok: false, code: "NOT_FOUND", error: "user not found" }, { status: 404 });
+  return NextResponse.json({ ok: true, deletedId: id }, { status: 200 });
+}
+
 export async function POST(req: Request) {
   if (!isDbConfigured() || !sql) return NextResponse.json(dbNotConfigured(), { status: 503 });
   await ensureAllTables();
