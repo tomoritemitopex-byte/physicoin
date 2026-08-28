@@ -35,18 +35,19 @@ function PanelSkeleton({ label }: { label: string }) {
 
 type TabId = "overview" | "mining" | "roadmap" | "timetable" | "verify";
 
+ // Timetable-first ordering: tool tabs first, marketing (Overview→About) last
 const TABS: { id: TabId; label: string; Icon: React.ComponentType<any> }[] = [
-  { id: "overview", label: "Overview", Icon: LayoutDashboard },
-  { id: "mining", label: "Mining", Icon: Pickaxe },
-  { id: "roadmap", label: "Roadmap", Icon: Map },
   { id: "timetable", label: "Timetable", Icon: CalendarCheck },
   { id: "verify", label: "Verify", Icon: ShieldCheck },
+  { id: "mining", label: "Check-in", Icon: Pickaxe },
+  { id: "roadmap", label: "Roadmap", Icon: Map },
+  { id: "overview", label: "About", Icon: LayoutDashboard },
 ];
 
 const VALID_TABS = new Set<string>(TABS.map((t) => t.id));
 function parseTab(raw: string | null): TabId {
   if (raw && VALID_TABS.has(raw)) return raw as TabId;
-  return "overview";
+  return "timetable";
 }
 
 const MODULES = [
@@ -80,6 +81,7 @@ function AuthBadge() {
 function HeaderLoginButton({ onLoginClick }: { onLoginClick: () => void }) {
   const { auth } = useAuth();
   if (auth?.nickname) return <AuthBadge />;
+  // Ghost, not dominant white pill — value before login
   return (
     <div className="flex items-center gap-2">
       <a
@@ -88,12 +90,11 @@ function HeaderLoginButton({ onLoginClick }: { onLoginClick: () => void }) {
           e.preventDefault();
           onLoginClick();
         }}
-        className="inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-[13px] font-semibold text-slate-900 shadow-soft hover:bg-slate-100 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+        className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-2 text-[13px] font-medium text-slate-200 hover:bg-white hover:text-slate-900 hover:border-white transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
       >
         <LogIn size={14} strokeWidth={2} />
         Login
       </a>
-      {/* secondary link for crawlers / no-JS: real API profile fallback */}
       <a href="/api/profile" className="sr-only">API profile</a>
     </div>
   );
@@ -163,29 +164,28 @@ function HomeInner() {
 
   const setTab = useCallback((next: TabId) => {
     setTabState(next);
-    const qs = next === "overview" ? "" : `?tab=${next}`;
+    const qs = `?tab=${next}`;
     router.push(`/${qs}`, { scroll: false });
   }, [router]);
 
   const scrollToProfile = useCallback(() => {
-    // Ensure overview tab is active then scroll to profile anchor
-    setTab("overview");
-    // delay to allow tab switch render before scroll
+    // Profile lives inside timetable/about now — ensure timetable or about visible then scroll
+    const targetTab: TabId = tab === "timetable" || tab === "overview" ? tab : "timetable";
+    if (tab !== targetTab) setTab(targetTab);
     requestAnimationFrame(() => {
       setTimeout(() => {
         document.getElementById("profile")?.scrollIntoView({ behavior: "smooth", block: "start" });
-        // also update url hash without navigation
-        try { history.replaceState(null, "", "?tab=overview#profile"); } catch {}
+        try { history.replaceState(null, "", `?tab=${targetTab}#profile`); } catch {}
       }, 80);
     });
-  }, [setTab]);
+  }, [setTab, tab]);
 
-  // Handle #profile hash on load when overview
+  // Handle #profile hash on load
   useEffect(() => {
-    if (typeof window !== "undefined" && window.location.hash === "#profile" && urlTab === "overview") {
+    if (typeof window !== "undefined" && window.location.hash === "#profile") {
       setTimeout(() => document.getElementById("profile")?.scrollIntoView({ behavior: "smooth" }), 250);
     }
-  }, [urlTab]);
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -252,19 +252,17 @@ function HomeInner() {
 
   return (
     <div className="min-h-screen bg-[#070a12] text-slate-100 selection:bg-[#3b82f6]/20">
-      {/* mesh deduplicated — owned by layout.tsx only */}
-
-      {/* header — Linear-tight, Vercel-precise · Login at top-right */}
+      {/* header — timetable-first, login de-emphasized */}
       <header className="sticky top-0 z-40 border-b border-white/[0.06] bg-[#070a12]/80 backdrop-blur-[12px]">
         <div className="mx-auto flex max-w-[1240px] items-center justify-between gap-6 px-6 py-3.5 lg:px-8">
           <div className="flex items-center gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-[9px] bg-white text-[10px] font-black tracking-[-0.04em] text-slate-900">PHYSI</div>
             <div className="hidden sm:block leading-none">
-              <p className="font-mono text-[10.5px] font-medium uppercase tracking-[0.14em] text-slate-500">Pilot — testing now</p>
-              <p className="mt-0.5 text-[12.5px] font-medium tracking-tight text-slate-300">Not official · TEST-PHYSI, no cash value</p>
+              <p className="font-mono text-[10.5px] font-medium uppercase tracking-[0.14em] text-slate-500">Live timetable — advisory</p>
+              <p className="mt-0.5 text-[12.5px] font-medium tracking-tight text-slate-300">Built by students · TEST-PHYSI no cash value</p>
             </div>
-            <span className="hidden lg:inline-flex items-center gap-1.5 rounded-full border border-white/[0.06] bg-white/[0.03] px-2.5 py-1 font-mono text-[10.5px] font-medium tracking-wide text-slate-500">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400/70" /> Preview
+            <span className="hidden lg:inline-flex items-center gap-1.5 rounded-full border border-emerald-400/15 bg-emerald-400/10 px-2.5 py-1 font-mono text-[10.5px] font-medium tracking-wide text-emerald-300">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" /> Live
             </span>
           </div>
 
@@ -324,78 +322,130 @@ function HomeInner() {
 
       <Banner error={apiError} onDismiss={() => setApiError(null)} />
 
-      <main className="mx-auto max-w-[1240px] px-6 pb-10 pt-10 lg:px-8 lg:pt-14">
+      <main className="mx-auto max-w-[1240px] px-6 pb-10 pt-6 lg:px-8 lg:pt-8">
         <div key={tab} id={`tabpanel-${tab}`} role="tabpanel" aria-labelledby={`tab-${tab}`} tabIndex={0} className="animate-[in_0.28s_ease] focus-visible:outline-none">
-          {tab === "overview" && (
-            <div className="space-y-12">
-              {/* ── HERO — human copy: student real-time calendar ── */}
-              <section id="hero" className="scroll-mt-24">
-                <div className="max-w-[720px]">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-white/[0.06] bg-white/[0.03] px-3 py-1">
-                    <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
-                    <span className="font-mono text-[10.5px] font-medium uppercase tracking-[0.12em] text-slate-400">Pilot — testing now</span>
-                    <span className="hidden sm:inline font-mono text-[10.5px] text-slate-600">— Not official · TEST-PHYSI, no cash value</span>
+          {tab === "timetable" && (
+            <div className="space-y-6">
+              {/* ── TIMETABLE-FIRST: compact utility header — no essay ── */}
+              <section className="rounded-[20px] border border-white/[0.06] bg-white/[0.02] px-5 py-4 sm:px-6 sm:py-5">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h1 className="text-[20px] font-[700] leading-none tracking-[-0.02em] text-white sm:text-[22px]">Live timetable</h1>
+                      <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 font-mono text-[10px] font-semibold tracking-wide text-emerald-300">Advisory · Green check = real</span>
+                      <span className="font-mono text-[11px] tracking-wide text-slate-500">Pilot — not official</span>
+                    </div>
+                    <p className="mt-2 max-w-[640px] text-[13.5px] leading-5 text-slate-400">
+                      Next lectures straight from students. <span className="text-slate-300">Share what you hear, confirm what you see</span> — the more who use it, the more accurate it gets.
+                    </p>
                   </div>
-
-                  <h1 className="mt-6 text-[34px] font-[720] leading-[0.94] tracking-[-0.035em] text-white sm:text-[40px] lg:text-[48px]" style={{ fontFeatureSettings: '"cv01","ss03"' }}>
-                    A live timetable,
-                    <br />
-                    <span className="text-slate-400">built by the students who use it.</span>
-                  </h1>
-
-                  <p className="mt-4 max-w-[560px] text-[15.5px] leading-[1.65] text-slate-300">
-                    No one knows next week&apos;s lectures and venues — especially freshers and JAMBites finding their way around campus.
-                    <span className="text-slate-400"> PHYSI is a real-time calendar made by students:</span> share what you hear, confirm what you see, and everyone stays in sync.
-                  </p>
-                  <p className="mt-3 max-w-[560px] text-[14px] leading-6 text-slate-500">
-                    The more of us who use it, the more accurate it gets. That&apos;s the point — many contributors, one trusted view. Advisory only; always confirm exams and official venues with your department. <span className="text-slate-400">TEST-PHYSI points have no cash value.</span>
-                  </p>
-
-                  <div className="mt-7 flex flex-wrap items-center gap-3">
-                    <a
-                      href="#profile"
-                      onClick={(e) => { e.preventDefault(); scrollToProfile(); }}
-                      className="inline-flex items-center gap-1.5 rounded-full bg-white px-5 py-2.5 text-[13.5px] font-semibold text-slate-900 shadow-soft hover:bg-slate-100 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
-                    >
-                      {userCount === 0 && !statsLoading ? "Create your profile" : "Login to PHYSI"} <ArrowUpRight size={14} strokeWidth={2} className="opacity-60" />
+                  <div className="flex flex-wrap items-center gap-2 lg:shrink-0">
+                    <a href="#timetable-feed" className="inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-[13px] font-semibold text-slate-900 hover:bg-slate-100 transition">
+                      Today <ArrowUpRight size={14} className="opacity-60" />
                     </a>
-                    <button onClick={() => setTab("timetable")} className="rounded-full border border-white/[0.08] bg-white/[0.04] px-5 py-2.5 text-[13.5px] font-medium text-white hover:bg-white/[0.07] transition">
-                      See live timetable
+                    <button onClick={scrollToProfile} className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-[13px] font-medium text-slate-200 hover:bg-white/[0.08] transition">
+                      {userCount === 0 && !statsLoading ? "Create profile" : "Log in to confirm"}
                     </button>
-                    <span className="font-mono text-[11px] tracking-wide text-slate-500">Free to join · Daily check-in · TEST-PHYSI — no cash value, advisory only</span>
                   </div>
                 </div>
-
-                <div className="mt-10 grid grid-cols-2 gap-0 divide-x divide-white/[0.06] border-y border-white/[0.06] lg:grid-cols-4">
-                  {[
-                    { label: "Community", value: "Live pilot", sub: "Students building the calendar together", loading: false },
-                    { label: "Confirmed lectures", value: String(verifiedCount).padStart(2, "0"), sub: verifiedCount === 0 && !statsLoading ? "None confirmed yet — be first to share" : "Green-check confirmed", loading: statsLoading },
-                    { label: "Students", value: String(userCount).padStart(2, "0"), sub: userCount === 0 && !statsLoading ? "Join early, help freshers" : "Pilot community", loading: statsLoading },
-                    { label: "Confirmations", value: String(stats?.checks ?? 0).padStart(2, "0"), sub: "Every Yes/No helps everyone", loading: statsLoading },
-                  ].map((m) => (
-                    <div key={m.label} className="px-5 py-5 first:pl-0 lg:px-6 lg:py-6">
-                      <p className="font-mono text-[10.5px] font-medium uppercase tracking-[0.14em] text-slate-500">{m.label}</p>
-                      {m.loading ? (
-                        <div className="mt-2 h-7 w-14 animate-pulse rounded bg-white/10" aria-hidden="true" />
-                      ) : (
-                        <p className="mt-2 font-mono text-[20px] font-semibold tracking-tight tabular-nums text-white">{m.value}</p>
-                      )}
-                      <p className="mt-0.5 text-xs text-slate-500">{m.loading ? <span className="inline-block h-3 w-24 animate-pulse rounded bg-white/5" aria-hidden="true" /> : m.sub}</p>
-                    </div>
-                  ))}
+                {/* micro-stats — inline, not hero billboard */}
+                <div className="mt-4 flex flex-wrap gap-2 border-t border-white/[0.04] pt-3 font-mono text-[11px] tracking-wide text-slate-500">
+                  <span>{statsLoading ? "…" : `${String(verifiedCount).padStart(2,"0")} confirmed`}</span>
+                  <span className="text-slate-700">·</span>
+                  <span>{statsLoading ? "…" : `${String(userCount).padStart(2,"0")} students`}</span>
+                  <span className="text-slate-700">·</span>
+                  <span>{statsLoading ? "…" : `${String(stats?.checks ?? 0).padStart(2,"0")} confirmations`}</span>
+                  <span className="hidden sm:inline text-slate-600">— TEST-PHYSI has no cash value · Advisory only</span>
                 </div>
               </section>
 
-              {/* ── NETWORK VALUE — why this exists ── */}
-              <section id="value" className="scroll-mt-24">
-                <div className="max-w-[720px]">
-                  <p className="font-mono text-[10.5px] font-medium uppercase tracking-[0.14em] text-slate-500">Why PHYSI exists</p>
-                  <h2 className="mt-3 text-[22px] font-semibold leading-tight tracking-[-0.02em] text-white sm:text-[26px]">A network that keeps the calendar honest.</h2>
-                  <p className="mt-3 max-w-[640px] text-[14.5px] leading-6 text-slate-400">
-                    Official timetables are slow. WhatsApp groups are noisy. PHYSI sits in the middle — fast like a group chat, but every event earns trust through verification.
+              {/* ── THE TOOL — timetable feed is first interactive element ── */}
+              <div id="timetable-feed" className="scroll-mt-28">
+                <TimetableFeed />
+              </div>
+
+              {/* ── SECONDARY: why it exists — collapsed to one row, below tool ── */}
+              <section className="grid gap-3 sm:grid-cols-3">
+                {[
+                  { Icon: Radio, k: "Real-time, not official", v: "Anyone can pitch a lecture — it lands instantly, marked advisory." },
+                  { Icon: Users, k: "Verified by cohort", v: "Yes / No / Skip. Many agrees → green check." },
+                  { Icon: BadgeCheck, k: "Always double-check", v: "Green is strongest signal — still confirm exams with dept." },
+                ].map((c) => (
+                  <div key={c.k} className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <c.Icon size={13} strokeWidth={1.8} className="text-slate-400" />
+                      <p className="text-[12.5px] font-semibold tracking-tight text-white">{c.k}</p>
+                    </div>
+                    <p className="mt-1 text-[12.5px] leading-5 text-slate-400">{c.v}</p>
+                  </div>
+                ))}
+              </section>
+
+              {/* ── LOGIN — deferred, below tool, not a wall before it ── */}
+              <div id="profile" className="scroll-mt-28">
+                <div className="flex items-center justify-between gap-3 px-1">
+                  <p className="font-mono text-[10.5px] font-medium uppercase tracking-[0.14em] text-slate-500">Profile — log in to post & confirm</p>
+                  <span className="font-mono text-[11px] tracking-wide text-slate-600">Programme · Level · Handle</span>
+                </div>
+                <div className="mt-3 rounded-[20px] border border-white/[0.06] bg-white/[0.02] p-1">
+                  <ProfilePilotForm />
+                </div>
+                <p className="mt-2 text-center font-mono text-[11px] leading-4 text-slate-600">
+                  Already have a handle? Re-enter it — we&apos;ll log you back in. No password in pilot.
+                </p>
+              </div>
+
+              {/* ── DETAILS — collapsed strip for curiosity, not wall ── */}
+              <details className="group rounded-2xl border border-white/[0.06] bg-white/[0.02] px-5 py-4">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+                  <span className="font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400">How it works — 4 steps</span>
+                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 font-mono text-[11px] tracking-wide text-slate-400 group-open:hidden">Show</span>
+                  <span className="hidden rounded-full border border-white/10 bg-white px-3 py-1 font-mono text-[11px] font-semibold tracking-wide text-slate-900 group-open:inline-flex">Hide</span>
+                </summary>
+                <div className="mt-4 grid gap-3 sm:grid-cols-4">
+                  {[
+                    ["01", "Join", "Create profile — programme, level, nickname."],
+                    ["02", "Share", "Post venue, time, course you heard about."],
+                    ["03", "Confirm", "Tap Yes / No / Skip — together we sort it."],
+                    ["04", "Check in", "Daily pop-in → TEST-PHYSI (no value, 24h)."],
+                  ].map(([n, t, d]) => (
+                    <div key={n} className="rounded-xl border border-white/[0.05] bg-white/[0.02] px-3 py-3">
+                      <span className="inline-flex h-6 w-6 items-center justify-center rounded-lg bg-white font-mono text-[11px] font-bold text-slate-900">{n}</span>
+                      <p className="mt-2 text-[13px] font-semibold text-white">{t}</p>
+                      <p className="mt-1 font-mono text-[11px] leading-4 text-slate-500">{d}</p>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            </div>
+          )}
+
+          {tab === "overview" && (
+            <div className="space-y-6">
+              {/* ── ABOUT: also timetable-first — no disorientation even if linked here ── */}
+              <section className="rounded-[20px] border border-white/[0.06] bg-white/[0.02] px-5 py-4 sm:px-6 sm:py-5">
+                <div className="flex flex-col gap-2">
+                  <div className="inline-flex items-center gap-2">
+                    <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+                    <span className="font-mono text-[10.5px] font-medium uppercase tracking-[0.12em] text-slate-400">About PHYSI — pilot, advisory, not official</span>
+                  </div>
+                  <h1 className="text-[22px] font-[700] leading-tight tracking-[-0.025em] text-white sm:text-[24px]">A live timetable, built by the students who use it.</h1>
+                  <p className="max-w-[640px] text-[13.5px] leading-5 text-slate-400">
+                    No one knows next week&apos;s lectures and venues — especially freshers finding their way around. PHYSI is a student real-time calendar: share what you hear, confirm what you see. <button onClick={() => setTab("timetable")} className="font-semibold text-white underline decoration-white/20 underline-offset-4 hover:text-slate-200">Open timetable →</button>
                   </p>
                 </div>
-                <div className="mt-7 grid gap-4 sm:grid-cols-3">
+              </section>
+
+              <div id="timetable-feed-about" className="scroll-mt-28">
+                <TimetableFeed />
+              </div>
+
+              <section id="value" className="scroll-mt-24">
+                <div className="flex items-baseline justify-between gap-3">
+                  <p className="font-mono text-[10.5px] font-medium uppercase tracking-[0.14em] text-slate-500">Why PHYSI exists</p>
+                  <button onClick={() => setTab("timetable")} className="font-mono text-[11px] tracking-wide text-slate-500 hover:text-white">Go to timetable →</button>
+                </div>
+                <div className="mt-4 grid gap-4 sm:grid-cols-3">
                   {[
                     { idx: "§01", Icon: Radio, title: "Real-time, not official", desc: "Anyone in the pilot can pitch an event — guest lecture, room change, workshop. It appears instantly in the advisory feed.", accent: "text-emerald-400" },
                     { idx: "§02", Icon: Users, title: "Verified by the cohort", desc: "Classmates vote YES / NO / Skip. When consensus tips, the event gets a green-check. Only those who were there decide.", accent: "text-blue-400" },
@@ -419,7 +469,6 @@ function HomeInner() {
                 </div>
               </section>
 
-              {/* ── HOW IT WORKS ── */}
               <section id="how" className="scroll-mt-24">
                 <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
                   <div>
@@ -457,7 +506,6 @@ function HomeInner() {
                       ))}
                     </div>
                   </div>
-
                   <div className="space-y-4">
                     <div className="physi-index-card">
                       <div className="flex items-center gap-3">
@@ -472,7 +520,6 @@ function HomeInner() {
                         Every event is traceable — who pitched it, who verified it, when consensus was reached. The audit trail is the feature.
                       </p>
                     </div>
-
                     <div id="profile" className="physi-panel scroll-mt-28 p-6 lg:p-7">
                       <div className="mb-5 flex items-center justify-between gap-3">
                         <p className="font-mono text-[10.5px] font-medium uppercase tracking-[0.14em] text-slate-500">Pilot access · Login</p>
@@ -487,7 +534,6 @@ function HomeInner() {
                 </div>
               </section>
 
-              {/* ── MODULES — bespoke PHYSI index strip ── */}
               <section>
                 <div className="flex items-baseline justify-between gap-4">
                   <h2 className="font-mono text-[10.5px] font-medium uppercase tracking-[0.14em] text-slate-500">Modules · PHYSI index</h2>
@@ -509,7 +555,6 @@ function HomeInner() {
                 </div>
               </section>
 
-              {/* ── FINAL CTA — at bottom end after understanding content ── */}
               <section id="cta" aria-label="Final call to action" className="scroll-mt-24 rounded-[24px] border border-white/[0.07] bg-gradient-to-b from-white/[0.05] to-white/[0.02] p-8 lg:p-10 shadow-card text-center" style={{ borderRadius: "24px" }}>
                 <div className="mx-auto max-w-[640px]">
                   <p className="font-mono text-[10.5px] font-medium uppercase tracking-[0.14em] text-slate-500">Ready to join?</p>
@@ -526,14 +571,13 @@ function HomeInner() {
                       <LogIn size={16} strokeWidth={2} />
                       Login — go to profile
                     </a>
-                    <a
-                      href="#profile"
-                      onClick={(e) => { e.preventDefault(); scrollToProfile(); }}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.04] px-6 py-3 text-[14px] font-medium text-white hover:bg-white/[0.08] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
+                    <button
+                      onClick={() => setTab("timetable")}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.04] px-6 py-3 text-[14px] font-medium text-white hover:bg-white/[0.08] transition"
                     >
-                      Create profile
+                      Open timetable
                       <ArrowUpRight size={16} strokeWidth={2} className="opacity-60" />
-                    </a>
+                    </button>
                   </div>
                   <p className="mt-4 font-mono text-[11px] tracking-wide text-slate-600">
                     Pilot only · Advisory · No cash value · <a href="/api/profile" className="underline decoration-white/20 underline-offset-4 hover:text-slate-400">API: /api/profile</a>
@@ -546,14 +590,13 @@ function HomeInner() {
           {tab === "mining" && (
             <div className="mx-auto max-w-[720px] space-y-4">
               <div className="flex items-center gap-2">
-                <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 font-mono text-[11px] font-medium tracking-wide text-slate-300">Mining</span>
+                <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 font-mono text-[11px] font-medium tracking-wide text-slate-300">Check-in</span>
                 <span className="font-mono text-[11px] tracking-wide text-slate-500">10 base · × level · 24h · cap ~12/day</span>
               </div>
               <MiningPanel />
             </div>
           )}
           {tab === "roadmap" && <EventRoadmap />}
-          {tab === "timetable" && <TimetableFeed />}
           {tab === "verify" && <VerificationEngine />}
         </div>
       </main>
@@ -581,7 +624,7 @@ function HomeInner() {
 
       <footer className="mx-auto max-w-[1240px] px-6 pb-24 pt-8 lg:px-8 lg:pb-10">
         <div className="border-t border-white/[0.06] pt-6 text-center font-mono text-[11px] leading-6 tracking-wide text-slate-600">
-          PHYSI · Pilot — testing now · Not official · TEST-PHYSI — test points only, no cash value · Advisory — always confirm official venues with your department
+          PHYSI · Live timetable — advisory · Not official · TEST-PHYSI — test points only, no cash value · Always confirm official venues with your department
         </div>
       </footer>
     </div>
