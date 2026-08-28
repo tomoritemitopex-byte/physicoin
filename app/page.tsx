@@ -1,3 +1,5 @@
+import { ProfilePilotForm } from '@/components/profile-pilot-form';
+
 const metrics = [
   { label: 'Pilot schools', value: '01', note: 'FUHSI-first rollout' },
   { label: 'Verified events', value: '128', note: 'Scoped, reviewed, canonical' },
@@ -69,6 +71,8 @@ export default function Home() {
             </span>
           </div>
         </header>
+
+        <ProfilePilotForm />
 
         <section className="mt-8 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="rounded-[2rem] border border-white/10 bg-white/5 p-8 shadow-2xl backdrop-blur">
