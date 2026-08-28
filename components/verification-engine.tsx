@@ -88,13 +88,13 @@ export function VerificationEngine() {
       setStats((s) => ({ verified: s.verified + 1, yes: s.yes + (vote === "YES" ? 1 : 0), no: s.no + (vote === "NO" ? 1 : 0) }));
       if (data.mock) {
         setTone("info");
-        const msg = `Demo ${vote} for “${active.title}” — not persisted. Create profile + real events to persist.`;
+        const msg = `Demo ${vote} for “${active.title}” — not saved. Create profile + real events to save.`;
         setMessage(msg);
         setToast({ type: "info", msg });
       } else {
         setTone("success");
-        const delta = vote === "YES" ? "+0.02 authority" : vote === "NO" ? "−0.01 authority" : "no change";
-        const msg = `✓ ${vote} recorded · weight ${data.authority_weight ?? "?"} · ${delta}${data.authority_final_after ? ` → ${data.authority_final_after}` : ""}`;
+        const delta = vote === "YES" ? "Verified" : vote === "NO" ? "Not verified" : "Skipped";
+        const msg = `✓ ${vote} recorded · ${delta}`;
         setMessage(msg);
         setToast({ type: "success", msg });
       }
@@ -126,9 +126,9 @@ export function VerificationEngine() {
 
         <div className="relative flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-[11px] font-black uppercase tracking-[0.32em] text-amber-300">Verification Engine · Authority-weighted</p>
-            <h3 className="mt-2 flex items-center gap-2 text-2xl font-black text-white">Manual verification <span className="rounded-full bg-white px-2.5 py-0.5 text-[10px] font-black tracking-widest text-slate-900">BELL</span></h3>
-            <p className="mt-1 max-w-xl text-sm leading-6 text-slate-400">Tap <b className="text-white">🔔 Bell</b> to pull a random <span className="font-mono text-xs text-sky-300">event store</span> row from <span className="font-mono text-xs text-amber-300">event API</span> and vote <b className="text-white">YES / NO / CANCEL</b>. Weighted by <span className="font-mono text-xs text-emerald-300">authority_final</span>.</p>
+            <p className="text-[11px] font-black uppercase tracking-[0.32em] text-amber-300">Check · Verified</p>
+            <h3 className="mt-2 flex items-center gap-2 text-2xl font-black text-white">Quick check <span className="rounded-full bg-white px-2.5 py-0.5 text-[10px] font-black tracking-widest text-slate-900">BELL</span></h3>
+            <p className="mt-1 max-w-xl text-sm leading-6 text-slate-400">Tap <b className="text-white">🔔 Bell</b> to check a random event — vote <b className="text-white">YES</b>, <b className="text-white">NO</b> or <b className="text-white">Skip</b>. Green check = real.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-xs font-bold text-amber-300">{loadingEvents ? "Loading…" : `${events.length} events`}</span>
@@ -141,9 +141,9 @@ export function VerificationEngine() {
         </div>
 
         <div className="relative mt-6 grid gap-3 sm:grid-cols-3">
-          <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-4 backdrop-blur"><p className="text-xs font-bold uppercase tracking-widest text-slate-400">Verified this session</p><p className="mt-1 text-3xl font-black tabular-nums text-white">{stats.verified}</p><p className="text-xs text-slate-500">POST verification API</p></div>
-          <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4"><p className="text-xs font-bold uppercase tracking-widest text-emerald-300">YES votes</p><p className="mt-1 text-3xl font-black tabular-nums text-white">{stats.yes}</p><p className="text-xs text-emerald-200/70">+0.02 authority</p></div>
-          <div className="rounded-2xl border border-rose-400/20 bg-rose-400/10 p-4"><p className="text-xs font-bold uppercase tracking-widest text-rose-300">NO votes</p><p className="mt-1 text-3xl font-black tabular-nums text-white">{stats.no}</p><p className="text-xs text-rose-200/70">−0.01 authority</p></div>
+          <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-4 backdrop-blur"><p className="text-xs font-bold uppercase tracking-widest text-slate-400">Checked this session</p><p className="mt-1 text-3xl font-black tabular-nums text-white">{stats.verified}</p><p className="text-xs text-slate-500">Green check = real</p></div>
+          <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4"><p className="text-xs font-bold uppercase tracking-widest text-emerald-300">YES votes</p><p className="mt-1 text-3xl font-black tabular-nums text-white">{stats.yes}</p><p className="text-xs text-emerald-200/70">Verified</p></div>
+          <div className="rounded-2xl border border-rose-400/20 bg-rose-400/10 p-4"><p className="text-xs font-bold uppercase tracking-widest text-rose-300">NO votes</p><p className="mt-1 text-3xl font-black tabular-nums text-white">{stats.no}</p><p className="text-xs text-rose-200/70">Not verified</p></div>
         </div>
 
         <div className="relative mt-6 flex flex-wrap items-center gap-3">
@@ -181,7 +181,7 @@ export function VerificationEngine() {
               ))}
             </div>
           )}
-          <p className="mt-3 text-xs text-slate-500">Live contracts: <span className="font-mono text-amber-300">event store</span> + <span className="font-mono text-emerald-300">verification store</span> + <span className="font-mono text-sky-300">authority score</span> · no mocks.</p>
+          <p className="mt-3 text-xs text-slate-500">Green check = real · Your vote helps keep things accurate · Daily check-in capped.</p>
         </div>
       </section>
 
@@ -201,14 +201,14 @@ export function VerificationEngine() {
               {active.scope_type ? <p className="text-xs uppercase tracking-widest text-slate-400">Scope: {active.scope_type}{active.scope_value ? ` · ${active.scope_value}` : ""} {active.status ? `· ${active.status}` : ""}</p> : null}
               {active.created_by_nickname ? <p className="text-xs text-slate-500">by <b className="text-slate-300">{active.created_by_nickname}</b></p> : null}
             </div>
-            <p className="relative mt-4 rounded-2xl border border-white/10 bg-white/5 p-3 text-sm leading-6 text-slate-300 backdrop-blur">Did this event really happen as listed? Your vote is weighted by your authority. <b className="text-emerald-300">YES</b> +0.02 · <b className="text-rose-300">NO</b> −0.01 · <b className="text-slate-300">CANCEL</b> skip.</p>
+            <p className="relative mt-4 rounded-2xl border border-white/10 bg-white/5 p-3 text-sm leading-6 text-slate-300 backdrop-blur">Did this happen as listed? <b className="text-emerald-300">YES</b> = real · <b className="text-rose-300">NO</b> = not real · <b className="text-slate-300">Skip</b> = not sure.</p>
             {!nickname && <p className="relative mt-2 rounded-xl border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-xs font-bold text-rose-200">Create profile first — voting needs global auth.</p>}
             <div className="relative mt-6 grid grid-cols-3 gap-3">
               <button onClick={() => handleVote("YES")} disabled={!!busy || !nickname} className="rounded-2xl bg-emerald-400 px-4 py-3 text-sm font-black text-slate-950 shadow-lg shadow-emerald-500/20 transition hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60">{busy==="YES" ? <span className="inline-flex items-center gap-2"><span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-900 border-t-transparent" />…</span> : "YES"}</button>
               <button onClick={() => handleVote("NO")} disabled={!!busy || !nickname} className="rounded-2xl bg-rose-400 px-4 py-3 text-sm font-black text-slate-950 shadow-lg shadow-rose-500/20 transition hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60">{busy==="NO" ? "…" : "NO"}</button>
-              <button onClick={() => handleVote("CANCEL")} disabled={!!busy || !nickname} className="rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-sm font-black text-white transition hover:bg-white/10 disabled:opacity-60">{busy==="CANCEL" ? "…" : "CANCEL"}</button>
+              <button onClick={() => handleVote("CANCEL")} disabled={!!busy || !nickname} className="rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-sm font-black text-white transition hover:bg-white/10 disabled:opacity-60">{busy==="CANCEL" ? "…" : "Skip"}</button>
             </div>
-            <p className="relative mt-3 text-center text-xs text-slate-500">Posts to <span className="font-mono text-sky-300">POST verification API</span> · @{nickname || "—"} · authority-weighted</p>
+            <p className="relative mt-3 text-center text-xs text-slate-500">Checked as @{nickname || "—"} · Green check = real</p>
           </div>
         </div>
       ) : null}

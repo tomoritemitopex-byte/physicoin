@@ -45,14 +45,14 @@ type PhysiEvent = {
   created_at: string;
 };
 
-// PHYSI Verification Pipeline — 6 steps (flattened from 12, no candy)
+// PHYSI Verification Pipeline — 6 steps
 const roadmapSteps = [
-  { n: "01", label: "Pitch", desc: "Student proposes event", detail: "Entry point: title, venue, date/time captured. No verification yet. Scoped from personal to global." },
-  { n: "02", label: "Scope", desc: "Personal / Programme / Level / Faculty", detail: "Choose breadth. Personal/programme/level stay as personal bubbles; faculty/university/global are candidates for canonical." },
-  { n: "03", label: "Venue & Date lock", desc: "Fixed on advisory timetable", detail: "Venue + date required for duplicate guard and timetable sync. Powers advisory confidence (not verified quorum yet)." },
-  { n: "04", label: "Duplicate Guard", desc: "lower(title)+date+venue → 409", detail: "API rejects duplicates (lower(title)+event_date+lower(venue)). Returns 409 + duplicate_warning. Prevents double-booking." },
-  { n: "05", label: "Verification", desc: "YES / NO / CANCEL weighted", detail: "Verification Engine: weighted YES (+0.02), NO (−0.01), CANCEL (skip) by authority_final. Accumulates signals for quorum." },
-  { n: "06", label: "Canonical → Timetable", desc: "If broad + quorum → shared calendar", detail: "If scope is faculty/university/global and quorum met, promoted to canonical. Advisory green after promotion. TEST-PHYSI reward capped ~12/day." },
+  { n: "01", label: "Pitch", desc: "Student proposes event", detail: "Start here: title, venue, date and time. No check yet. Pick who sees it — just you or wider." },
+  { n: "02", label: "Scope", desc: "Personal / Programme / Level / Faculty", detail: "Choose reach. Narrow stays personal; broad is a candidate for a green check." },
+  { n: "03", label: "Venue & Date lock", desc: "Fixed on timetable", detail: "Venue + date powers the timetable — shows which events are worth a quick check." },
+  { n: "04", label: "Duplicate Guard", desc: "Same title + date + venue blocked", detail: "We block duplicates (same title + date + venue). Keeps the calendar clean." },
+  { n: "05", label: "Check", desc: "YES / NO / Skip", detail: "Quick check: YES, NO or Skip. Community votes help surface what's real. Green check = real." },
+  { n: "06", label: "Verified → Timetable", desc: "If broad + enough checks → shared calendar", detail: "If enough real checks, shared calendar shows Green check = real. Daily check-in capped ~12/day." },
 ];
 
 export function EventRoadmap() {
@@ -167,10 +167,10 @@ export function EventRoadmap() {
       <div className="rounded-[2rem] border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.3em] text-slate-400">PHYSI Verification Pipeline</p>
-            <h2 className="mt-2 text-3xl font-black leading-tight text-white">PHYSI Verification Pipeline (6 steps)</h2>
+            <p className="text-xs font-bold uppercase tracking-[0.3em] text-slate-400">Verified Steps</p>
+            <h2 className="mt-2 text-3xl font-black leading-tight text-white">From pitch to Verified (6 steps)</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-              From pitch to canonical timetable — honest, linear, no candy. Tap a step for detail. Create opens as a drawer. TEST-PHYSI capped.
+              From pitch to green check — simple and clear. Tap a step for detail. Daily points capped · Green check = real.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -354,9 +354,9 @@ export function EventRoadmap() {
           <div className="mt-5 rounded-2xl border border-white/10 bg-white/5 p-4">
             <p className="text-xs font-bold uppercase tracking-wide text-amber-300">Duplicate guard active</p>
             <p className="mt-1 text-xs leading-5 text-slate-400">
-              API blocks inserts where <span className="text-slate-200">lower(title) + event_date + lower(venue)</span> already exists. Returns <span className="font-mono text-amber-300">409 + duplicate_warning</span>.
+              We block duplicate events with the same title, date, and venue — keeps the calendar clean.
             </p>
-            <button onClick={fetchEvents} className="mt-3 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-bold text-slate-300 hover:bg-white/10">↻ Refresh pipeline</button>
+            <button onClick={fetchEvents} className="mt-3 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-bold text-slate-300 hover:bg-white/10">↻ Refresh list</button>
           </div>
         </div>
       </div>
@@ -370,7 +370,7 @@ export function EventRoadmap() {
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.3em] text-amber-300">Create Event</p>
                 <h3 className="mt-1 text-xl font-black text-white">Push to roadmap</h3>
-                <p className="mt-1 text-xs text-slate-400">Event API • secure event store</p>
+                <p className="mt-1 text-xs text-slate-400">Add to timetable · Green check = real</p>
               </div>
               <button onClick={() => setDrawerOpen(false)} className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white hover:bg-white/10">✕</button>
             </div>
@@ -417,11 +417,11 @@ export function EventRoadmap() {
                 <label className="grid gap-2 text-sm font-semibold text-slate-200">
                   Created by nickname
                   <input value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder="Tope (must match a profile)" className="rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-amber-400/40" />
-                  <span className="text-xs font-normal text-slate-400">Links event to physi_users.id via nickname lookup</span>
+                  <span className="text-xs font-normal text-slate-400">Links event to your profile</span>
                 </label>
 
                 <div className="rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-xs leading-5 text-amber-200">
-                  <span className="font-black">Promotion logic:</span> personal scopes stay as <span className="font-bold text-white">personal</span> bubbles; faculty / university / global promote to <span className="font-bold text-emerald-300">canonical</span>. Duplicate = 409.
+                  <span className="font-black">How it works:</span> narrow reach stays <span className="font-bold text-white">personal</span>; broad reach can earn a <span className="font-bold text-emerald-300">green check</span>. Green check = real.
                 </div>
 
                 {message && (

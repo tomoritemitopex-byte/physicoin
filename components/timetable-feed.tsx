@@ -19,9 +19,9 @@ type Slot = {
 };
 
 const CONF: Record<Confidence, { label: string; dot: string; badge: string; bar: string; glow: string }> = {
-  green: { label: "Faculty scope (not verified)", dot: "bg-emerald-400", badge: "border-emerald-400/30 bg-emerald-400/10 text-emerald-300", bar: "bg-emerald-400", glow: "shadow-emerald-400/20" },
+  green: { label: "Green check = real", dot: "bg-emerald-400", badge: "border-emerald-400/30 bg-emerald-400/10 text-emerald-300", bar: "bg-emerald-400", glow: "shadow-emerald-400/20" },
   yellow: { label: "Needs check", dot: "bg-amber-400", badge: "border-amber-400/30 bg-amber-400/10 text-amber-300", bar: "bg-amber-400", glow: "shadow-amber-400/20" },
-  red: { label: "Low confidence", dot: "bg-rose-400", badge: "border-rose-400/30 bg-rose-400/10 text-rose-300", bar: "bg-rose-400", glow: "shadow-rose-400/20" },
+  red: { label: "Needs check", dot: "bg-rose-400", badge: "border-rose-400/30 bg-rose-400/10 text-rose-300", bar: "bg-rose-400", glow: "shadow-rose-400/20" },
 };
 
 function Skeleton() {
@@ -45,7 +45,7 @@ function EmptyIllustration({ filter }: { filter: string }) {
       <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 text-2xl shadow-inner">🗓️</div>
       <p className="mt-4 text-sm font-black text-white">{filter === "all" ? "No timetable slots yet" : `No ${filter} slots`}</p>
       <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-400">
-        {filter === "all" ? <>Canonical events from <span className="font-mono text-xs text-amber-300">event store</span> appear here. Create an event via the roadmap — broad scopes promote to green.</> : <>Switch to <b className="text-white">All</b> to see the full feed, or tap <b className="text-white">Sync now</b> to refetch from <span className="font-mono text-xs text-sky-300">live timetable API</span>.</>}
+        {filter === "all" ? <>Verified events appear here with a green check. Create an event via the roadmap — broad reach helps it get a green check.</> : <>Switch to <b className="text-white">All</b> to see the full feed, or tap <b className="text-white">Sync now</b> to refresh.</>}
       </p>
     </div>
   );
@@ -60,7 +60,7 @@ export function TimetableFeed() {
   const [source, setSource] = useState<string>("");
   const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [metrics, setMetrics] = useState<{ users: number; events: number; verifications: number; upcoming: number } | null>(null);
+  const [metrics, setMetrics] = useState<{ users: number; events: number; checks: number; upcoming: number } | null>(null);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -70,7 +70,7 @@ export function TimetableFeed() {
         setMetrics({
           users: d.metrics.users ?? d.counts?.physi_users ?? 0,
           events: d.metrics.events ?? d.counts?.physi_events ?? 0,
-          verifications: d.metrics.verifications ?? d.counts?.physi_verifications ?? 0,
+          checks: d.metrics.verifications ?? d.metrics.checks ?? d.counts?.physi_verifications ?? 0,
           upcoming: d.metrics.upcoming_events ?? 0,
         });
       }
@@ -120,7 +120,7 @@ export function TimetableFeed() {
         <div>
           <p className="text-[11px] font-black uppercase tracking-[0.32em] text-amber-300">Timetable Feed · Live Sync</p>
           <h3 className="mt-2 flex items-center gap-2 text-2xl font-black text-white">Live timetable <span className="rounded-full bg-white px-2.5 py-0.5 text-[10px] font-black tracking-widest text-slate-900">PHYSI</span></h3>
-          <p className="mt-1 max-w-xl text-sm leading-6 text-slate-400">Advisory only — real fetch from <span className="font-mono text-xs text-sky-300">live timetable API</span> → faculty scope is not verified quorum. Green = faculty scope, not high confidence. TEST-PHYSI has no value.</p>
+          <p className="mt-1 max-w-xl text-sm leading-6 text-slate-400">Advisory only — Green check = real · Others need a quick check · Points have no cash value.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-slate-900/60 px-3 py-1 text-xs font-semibold text-slate-300">
@@ -135,9 +135,9 @@ export function TimetableFeed() {
       {/* counts */}
       <div className="relative mt-6 grid gap-3 sm:grid-cols-3">
         {([
-          { k: "green", label: "Green · Faculty scope", sub: "Not verified — advisory", count: counts.green, cls: "border-emerald-400/20 bg-emerald-400/10 text-emerald-300" },
-          { k: "yellow", label: "Yellow · Review", sub: "Needs verification", count: counts.yellow, cls: "border-amber-400/20 bg-amber-400/10 text-amber-300" },
-          { k: "red", label: "Red · Conflict", sub: "Low / stale", count: counts.red, cls: "border-rose-400/20 bg-rose-400/10 text-rose-300" },
+          { k: "green", label: "Green check = real", sub: "Verified", count: counts.green, cls: "border-emerald-400/20 bg-emerald-400/10 text-emerald-300" },
+          { k: "yellow", label: "Yellow · Check", sub: "Needs a look", count: counts.yellow, cls: "border-amber-400/20 bg-amber-400/10 text-amber-300" },
+          { k: "red", label: "Red · Check", sub: "Needs a look", count: counts.red, cls: "border-rose-400/20 bg-rose-400/10 text-rose-300" },
         ] as const).map((c) => (
           <button key={c.k} onClick={() => setFilter(c.k as Confidence)} className={`group relative overflow-hidden rounded-2xl border p-4 text-left backdrop-blur transition hover:scale-[1.01] active:scale-[0.99] ${c.cls} ${filter === c.k ? "ring-2 ring-white/30" : ""}`}>
             <p className="text-xs font-bold uppercase tracking-widest opacity-90">{c.label}</p>
@@ -161,7 +161,7 @@ export function TimetableFeed() {
           ))}
         </div>
       </div>
-      {source && <p className="relative mt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Source: <span className="text-slate-300">{source}</span> · tap a pill to filter · sync pulls fresh confidence{metrics ? <span> · <span className="text-emerald-300">{metrics.users} users</span> · <span className="text-sky-300">{metrics.events} events</span> · <span className="text-amber-300">{metrics.upcoming} upcoming</span> via /api/stats</span> : null}</p>}
+      {source && <p className="relative mt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Source: <span className="text-slate-300">{source}</span> · tap a pill to filter · sync pulls fresh status{metrics ? <span> · <span className="text-emerald-300">{metrics.users} users</span> · <span className="text-sky-300">{metrics.events} events</span> · <span className="text-amber-300">{metrics.upcoming} upcoming</span></span> : null}</p>}
 
       {/* feed */}
       <div className="relative mt-6 grid gap-3">
@@ -203,7 +203,7 @@ export function TimetableFeed() {
         )}
       </div>
 
-      <p className="relative mt-4 flex items-center gap-2 text-xs text-slate-500"><span className="h-2 w-2 rounded-full bg-slate-400" /> Advisory path: <span className="font-mono text-sky-300">event store → live timetable API → faculty scope (not verified)</span> · green is not quorum.</p>
+      <p className="relative mt-4 flex items-center gap-2 text-xs text-slate-500"><span className="h-2 w-2 rounded-full bg-slate-400" /> Green check = real · Verified events stay on top · Daily check-in capped.</p>
 
       <style>{`@keyframes toastIn{from{opacity:0;transform:translate(-50%,8px) scale(0.98)}to{opacity:1;transform:translate(-50%,0) scale(1)}}`}</style>
     </section>

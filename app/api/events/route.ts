@@ -48,13 +48,23 @@ async function ensureEventsTable() {
   await sql`CREATE INDEX IF NOT EXISTS physi_events_status_idx ON physi_events (status);`;
   // Duplicate guard at DB level — prevents race
   await sql`CREATE UNIQUE INDEX IF NOT EXISTS physi_events_title_venue_date_uidx ON physi_events (lower(title), lower(venue), event_date);`;
+  await sql`
+    CREATE TABLE IF NOT EXISTS physi_canonical_log (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      event_id UUID NOT NULL REFERENCES physi_events(id) ON DELETE CASCADE,
+      promoted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      yes_weight NUMERIC(10,2) NOT NULL,
+      total_weight NUMERIC(10,2) NOT NULL,
+      yes_ratio NUMERIC(5,3) NOT NULL,
+      promoted_by UUID REFERENCES physi_users(id) ON DELETE SET NULL
+    );
+  `;
+  await sql`CREATE INDEX IF NOT EXISTS physi_canonical_log_event_idx ON physi_canonical_log (event_id);`;
 }
 
-function deriveStatus(scopeType: string): 'personal' | 'canonical' {
-  const s = scopeType.trim().toLowerCase();
-  const canonicalScopes = ['global', 'university', 'faculty', 'all', 'canonical', 'department'];
-  if (canonicalScopes.includes(s)) return 'canonical';
-  return 'personal';
+function deriveStatus(_scopeType: string): 'pending' {
+  // Satoshi P0: always pending on create. Promotion is quorum-gated (yesW>=5 && yes_ratio>=0.66) via verify route transactionally.
+  return 'pending';
 }
 
 const VALID_SCOPE_TYPES = ['personal', 'department', 'faculty', 'university', 'global', 'all', 'canonical', 'programme', 'level'] as const;
@@ -66,13 +76,13 @@ export async function GET(request: Request) {
     await ensureEventsTable();
 
     const { searchParams } = new URL(request.url);
-    const statusFilter = searchParams.get('status')?.trim().toLowerCase() || null; // personal|canonical
+    const statusFilter = searchParams.get('status')?.trim().toLowerCase() || null; // pending|personal|canonical
     const scopeFilter = searchParams.get('scope_type')?.trim().toLowerCase() || null;
     const limitRaw = searchParams.get('limit')?.trim() || '200';
     const limit = Math.min(200, Math.max(1, parseInt(limitRaw, 10) || 200));
 
     let events;
-    if (statusFilter && ['personal', 'canonical'].includes(statusFilter)) {
+    if (statusFilter && ['pending', 'personal', 'canonical'].includes(statusFilter)) {
       events = await sql`
         SELECT e.id, e.title, e.venue, e.event_date, e.event_time, e.scope_type, e.scope_value, e.status, e.authority_points, e.required_points, e.created_by, e.created_at, e.updated_at,
                u.nickname as created_by_nickname
@@ -176,8 +186,8 @@ export async function POST(request: Request) {
     }
 
     const status = deriveStatus(scope_type);
-    const authority_points = status === 'canonical' ? 0 : 0;
-    const required_points = status === 'canonical' ? 5 : 0;
+    const authority_points = 0;
+    const required_points = 5; // quorum threshold: yesW>=5 for promotion
 
     let inserted;
     try {
@@ -198,7 +208,7 @@ export async function POST(request: Request) {
       throw e;
     }
 
-    return NextResponse.json({ ok: true, event: inserted, promoted: status === 'canonical' }, { status: 201 });
+    return NextResponse.json({ ok: true, event: inserted, promoted: false, status: 'pending' }, { status: 201 });
   } catch (error) {
     console.error('[events][POST] failed:', error);
     return NextResponse.json({ ok: false, error: 'Could not create event right now.' }, { status: 500 });

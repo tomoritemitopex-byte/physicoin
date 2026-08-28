@@ -20,11 +20,11 @@ const TABS: { id: TabId; label: string; Icon: React.ComponentType<any> }[] = [
 
 const MODULES = [
   { title: "Identity & Access", detail: "Profile setup, role scopes and pilot access rules.", status: "Ready", dot: "bg-blue-500" },
-  { title: "Event Roadmap", detail: "PHYSI Verification Pipeline — Pitch to Canonical with duplicate guard.", status: "Testing", dot: "bg-slate-400" },
-  { title: "Timetable Feed", detail: "Advisory sync — green is faculty scope only, not verified quorum.", status: "Ready", dot: "bg-blue-500" },
-  { title: "Mining Engine", detail: "Daily check-in (TEST-PHYSI, no value) · cap ~12/day.", status: "Ready", dot: "bg-blue-500" },
-  { title: "Verification", detail: "Weighted YES / NO / CANCEL — authority matters.", status: "Testing", dot: "bg-slate-400" },
-  { title: "Analytics & Audit", detail: "Track authority drift and flag suspicious patterns.", status: "Planned", dot: "bg-slate-600" },
+  { title: "Event Roadmap", detail: "From pitch to green check — six clear steps.", status: "Testing", dot: "bg-slate-400" },
+  { title: "Timetable Feed", detail: "Advisory sync — Green check = real, others need a quick check.", status: "Ready", dot: "bg-blue-500" },
+  { title: "Mining Engine", detail: "Daily check-in · points for fun · cap ~12/day.", status: "Ready", dot: "bg-blue-500" },
+  { title: "Check", detail: "Quick YES / NO / Skip — Verified helps everyone.", status: "Testing", dot: "bg-slate-400" },
+  { title: "Analytics & Audit", detail: "Track activity and flag anything odd.", status: "Planned", dot: "bg-slate-600" },
 ];
 
 function AuthBadge() {
@@ -52,7 +52,7 @@ function AuthBadge() {
 function HomeInner() {
   const [tab, setTab] = useState<TabId>("overview");
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [stats, setStats] = useState<{ users: number; events: number; verifications: number } | null>(null);
+  const [stats, setStats] = useState<{ users: number; events: number; checks: number } | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
 
   useEffect(() => {
@@ -61,8 +61,8 @@ function HomeInner() {
       .then((r) => r.json())
       .then((j) => {
         if (!alive) return;
-        if (j?.ok && j.metrics) setStats({ users: Number(j.metrics.users ?? 0), events: Number(j.metrics.events ?? 0), verifications: Number(j.metrics.verifications ?? 0) });
-        else if (j?.counts) setStats({ users: Number(j.counts.physi_users ?? 0), events: Number(j.counts.physi_events ?? 0), verifications: Number(j.counts.physi_verifications ?? 0) });
+        if (j?.ok && j.metrics) setStats({ users: Number(j.metrics.users ?? 0), events: Number(j.metrics.events ?? 0), checks: Number(j.metrics.verifications ?? j.metrics.checks ?? 0) });
+        else if (j?.counts) setStats({ users: Number(j.counts.physi_users ?? 0), events: Number(j.counts.physi_events ?? 0), checks: Number(j.counts.physi_verifications ?? 0) });
       })
       .catch(() => {})
       .finally(() => alive && setStatsLoading(false));
@@ -165,7 +165,7 @@ function HomeInner() {
                     PHYSI — Research Preview
                   </h1>
                   <p className="mt-4 max-w-[560px] text-[15px] leading-6 text-slate-400">
-                    Testing verification + mining with a 10-student FUHSI cohort. Timetable is advisory only. TEST-PHYSI has no monetary value.
+                    Testing with a small FUHSI cohort. Timetable is advisory only — Green check = real. Points have no cash value.
                   </p>
 
                   <div className="mt-6 flex flex-wrap items-center gap-3">
@@ -181,10 +181,10 @@ function HomeInner() {
                     >
                       Push event
                     </button>
-                    <span className="text-xs text-slate-500">Daily check-in · TEST-PHYSI · cap ~12 / day · no redemption</span>
+                    <span className="text-xs text-slate-500">Daily check-in · points · cap ~12/day · Green check = real</span>
                   </div>
                   <p className="mt-3 text-xs leading-5 text-slate-500">
-                    Method, limits, and what we don&apos;t claim: sown events may differ from canonical · green means faculty scope only, not verified quorum · cap visible in Mining. No funds at risk.
+                    Green check = real · Others need a quick check · Daily cap visible in check-in. Points have no cash value.
                   </p>
                 </div>
 
@@ -192,9 +192,9 @@ function HomeInner() {
                 <div className="mt-10 grid grid-cols-2 gap-6 border-t border-white/[0.06] pt-6 lg:grid-cols-4">
                   {[
                     { label: "Pilot schools", value: "01", sub: "FUHSI-first · Lab" },
-                    { label: "Verified events", value: statsLoading ? "—" : String(stats?.events ?? 0), sub: (stats?.events ?? 0) === 0 && !statsLoading ? "0 sown — be first" : "canonical + personal" },
+                    { label: "Verified events", value: statsLoading ? "—" : String(stats?.events ?? 0), sub: (stats?.events ?? 0) === 0 && !statsLoading ? "0 sown — be first" : "Green check = real" },
                     { label: "Active testers", value: statsLoading ? "—" : String(stats?.users ?? 0), sub: (stats?.users ?? 0) === 0 && !statsLoading ? "be first — invite cohort" : "students + admins" },
-                    { label: "Verifications", value: statsLoading ? "—" : String(stats?.verifications ?? 0), sub: "weighted YES/NO/CANCEL" },
+                    { label: "Verified", value: statsLoading ? "—" : String(stats?.checks ?? 0), sub: "Green check = real" },
                   ].map((m) => (
                     <div key={m.label} className="min-w-0">
                       <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">{m.label}</p>
@@ -221,13 +221,13 @@ function HomeInner() {
                       <div>
                         <p className="text-[15px] font-semibold text-white">PHYSI</p>
                         <p className="text-sm leading-5 text-slate-400">Event-driven truth coin.</p>
-                        <p className="text-xs text-slate-500">Authority-weighted · scoped · verified</p>
+                        <p className="text-xs text-slate-500">Verified · Green check = real</p>
                       </div>
                     </div>
                     <div className="mt-5 grid grid-cols-3 gap-2 text-center">
                       {[
                         { k: "Base", v: "10" },
-                        { k: "Weight", v: "× auth" },
+                        { k: "Bonus", v: "× level" },
                         { k: "Cooldown", v: "24h" },
                       ].map((s) => (
                         <div key={s.k} className="rounded-xl border border-white/10 bg-[#020610] px-2 py-3">
@@ -243,9 +243,9 @@ function HomeInner() {
                     <ol className="mt-4 space-y-3">
                       {[
                         ["01", "Create profile", "Programme, level, statuses"],
-                        ["02", "Push event", "Duplicate guard + promo check"],
-                        ["03", "Verify", "Yes / No / Cancel weighted"],
-                        ["04", "Daily check-in", "TEST-PHYSI · cap ~12/day · no value"],
+                        ["02", "Push event", "Duplicate check + green check"],
+                        ["03", "Check", "YES / NO / Skip — Green check = real"],
+                        ["04", "Daily check-in", "Daily points · cap ~12/day · Green check = real"],
                       ].map(([n, t, d]) => (
                         <li key={n} className="flex gap-3">
                           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white text-[11px] font-bold text-slate-900">
@@ -292,8 +292,8 @@ function HomeInner() {
           {tab === "mining" && (
             <div className="mx-auto max-w-[720px] space-y-4">
               <div className="flex items-center gap-2">
-                <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-xs font-medium text-amber-300">Daily check-in · TEST-PHYSI</span>
-                <span className="text-xs text-slate-500">TEST-PHYSI · cap ~12 / day · no redemption · no value</span>
+                <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-xs font-medium text-amber-300">Daily check-in</span>
+                <span className="text-xs text-slate-500">Points · cap ~12/day · Green check = real</span>
               </div>
               <MiningPanel />
             </div>
@@ -322,7 +322,7 @@ function HomeInner() {
 
       <footer className="mx-auto max-w-[1280px] px-6 pb-24 pt-8 lg:px-8 lg:pb-10">
         <div className="border-t border-white/[0.06] pt-6 text-center text-xs leading-6 text-slate-500">
-          © PHYSI — Research Preview · FUHSI Lab Pilot · Status: Testing · Not canonical · TEST-PHYSI, no value
+          © PHYSI — Research Preview · FUHSI Lab Pilot · Green check = real · Points have no cash value
         </div>
       </footer>
     </div>

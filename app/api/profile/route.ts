@@ -13,25 +13,42 @@ const LEVEL_BASE: Record<string, number> = {
   '600L': 1.25,
 };
 
+/**
+ * Satoshi P0: authority capped to 1.10 until FUHSI key signs.
+ * Removed SUG 2.5x king (string.includes('sug') bonus). Without a valid
+ * FUHSI_AUTHORITY_KEY env, all authority_final is clamped to 1.10 max.
+ * When FUHSI_AUTHORITY_KEY is set, the full table up to 2.00 is allowed
+ * (requires off-chain FUHSI signature verification in future).
+ */
+function isFuhsiAuthorityUnlocked(): boolean {
+  const k = process.env.FUHSI_AUTHORITY_KEY ?? process.env.FUHSI_SIGNING_KEY ?? '';
+  return typeof k === 'string' && k.trim().length >= 16;
+}
+
 function calcAuthority(level: string, statuses: string[]): { base: number; final: number } {
   const lb = LEVEL_BASE[level] ?? 1.0;
   let bonus = 0;
   const joined = statuses.map((s) => s.toLowerCase());
   for (const s of joined) {
-    if (s.includes('president') && !s.includes('vice')) bonus += 0.2;
-    else if (s.includes('vice president') || s === 'vp' || s.includes('vice-president')) bonus += 0.12;
-    else if (s.includes('governor')) bonus += 0.12;
-    else if (s.includes('course rep') || s.includes('course representative') || s.includes('class rep')) bonus += 0.1;
-    else if (s.includes('sug') || s.includes('sgs') || s.includes('student union')) bonus += 0.15;
-    else if (s.includes('secretary')) bonus += 0.08;
-    else if (s.includes('treasurer') || s.includes('financial')) bonus += 0.08;
-    else if (s.includes('p.r.o') || s.includes('pro ') || s.includes('public relation')) bonus += 0.07;
-    else if (s.includes('lecturer') || s.includes('staff') || s.includes('admin') || s.includes('hod')) bonus += 0.18;
+    if (s.includes('president') && !s.includes('vice')) bonus += 0.05;
+    else if (s.includes('vice president') || s === 'vp' || s.includes('vice-president')) bonus += 0.04;
+    else if (s.includes('governor')) bonus += 0.04;
+    else if (s.includes('course rep') || s.includes('course representative') || s.includes('class rep')) bonus += 0.04;
+    else if (s.includes('secretary')) bonus += 0.02;
+    else if (s.includes('treasurer') || s.includes('financial')) bonus += 0.02;
+    else if (s.includes('p.r.o') || s.includes('pro ') || s.includes('public relation')) bonus += 0.02;
+    else if (s.includes('lecturer') || s.includes('staff') || s.includes('admin') || s.includes('hod')) bonus += 0.05;
+    // SUG / SGS / student union bonus REMOVED — was 2.5x king via stacking; see Satoshi roast.
   }
-  bonus = Math.min(bonus, 0.5);
-  const base = Number((lb + bonus).toFixed(2));
-  const final = Math.min(2.0, Math.max(0.5, base));
-  return { base, final: Number(final.toFixed(2)) };
+  bonus = Math.min(bonus, 0.15);
+  const rawBase = Number((lb + bonus).toFixed(2));
+  let final = Math.min(2.0, Math.max(0.5, rawBase));
+  let base = rawBase;
+  if (!isFuhsiAuthorityUnlocked()) {
+    final = Math.min(1.1, final);
+    base = Math.min(1.1, rawBase);
+  }
+  return { base: Number(base.toFixed(2)), final: Number(final.toFixed(2)) };
 }
 
 function bad(msg: string, status = 400, extra: Record<string, unknown> = {}) {

@@ -62,6 +62,18 @@ async function ensureTables() {
   await sql`CREATE UNIQUE INDEX IF NOT EXISTS physi_verifications_verifier_event_uidx ON physi_verifications (verifier_id, event_id);`;
   await sql`CREATE INDEX IF NOT EXISTS physi_verifications_event_idx ON physi_verifications (event_id);`;
   await sql`CREATE INDEX IF NOT EXISTS physi_verifications_verifier_idx ON physi_verifications (verifier_id);`;
+  await sql`
+    CREATE TABLE IF NOT EXISTS physi_canonical_log (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      event_id UUID NOT NULL REFERENCES physi_events(id) ON DELETE CASCADE,
+      promoted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      yes_weight NUMERIC(10,2) NOT NULL,
+      total_weight NUMERIC(10,2) NOT NULL,
+      yes_ratio NUMERIC(5,3) NOT NULL,
+      promoted_by UUID REFERENCES physi_users(id) ON DELETE SET NULL
+    );
+  `;
+  await sql`CREATE INDEX IF NOT EXISTS physi_canonical_log_event_idx ON physi_canonical_log (event_id);`;
 }
 
 async function resolveUser(nickname?: string, verifierId?: string) {
@@ -210,6 +222,54 @@ export async function POST(request: Request) {
       await sql`UPDATE physi_events SET authority_points = authority_points + ${eventDelta}, updated_at = NOW() WHERE id = ${eventId};`;
     }
 
+    // Satoshi P0: quorum promotion — only when yesW>=5 && yes_ratio>=0.66, transactionally with physi_canonical_log
+    let promoted = false;
+    let canonicalLogId: string | null = null;
+    try {
+      const weightedRows = await sql`SELECT vote, authority_weight FROM physi_verifications WHERE event_id = ${eventId};`;
+      let yesW = 0, totalW = 0;
+      for (const r of weightedRows as Array<{ vote: string; authority_weight: string | number }>) {
+        const w = Number(r.authority_weight ?? 1);
+        totalW += w;
+        if (r.vote === 'YES') yesW += w;
+      }
+      const yesRatio = totalW ? yesW / totalW : 0;
+      const shouldPromote = yesW >= 5 && yesRatio >= 0.66;
+
+      if (shouldPromote && ev.status !== 'canonical') {
+        const doPromote = async (tx: any) => {
+          const [freshEv] = await (tx as any)`SELECT status FROM physi_events WHERE id = ${eventId} FOR UPDATE;`;
+          if (!freshEv || freshEv.status === 'canonical') return null;
+          await (tx as any)`UPDATE physi_events SET status = 'canonical', updated_at = NOW() WHERE id = ${eventId};`;
+          const [log] = await (tx as any)`
+            INSERT INTO physi_canonical_log (event_id, yes_weight, total_weight, yes_ratio, promoted_by)
+            VALUES (${eventId}, ${Number(yesW.toFixed(2))}, ${Number(totalW.toFixed(2))}, ${Number(yesRatio.toFixed(3))}, ${verifierId})
+            RETURNING id;
+          `;
+          return log?.id ?? null;
+        };
+        const maybeBegin = (sql as unknown as { begin?: (fn: (tx: typeof sql) => Promise<unknown>) => Promise<unknown> }).begin;
+        if (typeof maybeBegin === 'function') {
+          const res = await maybeBegin(async (tx: typeof sql) => doPromote(tx as typeof sql));
+          if (res) { promoted = true; canonicalLogId = String(res); }
+        } else {
+          // fallback non-transactional (single statements — still logs)
+          const [freshEv2] = await sql`SELECT status FROM physi_events WHERE id = ${eventId} LIMIT 1;`;
+          if (freshEv2 && freshEv2.status !== 'canonical') {
+            await sql`UPDATE physi_events SET status = 'canonical', updated_at = NOW() WHERE id = ${eventId};`;
+            const [log2] = await sql`
+              INSERT INTO physi_canonical_log (event_id, yes_weight, total_weight, yes_ratio, promoted_by)
+              VALUES (${eventId}, ${Number(yesW.toFixed(2))}, ${Number(totalW.toFixed(2))}, ${Number(yesRatio.toFixed(3))}, ${verifierId})
+              RETURNING id;
+            `;
+            promoted = true; canonicalLogId = String(log2?.id ?? '');
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[verify] quorum promotion failed (non-fatal):', e);
+    }
+
     return NextResponse.json(
       {
         ok: true,
@@ -218,6 +278,7 @@ export async function POST(request: Request) {
         authority_final_before: authorityWeight,
         authority_final_after: nextAuthority,
         delta,
+        quorum: promoted ? { promoted: true, canonical_log_id: canonicalLogId } : { promoted: false },
       },
       { status: 201 }
     );

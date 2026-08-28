@@ -32,11 +32,11 @@ function formatCooldown(ms: number) {
 }
 
 function tierFromAuthority(v: number) {
-  if (v >= 2) return { label: "Authority", icon: "◆", cls: "from-violet-500 to-fuchsia-500 border-violet-400/30 text-white" };
+  if (v >= 2) return { label: "Legend", icon: "◆", cls: "from-violet-500 to-fuchsia-500 border-violet-400/30 text-white" };
   if (v >= 1.5) return { label: "Elite", icon: "⬢", cls: "from-amber-400 to-orange-500 border-amber-400/30 text-slate-900" };
   if (v >= 1.2) return { label: "Trusted", icon: "●", cls: "from-emerald-400 to-teal-500 border-emerald-400/30 text-slate-900" };
   if (v >= 1.0) return { label: "Verified", icon: "◉", cls: "from-sky-400 to-blue-500 border-sky-400/30 text-white" };
-  return { label: "Novice", icon: "○", cls: "from-slate-600 to-slate-700 border-white/15 text-slate-200" };
+  return { label: "New", icon: "○", cls: "from-slate-600 to-slate-700 border-white/15 text-slate-200" };
 }
 
 function useCountUp(target: number, duration = 900) {
@@ -291,13 +291,12 @@ export function MiningPanel({ initialNickname = "" }: { initialNickname?: string
       {/* header */}
       <div className="relative flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.32em] text-amber-300">Daily check-in · TEST-PHYSI</p>
+          <p className="text-[11px] font-black uppercase tracking-[0.32em] text-amber-300">Daily check-in</p>
           <h3 className="mt-2 flex items-center gap-2 text-2xl font-black text-white">
-            Daily check-in (TEST-PHYSI)
-            <span className="rounded-full bg-amber-400 px-2.5 py-0.5 text-[10px] font-black tracking-widest text-slate-900">TEST</span>
-            <span className="rounded-full bg-white px-2.5 py-0.5 text-[10px] font-black tracking-widest text-slate-900">PHYSI</span>
+            Daily check-in
+            <span className="rounded-full bg-white px-2.5 py-0.5 text-[10px] font-black tracking-widest text-slate-900">DAILY</span>
           </h3>
-          <p className="mt-1 text-sm text-slate-400">10 × authority · 24h cooldown · Cap: ~12 / day · No redemption · Public log · no monetary value</p>
+          <p className="mt-1 text-sm text-slate-400">Daily bonus · 24h cooldown · Cap: ~12 / day · Points have no cash value</p>
         </div>
         <div className="flex flex-col items-end gap-2">
           <span
@@ -374,14 +373,14 @@ export function MiningPanel({ initialNickname = "" }: { initialNickname?: string
           </p>
           <div className="mt-4 grid grid-cols-2 gap-3">
             <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Authority</p>
+              <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Level</p>
               <p className="mt-1 text-lg font-black text-white">{authorityMultiplier}</p>
-              <p className="text-xs font-semibold text-sky-300">multiplier</p>
+              <p className="text-xs font-semibold text-sky-300">bonus</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
               <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Next Reward</p>
               <p className="mt-1 text-lg font-black text-white">{expectedReward}</p>
-              <p className="text-xs font-semibold text-emerald-300">10 × authority</p>
+              <p className="text-xs font-semibold text-emerald-300">Daily bonus</p>
             </div>
           </div>
         </div>
@@ -462,7 +461,7 @@ export function MiningPanel({ initialNickname = "" }: { initialNickname?: string
         ) : showGreenPulse ? (
           <>
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-amber-400 shadow-inner">$</span>
-            Check in · +{expectedReward} TEST-PHYSI
+            Check in · +{expectedReward} points
           </>
         ) : remainingMs > 0 ? (
           `Cooldown ${formatCooldown(remainingMs)}`
@@ -470,7 +469,7 @@ export function MiningPanel({ initialNickname = "" }: { initialNickname?: string
           "Load profile to check in"
         )}
       </button>
-      <p className="mt-2 text-center text-xs text-slate-500">Cap: ~12 / day · No redemption · Public log · TEST-PHYSI has no monetary value</p>
+      <p className="mt-2 text-center text-xs text-slate-500">Cap: ~12 / day · Points have no cash value · Green check = real</p>
 
       {message && (
         <p
@@ -505,7 +504,7 @@ export function MiningPanel({ initialNickname = "" }: { initialNickname?: string
               $
             </div>
             <p className="mt-4 text-sm font-black text-white">No check-ins yet</p>
-            <p className="mx-auto mt-1 max-w-sm text-sm leading-6 text-slate-400">Your daily check-in creates a log in <span className="font-mono text-xs text-amber-300">secure ledger</span> (TEST-PHYSI, no value). Cap ~12/day.</p>
+            <p className="mx-auto mt-1 max-w-sm text-sm leading-6 text-slate-400">Your daily check-in is saved · Points have no cash value · Cap ~12/day · Green check = real.</p>
             <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-xs font-bold text-slate-400">
               <span className={`h-2 w-2 rounded-full ${hasActiveCohort ? "bg-amber-400" : "bg-slate-500"}`} /> {hasActiveCohort ? "Ready when you are" : "Cohort empty — invite first tester"}
             </div>
@@ -536,7 +535,7 @@ export function MiningPanel({ initialNickname = "" }: { initialNickname?: string
                           <span className="hidden sm:inline text-slate-600">·</span>
                           <span className="inline-flex items-center gap-1">
                             <span className="h-1.5 w-1.5 rounded-full bg-sky-400" />
-                            {mult.toFixed(2)}x authority
+                            {mult.toFixed(2)}× bonus
                           </span>
                         </p>
                       </div>
