@@ -5,11 +5,34 @@ import { sql } from '@/lib/db';
  * All CREATEs are IF NOT EXISTS so calls are idempotent and safe
  * to run at the start of every API handler (serverless-friendly).
  * Guards on `!sql` so health / mock paths work without DATABASE_URL.
+ *
+ * Neon cold-start fixes:
+ *  - pgcrypto CREATE EXTENSION guarded (no superuser fail)
+ *  - ensureAllTables parallelized + single retry for cold start
  */
+
+// Guarded pgcrypto — Neon serverless roles lack superuser; extension may already exist or be forbidden.
+async function ensurePgcrypto(): Promise<void> {
+  if (!sql) return;
+  try {
+    // Fast-path: check if already installed (avoids superuser error entirely)
+    const rows = await sql`SELECT 1 as exists FROM pg_extension WHERE extname = 'pgcrypto' LIMIT 1;`;
+    if (Array.isArray(rows) && rows.length > 0) return;
+  } catch {
+    // SELECT failed (cold start / transient) — fall through to try CREATE
+  }
+  try {
+    await sql`CREATE EXTENSION IF NOT EXISTS pgcrypto;`;
+  } catch (e) {
+    // Neon / managed Postgres often forbids CREATE EXTENSION without superuser.
+    // gen_random_uuid() works if pgcrypto already enabled; otherwise uuid fallback still allows table creation.
+    console.warn('[ensure] CREATE EXTENSION pgcrypto skipped (no superuser or already exists):', (e as Error)?.message ?? e);
+  }
+}
 
 export async function ensureUsersTable(): Promise<void> {
   if (!sql) return;
-  await sql`CREATE EXTENSION IF NOT EXISTS pgcrypto;`;
+  await ensurePgcrypto();
   await sql`
     CREATE TABLE IF NOT EXISTS physi_users (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -106,14 +129,33 @@ export async function ensureVerificationsTable(): Promise<void> {
  * Ensure every PHYSI table/index exists. Use for stats / admin routes
  * that touch all tables. For isolated routes prefer the narrow helper
  * above to minimize cold-start DDL.
+ *
+ * Parallelized + single retry for Neon cold starts (TTFB bloat fix).
  */
 export async function ensureAllTables(): Promise<void> {
   if (!sql) return;
-  await ensureUsersTable();
-  await ensureEventsTable();
-  await ensureVerificationsTable();
-  await ensureMiningLogsTable();
-  await ensureCanonicalLogTable();
+
+  const run = async () => {
+    // Users must exist first (FK targets)
+    await ensureUsersTable();
+    // Events depends on users; remaining tables depend on users+events.
+    // After users, parallelize the rest to cut serial DDL latency.
+    await ensureEventsTable();
+    await Promise.all([
+      ensureVerificationsTable(),
+      ensureMiningLogsTable(),
+      ensureCanonicalLogTable(),
+    ]);
+  };
+
+  try {
+    await run();
+  } catch (err) {
+    // Neon http cold start can transiently fail first DDL batch — one retry with short backoff
+    console.warn('[ensure] ensureAllTables first attempt failed, retrying once (cold start):', (err as Error)?.message ?? err);
+    await new Promise((r) => setTimeout(r, 300));
+    await run();
+  }
 }
 
 // Back-compat aliases — existing routes called these names

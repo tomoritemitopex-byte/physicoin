@@ -8,15 +8,22 @@ export const dynamic = 'force-dynamic';
  * GET /api/stats
  * Returns real counts/sums from physi_* tables for dashboard metrics.
  * Gracefully handles DATABASE_URL missing (503 with structured code) and empty tables.
+ * Neon cold-start hardened: ensureAllTables is guarded + stats never 500 on STATS_ERROR.
  */
 export async function GET() {
   if (!sql) {
     return NextResponse.json(dbUnavailableResponse(), { status: 503 });
   }
 
+  // Guard ensure — never let DDL cold-start failure bubble to 500
   try {
     await ensureAllTables();
+  } catch (e) {
+    console.warn('[stats] ensureAllTables failed (cold start, will serve degraded stats):', (e as Error)?.message ?? e);
+    // continue — queries below use Promise.allSettled and return defaults per table
+  }
 
+  try {
     // Run counts in parallel — each guarded so one failing doesn't take down others
     const results = await Promise.allSettled([
       sql`SELECT COUNT(*)::int as c FROM physi_users;`,
@@ -71,6 +78,37 @@ export async function GET() {
       voteMap[String(r.vote)] = { count: Number(r.c), weight: Number(Number(r.w ?? 0).toFixed(2)) };
     }
 
+    // If all queries failed, return degraded 200 with STATS_ERROR instead of 500
+    const allFailed = results.every((r) => r.status === 'rejected');
+    if (allFailed) {
+      console.warn('[stats][GET] all queries failed — returning degraded STATS_ERROR 200');
+      return NextResponse.json(
+        {
+          ok: false,
+          error: 'Could not load stats right now.',
+          code: 'STATS_ERROR',
+          metrics: {
+            users: 0,
+            events: 0,
+            events_by_status: {},
+            events_by_scope: [],
+            upcoming_events: 0,
+            verifications: 0,
+            verifications_by_vote: {},
+            mining_logs: 0,
+            mining_total_earned: 0,
+            mining_avg_earned: 0,
+            mines_last_24h: 0,
+            total_mining_balance: 0,
+            avg_authority_final: 0,
+            max_authority_final: 0,
+          },
+          counts: { physi_users: 0, physi_events: 0, physi_verifications: 0, physi_mining_logs: 0 },
+        },
+        { status: 200 }
+      );
+    }
+
     return NextResponse.json({
       ok: true,
       generated_at: new Date().toISOString(),
@@ -99,6 +137,10 @@ export async function GET() {
     });
   } catch (error) {
     console.error('[stats][GET] failed:', error);
-    return NextResponse.json({ ok: false, error: 'Could not load stats right now.', code: 'STATS_ERROR' }, { status: 500 });
+    // Never 500 — return 200 with STATS_ERROR so frontend can show degraded UI without error boundary
+    return NextResponse.json(
+      { ok: false, error: 'Could not load stats right now.', code: 'STATS_ERROR', metrics: null },
+      { status: 200 }
+    );
   }
 }
