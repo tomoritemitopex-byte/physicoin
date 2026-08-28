@@ -15,9 +15,9 @@ const jetbrains = JetBrains_Mono({
 });
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://physicoin.vercel.app";
-const title = "PHYSI — Research Preview · FUHSI Lab Pilot";
+const title = "PHYSI — A live student timetable, built together";
 const description =
-  "PHYSI Research Preview — lab pilot for FUHSI: verification + advisory timetable + daily check-in (TEST-PHYSI, no value). Testing with small cohort.";
+  "PHYSI Research Preview — a real-time calendar made by students: share lectures and venues, confirm what's real, stay in sync. The more students who use it, the more accurate it gets. TEST-PHYSI test points only, no cash value. Advisory only.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
     title,
     description,
     siteName: "PHYSI",
-    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "PHYSI — Event truth, verified by the cohort" }],
+    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "PHYSI — A live timetable, built by the students who use it" }],
   },
   twitter: {
     card: "summary_large_image",

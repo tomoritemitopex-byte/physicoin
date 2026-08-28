@@ -63,7 +63,7 @@ export function ProfilePilotForm() {
       }
 
       setState('success');
-      setMessage(`Profile created: ${data.user.full_name} (${data.user.nickname})`);
+      setMessage(`Welcome, ${data.user.full_name} (@${data.user.nickname}) — you're in. Now share or confirm a lecture.`);
       setAuth({ nickname: data.user.nickname, fullName: data.user.full_name });
     } catch (error) {
       setState('error');
@@ -72,37 +72,44 @@ export function ProfilePilotForm() {
   }
 
   return (
-    <section className="mt-8 rounded-card border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur">
+    <section className="rounded-card border border-white/10 bg-white/[0.04] p-6 shadow-2xl backdrop-blur">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.3em] text-amber-300">Testing action</p>
-          <h3 className="mt-2 text-2xl font-black">Create Profile</h3>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Join the calendar</p>
+          <h3 className="mt-1 text-[18px] font-semibold tracking-tight text-white">Create your student profile</h3>
+          <p className="mt-1 text-[12.5px] leading-5 text-slate-500">30 seconds — programme, level, and a nickname. That&apos;s it. <span className="text-slate-400">TEST-PHYSI points have no cash value.</span></p>
         </div>
-        <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-bold text-sky-300">
-          Uses /api/profile
+        <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 font-mono text-[11px] font-medium tracking-wide text-slate-500">
+          Research Preview · Advisory only
         </span>
       </div>
 
       <form onSubmit={handleSubmit} className="mt-6 grid gap-4 md:grid-cols-2">
         <label className="grid gap-2 text-sm font-semibold text-slate-200">
-          Legal surname + first name
+          Full name <span className="font-normal text-slate-500">(surname + first name)</span>
           <input
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
             className="rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-500"
-            placeholder="Temitope Tomori"
+            placeholder="John Doe"
             required
+            minLength={2}
+            maxLength={100}
           />
         </label>
 
         <label className="grid gap-2 text-sm font-semibold text-slate-200">
-          Nickname
+          Nickname <span className="font-normal text-slate-500">(what others will see)</span>
           <input
             value={nickname}
             onChange={(e) => setNickname(e.target.value)}
             className="rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-500"
-            placeholder="Tope"
+            placeholder="alex_02"
             required
+            minLength={2}
+            maxLength={30}
+            pattern="^[a-zA-Z0-9_.\-]+$"
+            title="2–30 chars: letters, numbers, _, ., - (e.g., alex_02; Dream/dream also valid)"
           />
         </label>
 
@@ -137,7 +144,7 @@ export function ProfilePilotForm() {
         </label>
 
         <label className="md:col-span-2 grid gap-2 text-sm font-semibold text-slate-200">
-          Statuses, comma-separated
+          Role <span className="font-normal text-slate-500">(optional, comma-separated — e.g. Student, Course Rep)</span>
           <input
             value={statuses}
             onChange={(e) => setStatuses(e.target.value)}
@@ -151,10 +158,13 @@ export function ProfilePilotForm() {
           disabled={state === 'loading'}
           className="rounded-2xl bg-white px-5 py-3 text-sm font-black text-slate-950 transition hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-70 md:col-span-2"
         >
-          {state === 'loading' ? 'Creating profile...' : 'Create Profile'}
+          {state === 'loading' ? 'Creating profile…' : 'Create profile — join the calendar'}
         </button>
       </form>
 
+      <p className="mt-3 text-center font-mono text-[11px] leading-4 text-slate-600">
+        Why a profile? So classmates know who shared and confirmed each lecture. One profile per person.
+      </p>
       {message ? (
         <p
           className={`mt-4 rounded-2xl border px-4 py-3 text-sm ${

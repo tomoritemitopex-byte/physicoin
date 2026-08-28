@@ -416,7 +416,7 @@ export function EventRoadmap() {
                 </div>
                 <label className="grid gap-2 text-sm font-semibold text-slate-200">
                   Created by nickname
-                  <input value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder="Tope (must match a profile)" className="rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-amber-400/40" />
+                  <input value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder="alex_02 (must match a profile)" className="rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-amber-400/40" />
                   <span className="text-xs font-normal text-slate-400">Links event to your profile</span>
                 </label>
 
