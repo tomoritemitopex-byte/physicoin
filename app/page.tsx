@@ -1,4 +1,8 @@
 import { ProfilePilotForm } from '@/components/profile-pilot-form';
+import { MiningPanel } from '@/components/mining-panel';
+import { EventRoadmap } from '@/components/event-roadmap';
+import { TimetableFeed } from '@/components/timetable-feed';
+import { VerificationEngine } from '@/components/verification-engine';
 
 const metrics = [
   { label: 'Pilot schools', value: '01', note: 'FUHSI-first rollout' },
@@ -8,36 +12,12 @@ const metrics = [
 ];
 
 const modules = [
-  {
-    title: 'Identity & Access',
-    detail: 'Profile setup, role scopes, and enterprise-ready user access.',
-    status: 'Ready for pilot',
-  },
-  {
-    title: 'Event Roadmap',
-    detail: 'Personal roadmap bubbles, canonical promotion, duplicate prevention.',
-    status: 'In testing',
-  },
-  {
-    title: 'Timetable Feed',
-    detail: 'Live timetable sync with green, yellow, and red confidence states.',
-    status: 'Ready',
-  },
-  {
-    title: 'Mining Engine',
-    detail: 'Daily tap-to-mine loop with authority-weighted rewards.',
-    status: 'Ready',
-  },
-  {
-    title: 'Verification Engine',
-    detail: 'Random in-app popups with yes / no / cancel decisions.',
-    status: 'Testing now',
-  },
-  {
-    title: 'Analytics & Audit',
-    detail: 'Track authority changes, event promotion, and suspicious patterns.',
-    status: 'Planned',
-  },
+  { title: 'Identity & Access', detail: 'Profile setup, role scopes, and enterprise-ready user access.', status: 'Ready for pilot' },
+  { title: 'Event Roadmap', detail: 'Personal roadmap bubbles, canonical promotion, duplicate prevention.', status: 'In testing' },
+  { title: 'Timetable Feed', detail: 'Live timetable sync with green, yellow, and red confidence states.', status: 'Ready' },
+  { title: 'Mining Engine', detail: 'Daily tap-to-mine loop with authority-weighted rewards.', status: 'Ready' },
+  { title: 'Verification Engine', detail: 'Random in-app popups with yes / no / cancel decisions.', status: 'Testing now' },
+  { title: 'Analytics & Audit', detail: 'Track authority changes, event promotion, and suspicious patterns.', status: 'Planned' },
 ];
 
 const readiness = [
@@ -74,6 +54,13 @@ export default function Home() {
 
         <ProfilePilotForm />
 
+        <div className="mt-8 grid gap-6">
+          <MiningPanel />
+          <EventRoadmap />
+          <TimetableFeed />
+          <VerificationEngine />
+        </div>
+
         <section className="mt-8 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="rounded-[2rem] border border-white/10 bg-white/5 p-8 shadow-2xl backdrop-blur">
             <div className="inline-flex rounded-full border border-emerald-400/20 bg-emerald-400/10 px-4 py-1 text-xs font-bold uppercase tracking-[0.3em] text-emerald-300">
@@ -86,7 +73,6 @@ export default function Home() {
               This version looks and feels like an enterprise pilot: clean dashboard cards,
               metrics, module readiness, audit focus, and a strong front page for onboarding testers.
             </p>
-
             <div className="mt-8 flex flex-wrap gap-3">
               <a className="rounded-full bg-white px-6 py-3 text-sm font-black text-slate-950 shadow-lg shadow-black/20" href="#modules">
                 Review modules
@@ -95,7 +81,6 @@ export default function Home() {
                 Start testing checklist
               </a>
             </div>
-
             <div className="mt-10 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               {metrics.map((metric) => (
                 <div key={metric.label} className="rounded-3xl border border-white/10 bg-slate-900/60 p-4">
@@ -106,7 +91,6 @@ export default function Home() {
               ))}
             </div>
           </div>
-
           <div className="rounded-[2rem] border border-white/10 bg-gradient-to-br from-slate-900 to-slate-800 p-6 shadow-2xl">
             <div className="rounded-[1.5rem] border border-white/10 bg-white/5 p-5">
               <p className="text-xs font-bold uppercase tracking-[0.3em] text-amber-300">Front page coin sign</p>
@@ -122,7 +106,6 @@ export default function Home() {
                 </div>
               </div>
             </div>
-
             <div className="mt-5 rounded-[1.5rem] border border-white/10 bg-slate-950/60 p-5">
               <p className="text-xs font-bold uppercase tracking-[0.3em] text-sky-300">Enterprise controls</p>
               <div className="mt-4 space-y-3 text-sm leading-7 text-slate-300">
@@ -163,7 +146,6 @@ export default function Home() {
               ))}
             </div>
           </div>
-
           <div className="rounded-[2rem] border border-white/10 bg-gradient-to-br from-emerald-400/15 via-sky-400/10 to-violet-400/15 p-8 shadow-2xl backdrop-blur">
             <h3 className="text-2xl font-black">Pilot workflow</h3>
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
