@@ -9,7 +9,7 @@ async function ensureUsersTable() {
   `;
 
   await sql`
-    CREATE TABLE IF NOT EXISTS users (
+    CREATE TABLE IF NOT EXISTS physi_users (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       full_name TEXT NOT NULL,
       nickname TEXT NOT NULL,
@@ -51,7 +51,7 @@ export async function POST(request: Request) {
     await ensureUsersTable();
 
     const [user] = await sql`
-      INSERT INTO users (full_name, nickname, programme, level, statuses)
+      INSERT INTO physi_users (full_name, nickname, programme, level, statuses)
       VALUES (${fullName}, ${nickname}, ${programme}, ${level}, ${JSON.stringify(statuses)}::jsonb)
       RETURNING id, full_name, nickname, programme, level, statuses, authority_base, authority_final, mining_balance, created_at;
     `;
