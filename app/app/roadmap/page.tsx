@@ -259,14 +259,14 @@ export default function RoadmapPage(){
   return (
     <div className="relative -mx-4 -mt-5 w-[100vw] max-w-[100vw] sm:-mx-6 lg:-mx-8">
       <style>{`@keyframes canonicalPop{0%{transform:scale(0.72)}50%{transform:scale(1.22)}100%{transform:scale(1)}} @keyframes tickPulse{0%,100%{opacity:1}50%{opacity:.55}} @keyframes roadShimmer{0%{stroke-dashoffset:0}100%{stroke-dashoffset:28}}`}</style>
-      <div className="relative min-h-[calc(100vh-64px)] w-full overflow-hidden bg-black">
-        {/* ambient gradient hints - blue/purple/pink */}
+      <div className="relative min-h-[calc(100vh-64px)] w-full overflow-hidden" style={{background:"linear-gradient(180deg, #0d3b2a 0%, #143d2e 42%, #1a5c3a 100%)"}}>
+        {/* ambient gradient hints - forest greens */}
         <div className="pointer-events-none absolute inset-0">
-          <div className="absolute inset-0 bg-black" />
-          <div className="absolute -top-[8vh] left-1/2 h-[58vh] w-[120vw] -translate-x-1/2 rounded-[100%] opacity-[0.18]" style={{background:"radial-gradient(ellipse at center, rgba(124,58,237,0.35) 0%, rgba(59,130,246,0.18) 42%, rgba(236,72,153,0.14) 72%, transparent 75%)"}} />
-          <div className="absolute top-[18vh] left-[-6%] h-[46vh] w-[46vh] rounded-full opacity-[0.14] blur-[40px]" style={{background:"radial-gradient(circle, rgba(59,130,246,0.9), transparent 70%)"}} />
-          <div className="absolute top-[52vh] right-[-8%] h-[50vh] w-[50vh] rounded-full opacity-[0.16] blur-[42px]" style={{background:"radial-gradient(circle, rgba(236,72,153,0.85), transparent 70%)"}} />
-          <div className="absolute bottom-[18vh] left-1/2 h-[38vh] w-[90vw] -translate-x-1/2 opacity-[0.09] blur-[30px]" style={{background:"radial-gradient(ellipse, rgba(124,58,237,0.6), transparent 72%)"}} />
+          <div className="absolute inset-0" style={{background:"linear-gradient(180deg, rgba(13,59,42,0.85) 0%, rgba(26,92,58,0.55) 55%, rgba(45,106,79,0.72) 100%)"}} />
+          <div className="absolute -top-[8vh] left-1/2 h-[58vh] w-[120vw] -translate-x-1/2 rounded-[100%] opacity-[0.22]" style={{background:"radial-gradient(ellipse at center, rgba(82,183,136,0.28) 0%, rgba(64,145,108,0.20) 42%, rgba(45,106,79,0.16) 72%, transparent 75%)"}} />
+          <div className="absolute top-[18vh] left-[-6%] h-[46vh] w-[46vh] rounded-full opacity-[0.16] blur-[40px]" style={{background:"radial-gradient(circle, rgba(82,183,136,0.95), transparent 70%)"}} />
+          <div className="absolute top-[52vh] right-[-8%] h-[50vh] w-[50vh] rounded-full opacity-[0.18] blur-[42px]" style={{background:"radial-gradient(circle, rgba(45,106,79,0.9), transparent 70%)"}} />
+          <div className="absolute bottom-[18vh] left-1/2 h-[38vh] w-[90vw] -translate-x-1/2 opacity-[0.12] blur-[30px]" style={{background:"radial-gradient(ellipse, rgba(64,145,108,0.55), transparent 72%)"}} />
         </div>
 
         {/* top pills Share / Save */}
@@ -302,29 +302,29 @@ export default function RoadmapPage(){
 
         {/* centered rectangular map 2/3 screen */}
         <div className="relative mx-auto flex min-h-[calc(100vh-64px)] w-full max-w-[560px] justify-center overflow-auto pb-[320px] pt-[96px] sm:pb-[340px] sm:pt-[84px]">
-          {/* map card background */}
-          <div className="pointer-events-none absolute left-1/2 top-[88px] h-[86%] w-[96%] -translate-x-1/2 overflow-hidden rounded-[28px] border border-white/[0.07] shadow-[0_20px_80px_rgba(0,0,0,0.9)]" style={{background:"linear-gradient(180deg, rgba(30,58,138,0.38) 0%, rgba(124,58,237,0.26) 38%, rgba(192,38,211,0.18) 68%, rgba(14,165,233,0.14) 100%), linear-gradient(180deg, #0b1020 0%, #0f172a 100%)", minHeight: svgH}} />
+          {/* map card background — Fantastical Forest greens */}
+          <div className="pointer-events-none absolute left-1/2 top-[88px] h-[86%] w-[96%] -translate-x-1/2 overflow-hidden rounded-[28px] border border-white/[0.10] shadow-[0_20px_80px_rgba(13,59,42,0.75)]" style={{background:"linear-gradient(180deg, rgba(45,106,79,0.42) 0%, rgba(64,145,108,0.34) 38%, rgba(82,183,136,0.22) 68%, rgba(13,59,42,0.24) 100%), linear-gradient(180deg, #2d6a4f 0%, #40916c 52%, #52b788 100%)", minHeight: svgH}} />
           {/* cartoon mountains / trees behind road */}
           <svg viewBox={`0 0 520 ${svgH}`} className="pointer-events-none absolute left-1/2 top-[88px] h-[86%] w-[96%] -translate-x-1/2 rounded-[28px] overflow-hidden" style={{height: svgH, minHeight: svgH}}>
-            {/* mountains */}
-            <path d="M -10 210 L 90 78 L 170 175 L 250 54 L 340 168 L 430 92 L 560 210 Z" fill="rgba(255,255,255,0.07)" stroke="rgba(255,255,255,0.08)" strokeWidth={1} />
-            <path d="M -10 240 L 70 150 L 145 210 L 250 120 L 370 210 L 470 155 L 560 240 Z" fill="rgba(255,255,255,0.045)" />
-            {/* trees */}
+            {/* mountains — forest greens */}
+            <path d="M -10 210 L 90 78 L 170 175 L 250 54 L 340 168 L 430 92 L 560 210 Z" fill="rgba(13,59,42,0.32)" stroke="rgba(255,255,255,0.10)" strokeWidth={1} />
+            <path d="M -10 240 L 70 150 L 145 210 L 250 120 L 370 210 L 470 155 L 560 240 Z" fill="rgba(26,92,58,0.28)" />
+            {/* trees — cartoon forest greens */}
             {[42,92,410,462].map((x,i)=>(
-              <g key={i} opacity={0.22}>
-                <path d={`M ${x} 420 L ${x-22} 462 L ${x+22} 462 Z`} fill={i%2===0?"#065f46":"#1e3a5f"} />
-                <path d={`M ${x} 392 L ${x-18} 426 L ${x+18} 426 Z`} fill={i%2===0?"#047857":"#2563eb"} opacity={0.9} />
-                <rect x={x-4} y={462} width={8} height={14} rx={2} fill="#451a03" opacity={0.9} />
+              <g key={i} opacity={0.32}>
+                <path d={`M ${x} 420 L ${x-22} 462 L ${x+22} 462 Z`} fill={i%2===0?"#0d3b2a":"#1a5c3a"} />
+                <path d={`M ${x} 392 L ${x-18} 426 L ${x+18} 426 Z`} fill={i%2===0?"#2d6a4f":"#40916c"} opacity={0.95} />
+                <rect x={x-4} y={462} width={8} height={14} rx={2} fill="#2f3e2a" opacity={0.9} />
               </g>
             ))}
-            {/* rocks / ice obstacles off-road */}
+            {/* rocks / foliage accents — forest floor */}
             <g opacity={0.32}>
-              <ellipse cx={86} cy={310} rx={22} ry={13} fill="#57534e" />
-              <ellipse cx={92} cy={306} rx={10} ry={6} fill="#a8a29e" opacity={0.7} />
-              <ellipse cx={438} cy={520} rx={20} ry={12} fill="#78716c" />
-              <ellipse cx={430} cy={516} rx={8} ry={5} fill="#e7e5e4" opacity={0.85} />
-              <ellipse cx={78} cy={680} rx={18} ry={10} fill="#44403c" />
-              <path d="M 430 710 L 452 728 L 418 735 Z" fill="#cbd5e1" opacity={0.9} />
+              <ellipse cx={86} cy={310} rx={22} ry={13} fill="#6b8f71" />
+              <ellipse cx={92} cy={306} rx={10} ry={6} fill="#a7c4a0" opacity={0.7} />
+              <ellipse cx={438} cy={520} rx={20} ry={12} fill="#7a9e7e" />
+              <ellipse cx={430} cy={516} rx={8} ry={5} fill="#d8f3dc" opacity={0.85} />
+              <ellipse cx={78} cy={680} rx={18} ry={10} fill="#5a7a5a" />
+              <path d="M 430 710 L 452 728 L 418 735 Z" fill="#b7e4c7" opacity={0.9} />
             </g>
           </svg>
 
