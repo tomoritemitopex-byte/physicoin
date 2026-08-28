@@ -88,7 +88,7 @@ export function VerificationEngine() {
       setStats((s) => ({ verified: s.verified + 1, yes: s.yes + (vote === "YES" ? 1 : 0), no: s.no + (vote === "NO" ? 1 : 0) }));
       if (data.mock) {
         setTone("info");
-        const msg = `Demo ${vote} for “${active.title}” — not persisted. Create profile + real events in Neon to persist.`;
+        const msg = `Demo ${vote} for “${active.title}” — not persisted. Create profile + real events to persist.`;
         setMessage(msg);
         setToast({ type: "info", msg });
       } else {
@@ -128,7 +128,7 @@ export function VerificationEngine() {
           <div>
             <p className="text-[11px] font-black uppercase tracking-[0.32em] text-amber-300">Verification Engine · Authority-weighted</p>
             <h3 className="mt-2 flex items-center gap-2 text-2xl font-black text-white">Manual verification <span className="rounded-full bg-white px-2.5 py-0.5 text-[10px] font-black tracking-widest text-slate-900">BELL</span></h3>
-            <p className="mt-1 max-w-xl text-sm leading-6 text-slate-400">Tap <b className="text-white">🔔 Bell</b> to pull a random <span className="font-mono text-xs text-sky-300">physi_events</span> row from <span className="font-mono text-xs text-amber-300">/api/events</span> and vote <b className="text-white">YES / NO / CANCEL</b>. Weighted by <span className="font-mono text-xs text-emerald-300">authority_final</span>.</p>
+            <p className="mt-1 max-w-xl text-sm leading-6 text-slate-400">Tap <b className="text-white">🔔 Bell</b> to pull a random <span className="font-mono text-xs text-sky-300">event store</span> row from <span className="font-mono text-xs text-amber-300">event API</span> and vote <b className="text-white">YES / NO / CANCEL</b>. Weighted by <span className="font-mono text-xs text-emerald-300">authority_final</span>.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-xs font-bold text-amber-300">{loadingEvents ? "Loading…" : `${events.length} events`}</span>
@@ -141,7 +141,7 @@ export function VerificationEngine() {
         </div>
 
         <div className="relative mt-6 grid gap-3 sm:grid-cols-3">
-          <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-4 backdrop-blur"><p className="text-xs font-bold uppercase tracking-widest text-slate-400">Verified this session</p><p className="mt-1 text-3xl font-black tabular-nums text-white">{stats.verified}</p><p className="text-xs text-slate-500">POST /api/verify</p></div>
+          <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-4 backdrop-blur"><p className="text-xs font-bold uppercase tracking-widest text-slate-400">Verified this session</p><p className="mt-1 text-3xl font-black tabular-nums text-white">{stats.verified}</p><p className="text-xs text-slate-500">POST verification API</p></div>
           <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4"><p className="text-xs font-bold uppercase tracking-widest text-emerald-300">YES votes</p><p className="mt-1 text-3xl font-black tabular-nums text-white">{stats.yes}</p><p className="text-xs text-emerald-200/70">+0.02 authority</p></div>
           <div className="rounded-2xl border border-rose-400/20 bg-rose-400/10 p-4"><p className="text-xs font-bold uppercase tracking-widest text-rose-300">NO votes</p><p className="mt-1 text-3xl font-black tabular-nums text-white">{stats.no}</p><p className="text-xs text-rose-200/70">−0.01 authority</p></div>
         </div>
@@ -161,7 +161,7 @@ export function VerificationEngine() {
         {message && <p className={`relative mt-4 rounded-2xl border px-4 py-3 text-sm font-semibold leading-6 ${tone==="success" ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-200" : tone==="error" ? "border-rose-400/30 bg-rose-400/10 text-rose-200" : "border-sky-400/30 bg-sky-400/10 text-sky-200"}`}>{message}</p>}
 
         <div className="relative mt-6">
-          <div className="flex items-center justify-between"><p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Live event pool — {loadingEvents ? "loading…" : `${events.length} fetched`}</p><button onClick={fetchEvents} className="text-xs font-bold text-sky-300 hover:text-white">↻ Pull from /api/events</button></div>
+          <div className="flex items-center justify-between"><p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Live event pool — {loadingEvents ? "loading…" : `${events.length} fetched`}</p><button onClick={fetchEvents} className="text-xs font-bold text-sky-300 hover:text-white">↻ Pull from event API</button></div>
           {loadingEvents ? (
             <div className="mt-3 grid gap-2 sm:grid-cols-2">{[0,1,2,3].map((i) => <div key={i} className="animate-pulse rounded-2xl border border-white/10 bg-slate-900/40 p-4"><div className="h-4 w-3/4 rounded bg-white/10" /><div className="mt-2 h-3 w-1/2 rounded bg-white/10" /></div>)}</div>
           ) : events.length === 0 ? (
@@ -181,7 +181,7 @@ export function VerificationEngine() {
               ))}
             </div>
           )}
-          <p className="mt-3 text-xs text-slate-500">Live contracts: <span className="font-mono text-amber-300">physi_events</span> + <span className="font-mono text-emerald-300">physi_verifications</span> + <span className="font-mono text-sky-300">physi_users.authority_final</span> · no mocks.</p>
+          <p className="mt-3 text-xs text-slate-500">Live contracts: <span className="font-mono text-amber-300">event store</span> + <span className="font-mono text-emerald-300">verification store</span> + <span className="font-mono text-sky-300">authority score</span> · no mocks.</p>
         </div>
       </section>
 
@@ -208,7 +208,7 @@ export function VerificationEngine() {
               <button onClick={() => handleVote("NO")} disabled={!!busy || !nickname} className="rounded-2xl bg-rose-400 px-4 py-3 text-sm font-black text-slate-950 shadow-lg shadow-rose-500/20 transition hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60">{busy==="NO" ? "…" : "NO"}</button>
               <button onClick={() => handleVote("CANCEL")} disabled={!!busy || !nickname} className="rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-sm font-black text-white transition hover:bg-white/10 disabled:opacity-60">{busy==="CANCEL" ? "…" : "CANCEL"}</button>
             </div>
-            <p className="relative mt-3 text-center text-xs text-slate-500">Posts to <span className="font-mono text-sky-300">POST /api/verify</span> · @{nickname || "—"} · authority-weighted</p>
+            <p className="relative mt-3 text-center text-xs text-slate-500">Posts to <span className="font-mono text-sky-300">POST verification API</span> · @{nickname || "—"} · authority-weighted</p>
           </div>
         </div>
       ) : null}

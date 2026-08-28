@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "PHYSI Enterprise — Campus Truth Infrastructure",
-  description: "Production-style PHYSI dashboard for FUHSI pilot: mining, roadmap, timetable sync, and authority-weighted verification.",
+  title: "PHYSI — Research Preview · FUHSI Lab Pilot",
+  description: "PHYSI Research Preview — lab pilot for FUHSI: verification + advisory timetable + daily check-in (TEST-PHYSI, no value). Testing with small cohort.",
   icons: { icon: "/favicon.ico" },
 };
 

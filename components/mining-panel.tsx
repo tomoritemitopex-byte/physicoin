@@ -92,6 +92,7 @@ export function MiningPanel({ initialNickname = "" }: { initialNickname?: string
   const [pulse, setPulse] = useState(false);
   const [burst, setBurst] = useState(false);
   const [shake, setShake] = useState(false);
+  const [cohortUsers, setCohortUsers] = useState<number | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const animatedBalance = useCountUp(data?.balance ?? 0);
@@ -178,6 +179,17 @@ export function MiningPanel({ initialNickname = "" }: { initialNickname?: string
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authedNick, initialNickname]);
 
+  // cohort count to disable green pulse when 0 users (honest zero)
+  useEffect(() => {
+    fetch("/api/stats")
+      .then((r) => r.json())
+      .then((j) => {
+        const c = j?.metrics?.users ?? j?.counts?.physi_users;
+        if (typeof c === "number") setCohortUsers(Number(c));
+      })
+      .catch(() => {});
+  }, []);
+
   async function handleMine() {
     if (!nickname.trim()) {
       setMessageType("error");
@@ -255,6 +267,8 @@ export function MiningPanel({ initialNickname = "" }: { initialNickname?: string
   }
 
   const canMineNow = data ? data.canMine && remainingMs <= 0 : false;
+  const hasActiveCohort = (cohortUsers ?? 1) > 0;
+  const showGreenPulse = canMineNow && hasActiveCohort;
   const tier = data ? tierFromAuthority(Number(data.authority_final)) : tierFromAuthority(0);
   const progress = remainingMs > 0 ? 1 - remainingMs / COOLDOWN_MS : canMineNow ? 1 : 0;
   // ring math
@@ -277,19 +291,20 @@ export function MiningPanel({ initialNickname = "" }: { initialNickname?: string
       {/* header */}
       <div className="relative flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.32em] text-amber-300">Mining Engine · Daily Loop</p>
+          <p className="text-[11px] font-black uppercase tracking-[0.32em] text-amber-300">Daily check-in · TEST-PHYSI</p>
           <h3 className="mt-2 flex items-center gap-2 text-2xl font-black text-white">
-            Daily Tap-to-Mine
+            Daily check-in (TEST-PHYSI)
+            <span className="rounded-full bg-amber-400 px-2.5 py-0.5 text-[10px] font-black tracking-widest text-slate-900">TEST</span>
             <span className="rounded-full bg-white px-2.5 py-0.5 text-[10px] font-black tracking-widest text-slate-900">PHYSI</span>
           </h3>
-          <p className="mt-1 text-sm text-slate-400">10 × authority multiplier · 24h cooldown · on-chain via physi_mining_logs</p>
+          <p className="mt-1 text-sm text-slate-400">10 × authority · 24h cooldown · Cap: ~12 / day · No redemption · Public log · no monetary value</p>
         </div>
         <div className="flex flex-col items-end gap-2">
           <span
-            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-black tracking-wide ${canMineNow ? "border-emerald-400/30 bg-emerald-400/15 text-emerald-300" : remainingMs > 0 ? "border-amber-400/25 bg-amber-400/10 text-amber-300" : "border-white/10 bg-white/5 text-slate-300"}`}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-black tracking-wide ${showGreenPulse ? "border-emerald-400/30 bg-emerald-400/15 text-emerald-300" : remainingMs > 0 ? "border-amber-400/25 bg-amber-400/10 text-amber-300" : "border-white/10 bg-white/5 text-slate-300"}`}
           >
-            <span className={`h-2 w-2 rounded-full ${canMineNow ? "bg-emerald-400 animate-pulse" : remainingMs > 0 ? "bg-amber-400" : "bg-slate-400"}`} />
-            {canMineNow ? "Ready to mine" : remainingMs > 0 ? "Cooling down" : "Enter nickname"}
+            <span className={`h-2 w-2 rounded-full ${showGreenPulse ? "bg-emerald-400 animate-pulse" : remainingMs > 0 ? "bg-amber-400" : "bg-slate-400"}`} />
+            {showGreenPulse ? "Ready to check in" : remainingMs > 0 ? "Cooling down" : hasActiveCohort ? "Enter nickname" : "Cohort empty — be first"}
           </span>
           {data && (
             <span className={`inline-flex items-center gap-1.5 rounded-full border bg-gradient-to-br px-3 py-1 text-xs font-black ${tier.cls}`}>
@@ -337,7 +352,7 @@ export function MiningPanel({ initialNickname = "" }: { initialNickname?: string
       {/* hero: balance + coin */}
       <div className="relative mt-6 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         {/* balance card */}
-        <div className="rounded-[1.75rem] border border-white/10 bg-slate-900/70 p-5 backdrop-blur">
+        <div className="rounded-[1.5rem] border border-white/10 bg-slate-900/70 p-5 backdrop-blur">
           <div className="flex items-center justify-between">
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Balance</p>
             <span className="rounded-full bg-white/5 px-2.5 py-1 text-[11px] font-bold text-slate-300">PHYSI</span>
@@ -372,7 +387,7 @@ export function MiningPanel({ initialNickname = "" }: { initialNickname?: string
         </div>
 
         {/* coin + ring */}
-        <div className="flex flex-col items-center justify-center rounded-[1.75rem] border border-white/10 bg-gradient-to-br from-slate-900/80 to-slate-950/80 p-6">
+        <div className="flex flex-col items-center justify-center rounded-[1.5rem] border border-white/10 bg-gradient-to-br from-slate-900/80 to-slate-950/80 p-6">
           <div className="relative flex h-[170px] w-[170px] items-center justify-center">
             {/* cooldown ring */}
             <svg className="absolute inset-0 h-full w-full -rotate-90" viewBox="0 0 160 160">
@@ -390,8 +405,8 @@ export function MiningPanel({ initialNickname = "" }: { initialNickname?: string
                 style={{ transition: "stroke-dashoffset 1s linear, stroke 0.3s" }}
               />
             </svg>
-            {/* pulse halo */}
-            {canMineNow && <span className="absolute inset-2 rounded-full bg-amber-400/10 animate-[ping_2s_cubic-bezier(0,0,0.2,1)_infinite]" />}
+            {/* pulse halo — disabled when cohort empty (0 users) */}
+            {showGreenPulse && <span className="absolute inset-2 rounded-full bg-amber-400/10 animate-[ping_2s_cubic-bezier(0,0,0.2,1)_infinite]" />}
             {burst && <span className="absolute inset-0 rounded-full bg-amber-400/20 animate-[ping_0.7s_ease_out]" />}
             {/* coin */}
             <button
@@ -415,44 +430,47 @@ export function MiningPanel({ initialNickname = "" }: { initialNickname?: string
             <div className="mt-3 text-center">
               <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-300">Cooldown</p>
               <p className="mt-1 font-mono text-2xl font-black tabular-nums text-white">{formatCooldown(remainingMs)}</p>
-              {data?.nextMineAt && <p className="mt-1 text-xs text-slate-400">Next mine: {new Date(data.nextMineAt).toLocaleString()}</p>}
+              {data?.nextMineAt && <p className="mt-1 text-xs text-slate-400">Next check-in: {new Date(data.nextMineAt).toLocaleString()}</p>}
               <div className="mt-2 h-1 w-40 overflow-hidden rounded-full bg-white/10">
                 <div className="h-full bg-amber-400 transition-all duration-1000" style={{ width: `${progress * 100}%` }} />
               </div>
             </div>
-          ) : canMineNow ? (
-            <p className="mt-3 animate-pulse text-sm font-black text-amber-300">Tap the coin to mine!</p>
+          ) : showGreenPulse ? (
+            <p className="mt-3 text-sm font-black text-amber-300">Tap to check in!</p>
+          ) : !hasActiveCohort ? (
+            <p className="mt-3 text-sm font-medium text-slate-500">Cohort empty — be first to check in</p>
           ) : (
             <p className="mt-3 text-sm font-medium text-slate-500">Load your nickname to begin</p>
           )}
         </div>
       </div>
 
-      {/* Tap to Mine primary CTA */}
+      {/* Check-in primary CTA */}
       <button
         onClick={handleMine}
         disabled={loading || !canMineNow}
         className={`mt-6 flex w-full items-center justify-center gap-3 rounded-2xl px-6 py-4 text-base font-black shadow-lg transition-all active:scale-[0.99] ${
-          canMineNow
+          showGreenPulse
             ? "bg-gradient-to-br from-amber-300 via-yellow-400 to-amber-500 text-slate-900 shadow-amber-500/20 hover:brightness-[1.06]"
             : "border border-white/10 bg-white/5 text-slate-400 cursor-not-allowed"
         }`}
       >
         {loading ? (
           <span className="inline-flex items-center gap-2">
-            <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-900 border-t-transparent" /> Mining…
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-900 border-t-transparent" /> Checking in…
           </span>
-        ) : canMineNow ? (
+        ) : showGreenPulse ? (
           <>
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-amber-400 shadow-inner">$</span>
-            Tap to Mine · +{expectedReward} PHYSI
+            Check in · +{expectedReward} TEST-PHYSI
           </>
         ) : remainingMs > 0 ? (
           `Cooldown ${formatCooldown(remainingMs)}`
         ) : (
-          "Load profile to mine"
+          "Load profile to check in"
         )}
       </button>
+      <p className="mt-2 text-center text-xs text-slate-500">Cap: ~12 / day · No redemption · Public log · TEST-PHYSI has no monetary value</p>
 
       {message && (
         <p
@@ -486,10 +504,10 @@ export function MiningPanel({ initialNickname = "" }: { initialNickname?: string
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 to-amber-500 text-2xl font-black text-slate-900 shadow-lg">
               $
             </div>
-            <p className="mt-4 text-sm font-black text-white">No mining history yet</p>
-            <p className="mx-auto mt-1 max-w-sm text-sm leading-6 text-slate-400">Your daily tap creates a log in <span className="font-mono text-xs text-amber-300">physi_mining_logs</span>. Tap the coin to start your loop!</p>
-            <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-400/10 px-4 py-1.5 text-xs font-bold text-amber-300">
-              <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" /> Ready when you are
+            <p className="mt-4 text-sm font-black text-white">No check-ins yet</p>
+            <p className="mx-auto mt-1 max-w-sm text-sm leading-6 text-slate-400">Your daily check-in creates a log in <span className="font-mono text-xs text-amber-300">secure ledger</span> (TEST-PHYSI, no value). Cap ~12/day.</p>
+            <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-xs font-bold text-slate-400">
+              <span className={`h-2 w-2 rounded-full ${hasActiveCohort ? "bg-amber-400" : "bg-slate-500"}`} /> {hasActiveCohort ? "Ready when you are" : "Cohort empty — invite first tester"}
             </div>
           </div>
         ) : (
