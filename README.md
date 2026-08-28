@@ -1,33 +1,19 @@
-# PHYSI Web App
+# PHYSI v2 — Fresh Rebuild
 
-Web-first PHYSI landing page and roadmap scaffold for Vercel + Neon.
+Bespoke SRE.ai style. No code reused from v1.
 
-## Stack
-- Next.js
-- TypeScript
-- Neon Postgres ready
+- FRONT: `/` (RSC landing) — value before login
+- INSIDE: `/app/*` (timetable, verify, mining, roadmap, profile)
+- Stack: Next 14 · Tailwind · Neon serverless · handle auth
+- DB: `physi_*` isolated, `lib/ensure.ts` parallel + pgcrypto guard + retry
+- See `/tmp/new-arch.md` for full architecture.
 
-## Run locally
+## Quick start
 ```bash
+export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+nvm use 20
+cp .env.local.example .env.local  # add DATABASE_URL
 npm install
+npm run build
 npm run dev
 ```
-
-## Environment
-Create a `.env.local` file and add:
-
-```bash
-DATABASE_URL=your_neon_connection_string
-```
-
-## Deploy
-1. Push this repo to GitHub
-2. Import it into Vercel
-3. Add `DATABASE_URL` in Vercel environment variables
-4. Deploy
-
-## Notes
-- The current build is a polished front page / roadmap scaffold.
-- The Neon client is ready for future database queries.
-- `database/schema.sql` includes the starter tables for users, events, verifications, and mining logs.
-- You can expand this into auth, onboarding, event creation, and mining screens next.

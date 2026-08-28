@@ -1,0 +1,1 @@
+export default function ProfilePage() { return <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6 text-slate-300">Profile — pick a handle like <code className="rounded bg-white/10 px-1">alex_02</code> (not “John Doe” or “Dream”). Auth ships Phase 3. <code className="rounded bg-white/10 px-1">POST /api/profile</code> · No FUHSI</div>; }

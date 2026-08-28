@@ -1,0 +1,1 @@
+export default function RoadmapPage() { return <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6 text-slate-300">Roadmap — personal → canonical lifecycle ships Phase 4.</div>; }

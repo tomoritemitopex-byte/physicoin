@@ -1,0 +1,1 @@
+export default function MiningPage() { return <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6 text-slate-300">Check-in — 24h cooldown ships Phase 4. TEST-PHYSI pilot.</div>; }
