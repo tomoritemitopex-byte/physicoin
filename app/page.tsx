@@ -50,7 +50,7 @@ export default function LandingPage() {
           </a>
         </div>
         <p className="mt-4 font-mono text-[11px] leading-4 text-slate-600">
-          TEST-PHYSI is play energy — no cash value, expires in 24h. Advisory only — always confirm exams with your department. Green tick = your coursemates confirmed it. · No FUHSI
+          TEST-PHYSI is play energy — no cash value, expires in 24h. Advisory only — always confirm exams with your department. Green tick = your coursemates confirmed it.
         </p>
       </section>
 
@@ -96,7 +96,7 @@ export default function LandingPage() {
           <a href="/app/profile" className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-6 py-2.5 text-[14px] font-medium text-slate-200 hover:bg-white/[0.08] transition">Create profile</a>
           <a href="/app/timetable" className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-6 py-2.5 text-[14px] font-medium text-slate-200 hover:bg-white/[0.08] transition">Login</a>
         </div>
-        <p className="mt-3 font-mono text-[11px] leading-4 text-slate-500">TEST-PHYSI has no cash value — it’s just a health-style streak for being active. Always confirm exams with your department.</p>
+        <p className="mt-3 font-mono text-[11px] leading-4 text-slate-500">TEST-PHYSI has no cash value — expires in 24h, just a health-style streak for being active. Advisory only — always confirm exams with your department.</p>
       </section>
 
       <p className="mt-8 text-center font-mono text-[11px] tracking-wide text-slate-600">
