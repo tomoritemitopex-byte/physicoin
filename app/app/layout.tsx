@@ -72,6 +72,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [pathname]);
 
   const isProfile = pathname === "/app/profile" || pathname?.startsWith("/app/profile/");
+  const isRoadmap = pathname === "/app/roadmap" || pathname?.startsWith("/app/roadmap/");
+  const isFullBleed = isRoadmap;
 
   return (
     <div className="min-h-screen bg-[#070a12] text-slate-200 selection:bg-white selection:text-[#070a12]">
@@ -226,13 +228,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </header>
 
       {/* breadcrumb — TailAdmin PageBreadcrumb adapted */}
-      <div className="border-b border-white/[0.04] bg-white/[0.01] backdrop-blur-[2px]">
-        <Breadcrumb pathname={pathname} />
-      </div>
+      {!isFullBleed && (
+        <div className="border-b border-white/[0.04] bg-white/[0.01] backdrop-blur-[2px]">
+          <Breadcrumb pathname={pathname} />
+        </div>
+      )}
 
-      <main className="mx-auto max-w-[1280px] px-4 py-5 sm:px-6 sm:py-6 lg:px-8">{children}</main>
+      <main className={isFullBleed ? "w-full" : "mx-auto max-w-[1280px] px-4 py-5 sm:px-6 sm:py-6 lg:px-8"}>{children}</main>
 
-      <footer className="mx-auto max-w-[1280px] border-t border-white/[0.04] px-4 py-6 sm:px-6 lg:px-8">
+      <footer className={isFullBleed ? "w-full border-t border-white/[0.04] px-4 py-6 sm:px-6 lg:px-8" : "mx-auto max-w-[1280px] border-t border-white/[0.04] px-4 py-6 sm:px-6 lg:px-8"}>
         <div className="flex flex-col items-center justify-between gap-3 sm:flex-row">
           <p className="font-mono text-[10.5px] text-slate-600">
             PHYSI · built by students, for students · TEST-PHYSI has no cash value — expires in 24h · advisory only
