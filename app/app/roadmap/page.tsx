@@ -276,27 +276,69 @@ export default function RoadmapPage() {
 
   const wat = useMemo(() => formatWAT(now), [now]);
 
+  // --- infinite loop road constants (no hard start/end) ---
   const STEP_Y = 128;
-  const START_Y = 120;
+  const TOP_BUFFER = 220; // replaces hard START_Y cap — road extends beyond viewport
+  const BOTTOM_BUFFER = 320;
+  const MIN_TILE = 18; // ensure road feels endless even with few events
+  const ROAD_EXTEND = 180; // extra path length beyond first/last node
+
+  // tiled display items: duplicate to fill infinite illusion when few events
+  const displayItems = useMemo(() => {
+    if (roadItems.length === 0) return [] as typeof roadItems;
+    if (roadItems.length >= MIN_TILE) return roadItems;
+    const repeats = Math.ceil(MIN_TILE / roadItems.length);
+    const out: typeof roadItems = [];
+    for (let r = 0; r < repeats; r++) {
+      for (let i = 0; i < roadItems.length; i++) {
+        const it = roadItems[i];
+        // unique id per tile to keep React keys stable; keep original ms for sorting within tile
+        const tileId = it.id + "__tile" + r;
+        if (it.kind === "personal") {
+          out.push({ ...it, id: tileId } as any);
+        } else {
+          out.push({ ...it, id: tileId } as any);
+        }
+      }
+    }
+    return out;
+  }, [roadItems]);
+
+  // effective length for node placement (infinite fill)
+  const effectiveLen = displayItems.length || 8;
+
   const nodes = useMemo(() => {
-    if (roadItems.length === 0) {
+    const len = displayItems.length || 8;
+    if (displayItems.length === 0) {
       return Array.from({ length: 8 }, (_, i) => ({
         x: i % 2 === 0 ? 138 + (i % 4 === 0 ? 18 : 0) : 372 - (i % 4 === 1 ? 12 : 0),
-        y: START_Y + i * STEP_Y,
+        y: TOP_BUFFER + i * STEP_Y,
       }));
     }
-    return roadItems.map((_, i) => {
-      const y = START_Y + i * STEP_Y;
+    return displayItems.map((_, i) => {
+      const y = TOP_BUFFER + i * STEP_Y;
       let x: number;
-      if (roadItems.length === 1) x = 260;
+      if (displayItems.length === 1) x = 260;
       else if (i % 2 === 0) x = 142 + (i % 4 === 0 ? 18 : 0);
       else x = 378 - (i % 4 === 1 ? 12 : 0);
       return { x, y };
     });
-  }, [roadItems]);
+  }, [displayItems]);
 
-  const nowY = useMemo(() => START_Y + nowIdx * STEP_Y, [nowIdx]);
-  const svgH = useMemo(() => Math.max(860, (nodes[nodes.length - 1]?.y || START_Y + 7 * STEP_Y) + 180), [nodes]);
+  // NOW Y mapped to tiled road: if tiled (few events) center NOW in middle tile for endless illusion
+  const nowY = useMemo(() => {
+    if (displayItems.length === 0) return TOP_BUFFER + 3 * STEP_Y;
+    if (roadItems.length > 0 && roadItems.length < MIN_TILE) {
+      // center NOW in middle of infinite loop when tiled
+      return TOP_BUFFER + Math.floor(displayItems.length / 2) * STEP_Y;
+    }
+    return TOP_BUFFER + nowIdx * STEP_Y;
+  }, [nowIdx, displayItems.length, roadItems.length]);
+
+  const svgH = useMemo(() => {
+    const lastY = nodes[nodes.length - 1]?.y || TOP_BUFFER + 7 * STEP_Y;
+    return Math.max(980, lastY + BOTTOM_BUFFER);
+  }, [nodes]);
 
   // auto-scroll to center NOW on mount + every 30s + when nowIdx changes
   const scrollToNow = useCallback(
@@ -311,12 +353,12 @@ export default function RoadmapPage() {
     },
     [nowY]
   );
-  // initial + when road changes
+  // initial + when road changes (displayItems length ensures infinite fill re-centers)
   useEffect(() => {
     // slight delay to let layout paint
     const t = setTimeout(() => scrollToNow(false), 80);
     return () => clearTimeout(t);
-  }, [scrollToNow, roadItems.length]);
+  }, [scrollToNow, displayItems.length]);
   // every 30s recalc auto-move
   useEffect(() => {
     const iv = setInterval(() => scrollToNow(true), 30000);
@@ -333,8 +375,17 @@ export default function RoadmapPage() {
 
   const roadD = useMemo(() => {
     if (nodes.length === 0) return "";
-    if (nodes.length === 1) return `M ${nodes[0].x} ${nodes[0].y} L ${nodes[0].x} ${nodes[0].y}`;
-    let d = `M ${nodes[0].x} ${nodes[0].y}`;
+    if (nodes.length === 1) {
+      const y0 = nodes[0].y - ROAD_EXTEND;
+      const y1 = nodes[0].y + ROAD_EXTEND;
+      return `M ${nodes[0].x} ${y0} L ${nodes[0].x} ${y1}`;
+    }
+    // extend beyond first/last node for seamless infinite illusion
+    const first = nodes[0];
+    const last = nodes[nodes.length - 1];
+    const extTopY = first.y - ROAD_EXTEND;
+    const extBotY = last.y + ROAD_EXTEND;
+    let d = `M ${first.x} ${extTopY} L ${first.x} ${first.y}`;
     for (let i = 1; i < nodes.length; i++) {
       const a = nodes[i - 1],
         b = nodes[i];
@@ -345,6 +396,7 @@ export default function RoadmapPage() {
       const c2y = b.y - 30;
       d += ` C ${c1x} ${c1y}, ${c2x} ${c2y}, ${b.x} ${b.y}`;
     }
+    d += ` L ${last.x} ${extBotY}`;
     return d;
   }, [nodes]);
 
@@ -509,9 +561,18 @@ export default function RoadmapPage() {
 
         {toast && <div className="fixed bottom-28 left-1/2 z-50 -translate-x-1/2 rounded-full bg-white px-5 py-2.5 text-[13px] font-medium text-black shadow-xl">{toast}</div>}
 
-        {/* SCROLLABLE ROAD CONTAINER — endless winding purple road */}
-        <div ref={scrollRef} className="relative mx-auto flex h-[calc(100vh-64px)] w-full max-w-[560px] justify-center overflow-auto pb-[320px] pt-[112px] sm:pb-[340px] sm:pt-[104px]" style={{ scrollBehavior: "smooth" }}>
-          {/* map card background */}
+        {/* SCROLLABLE ROAD CONTAINER — endless winding purple road — infinite illusion with edge fades */}
+        <div
+          ref={scrollRef}
+          className="relative mx-auto flex h-[calc(100vh-64px)] w-full max-w-[560px] justify-center overflow-auto pb-[320px] pt-[112px] sm:pb-[340px] sm:pt-[104px]"
+          style={{
+            scrollBehavior: "smooth",
+            // top/bottom fade to transparent so road has NO visible start/end — truly endless
+            WebkitMaskImage: "linear-gradient(to bottom, transparent 0px, black 72px, black calc(100% - 96px), transparent 100%)",
+            maskImage: "linear-gradient(to bottom, transparent 0px, black 72px, black calc(100% - 96px), transparent 100%)",
+          }}
+        >
+           {/* map card background */}
           <div className="pointer-events-none absolute left-1/2 top-[104px] h-[86%] w-[96%] -translate-x-1/2 overflow-hidden rounded-[28px] border border-white/[0.10] shadow-[0_20px_80px_rgba(13,59,42,0.75)]" style={{ background: "linear-gradient(180deg, rgba(45,106,79,0.42) 0%, rgba(64,145,108,0.34) 38%, rgba(82,183,136,0.22) 68%, rgba(13,59,42,0.24) 100%), linear-gradient(180deg, #2d6a4f 0%, #40916c 52%, #52b788 100%)", minHeight: svgH }} />
           {/* trees/mountains */}
           <svg viewBox={`0 0 520 ${svgH}`} className="pointer-events-none absolute left-1/2 top-[104px] h-[86%] w-[96%] -translate-x-1/2 rounded-[28px] overflow-hidden" style={{ height: svgH, minHeight: svgH }}>
@@ -563,17 +624,19 @@ export default function RoadmapPage() {
             {loading
               ? Array.from({ length: 3 }).map((_, i) => (
                   <g key={i} opacity={0.28}>
-                    <circle cx={i % 2 === 0 ? 150 : 370} cy={140 + i * STEP_Y} r={30} fill="rgba(255,255,255,0.08)" />
+                    <circle cx={i % 2 === 0 ? 150 : 370} cy={TOP_BUFFER + i * STEP_Y} r={30} fill="rgba(255,255,255,0.08)" />
                   </g>
                 ))
-              : roadItems.map((item, i) => {
+              : displayItems.map((item, i) => {
                   const p = nodes[i];
                   const st = stateFor(item);
-                  const isActive = selectedId === item.id;
+                  // tile ids have __tile suffix — compare base id so selection stays coherent across loop
+                  const baseId = String(item.id).split("__tile")[0];
+                  const isActive = selectedId === item.id || selectedId === baseId;
+                  const isNew = newIds.has(item.id) || newIds.has(baseId);
                   const isPersonal = item.kind === "personal";
                   const leftSide = p.x < 260;
                   const isPast = item.ms <= now;
-                  const isNew = newIds.has(item.id);
                   let nodeR = 30;
                   let scale = 1;
                   let outline: string = (st as any).outline;
@@ -609,7 +672,8 @@ export default function RoadmapPage() {
                     <g
                       key={item.id}
                       onClick={() => {
-                        setSelectedId(item.id);
+                        // use base id so sheet shows canonical event even when clicking tiled duplicates
+                        setSelectedId(baseId);
                         setSheetOpen(true);
                       }}
                       style={{
@@ -665,6 +729,9 @@ export default function RoadmapPage() {
                 })}
           </svg>
         </div>
+        {/* viewport-fixed infinite edge fades — ensures no hard start/end even without mask support */}
+        <div className="pointer-events-none absolute left-1/2 top-[104px] z-[15] h-[72px] w-[96%] max-w-[560px] -translate-x-1/2" style={{ background: "linear-gradient(to bottom, rgba(13,59,42,0.92) 0%, rgba(13,59,42,0.68) 38%, transparent 100%)" }} />
+        <div className="pointer-events-none absolute bottom-0 left-1/2 z-[15] h-[108px] w-[96%] max-w-[560px] -translate-x-1/2" style={{ background: "linear-gradient(to top, rgba(13,59,42,0.92) 0%, transparent 100%)" }} />
 
         {/* create modal */}
         {showCreate && (
