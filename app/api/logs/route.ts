@@ -3,6 +3,7 @@ import { logError, getErrorMessage } from "@/lib/adapters/error";
 import "@/lib/adapters";
 
 export const dynamic = "force-dynamic";
+
 async function safeHandle(id: string, req: Request): Promise<Response> {
   const { logEvent } = await import("@/lib/adapters/realtime");
   const start = Date.now();
@@ -38,6 +39,6 @@ async function safeHandle(id: string, req: Request): Promise<Response> {
   }
 }
 
-export async function GET(req: Request) { return safeHandle("profile", req); }
-export async function POST(req: Request) { return safeHandle("profile", req); }
-export async function DELETE(req: Request) { return safeHandle("profile", req); }
+export async function GET(req: Request) {
+  return safeHandle("logs", req);
+}

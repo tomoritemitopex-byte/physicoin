@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { logError, getErrorMessage } from "@/lib/adapters/error";
 
 type EventRow = {
   id: string;
@@ -148,8 +149,8 @@ export default function RoadmapPage() {
       setEvents(evs);
       if (evs.length && !selectedId) setSelectedId(evs[0].id);
     } catch (e: any) {
-      if (e?.name === "AbortError") setErr("timetable timeout — showing empty road");
-      else setErr(e?.message || "feed failed");
+      if (e?.name === "AbortError") { logError("TIMETABLE_FETCH_FAILED", e, { page: "roadmap", kind: "timeout" }); setErr(getErrorMessage("TIMETABLE_FETCH_FAILED")); }
+      else { logError("TIMETABLE_FETCH_FAILED", e, { page: "roadmap" }); setErr(getErrorMessage("TIMETABLE_FETCH_FAILED")); }
       setEvents([]);
     } finally {
       clearTimeout(to);
@@ -248,7 +249,7 @@ export default function RoadmapPage() {
               fetchFeed();
             }, 1600);
           } catch (e: any) {
-            setToast(e.message || "broadcast failed");
+            logError("TIMETABLE_CREATE_FAILED", e, { page: "roadmap" }); setToast(getErrorMessage("TIMETABLE_CREATE_FAILED"));
             setPersonal((pr) => pr.map((x) => (x.localId === p.localId ? { ...x, broadcasting: false } : x)));
             broadcastQueue.current.delete(p.localId);
           }
@@ -453,8 +454,9 @@ export default function RoadmapPage() {
       if (!r.ok || j.ok === false) throw new Error(j.error || "vote failed");
       setToast(v === "YES" ? "you said you were there — thanks!" : v === "NO" ? "marked as not there" : "skipped — all good");
       fetchFeed();
-    } catch (e: any) {
-      setToast(e.message);
+    } catch (e: unknown) {
+      logError("VERIFY_SUBMIT_FAILED", e, { page: "roadmap" });
+      setToast(getErrorMessage("VERIFY_SUBMIT_FAILED"));
     } finally {
       setVoteBusy(null);
     }

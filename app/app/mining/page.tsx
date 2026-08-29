@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, useCallback, useRef } from "react";
+import { logError, getErrorMessage } from "@/lib/adapters/error";
 
 type StoredProfile = {
   id: string;
@@ -165,8 +166,9 @@ export default function MiningPage() {
         const latest = [...rows].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
         setLastEarned(Number(latest.earned_amount));
       }
-    } catch (e: any) {
-      setErr(e.message || "mining feed failed");
+    } catch (e: unknown) {
+      logError("MINING_FETCH_FAILED", e, { page: "mining" });
+      setErr(getErrorMessage("MINING_FETCH_FAILED"));
     } finally {
       setLoading(false);
     }
@@ -241,9 +243,11 @@ export default function MiningPage() {
       setNextAt(new Date(Date.now() + COOLDOWN_MS));
       // refresh logs from server
       await fetchMining();
-    } catch (e: any) {
-      setErr(e.message || "check-in didn't go through");
-      setToast(e.message || "check-in failed — try again");
+    } catch (e: unknown) {
+      logError("MINING_CHECKIN_FAILED", e, { page: "mining" });
+      const msg = getErrorMessage("MINING_CHECKIN_FAILED");
+      setErr(msg);
+      setToast(msg);
     } finally {
       setCheckingIn(false);
     }

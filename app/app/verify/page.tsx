@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
+import { logError, getErrorMessage } from "@/lib/adapters/error";
 
 type StoredProfile = {
   id: string;
@@ -61,8 +62,9 @@ export default function VerifyPage() {
       const j = await r.json();
       if (!r.ok || j.ok === false) throw new Error(j.error || j.hint || "couldn't load queue");
       setEvents(j.events ?? []);
-    } catch (e: any) {
-      setErr(e.message || "queue failed");
+    } catch (e: unknown) {
+      logError("VERIFY_FETCH_FAILED", e, { page: "verify" });
+      setErr(getErrorMessage("VERIFY_FETCH_FAILED"));
     } finally {
       setLoading(false);
     }
@@ -93,8 +95,9 @@ export default function VerifyPage() {
       else setToast("Skipped — no worries, next one.");
       // refresh queue to show updated authority_points
       fetchQueue();
-    } catch (e: any) {
-      setToast(e.message || "vote didn't go through — try again");
+    } catch (e: unknown) {
+      logError("VERIFY_SUBMIT_FAILED", e, { page: "verify" });
+      setToast(getErrorMessage("VERIFY_SUBMIT_FAILED"));
     } finally {
       setVoteBusy(null);
     }
@@ -206,7 +209,7 @@ export default function VerifyPage() {
       ) : err ? (
         <div className="rounded-[18px] border border-red-400/20 bg-red-400/10 p-6 text-center">
           <p className="text-[14px] font-medium text-red-200">queue is down</p>
-          <p className="mt-1 font-mono text-[12px] text-red-200/70">{err}</p>
+          <p className="mt-1 font-mono text-[12px] text-red-200/70">{err || "Something went wrong. Please try again."}</p>
           <button onClick={fetchQueue} className="mt-3 rounded-full bg-white px-4 py-1.5 text-[13px] font-semibold text-[#070a12]">
             try again
           </button>

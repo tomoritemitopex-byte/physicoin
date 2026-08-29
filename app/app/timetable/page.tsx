@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { ChevronLeft, ChevronRight, CalendarDays, Columns, LayoutGrid, List, Calendar, Clock3, MapPin, Users, CheckCircle2, AlertCircle, Sparkles, TrendingUp } from "lucide-react";
+import { logError, getErrorMessage } from "@/lib/adapters/error";
 
 // ── types ──
 type EventRow = {
@@ -98,7 +99,7 @@ export default function TimetablePage() {
       const j = await r.json();
       if (!r.ok || j.ok === false) throw new Error(j.error || j.hint || "couldn't load feed");
       setEvents(j.events ?? []);
-    } catch (e: any) { setErr(e.message || "feed failed"); }
+    } catch (e: unknown) { logError("TIMETABLE_FETCH_FAILED", e, { page: "timetable" }); setErr(getErrorMessage("TIMETABLE_FETCH_FAILED")); }
     finally { setLoading(false); }
   }, [filter]);
 
@@ -149,7 +150,7 @@ export default function TimetablePage() {
       setToast("posted — it's live as advisory. tell your coursemates to confirm!");
       setForm({ title:"", venue:"", event_date:"", event_time:"", scope_type:"general", scope_value:"" });
       setShowPost(false); fetchFeed();
-    }catch(e:any){ setToast(e.message); } finally{ setPosting(false); }
+    }catch(e: unknown){ logError("TIMETABLE_CREATE_FAILED", e, { page: "timetable" }); setToast(getErrorMessage("TIMETABLE_CREATE_FAILED")); } finally{ setPosting(false); }
   }
   async function vote(id: string, v: "YES"|"NO"|"CANCEL"){
     let verifierId: string | null = null;
@@ -161,7 +162,7 @@ export default function TimetablePage() {
       const j=await r.json(); if(!r.ok || j.ok===false) throw new Error(j.error || "vote failed");
       setToast(v==="YES" ? "you said you were there — thanks!" : v==="NO" ? "marked as not there" : "skipped — all good");
       fetchFeed();
-    }catch(e:any){ setToast(e.message); } finally{ setVoteBusy(null); }
+    }catch(e: unknown){ logError("VERIFY_SUBMIT_FAILED", e, { page: "timetable" }); setToast(getErrorMessage("VERIFY_SUBMIT_FAILED")); } finally{ setVoteBusy(null); }
   }
 
   const cells = useMemo(()=> getCalendarCells(cursor),[cursor]);
@@ -347,7 +348,7 @@ export default function TimetablePage() {
       ) : err ? (
         <div className="rounded-[18px] border border-red-400/20 bg-red-400/10 p-5 text-center">
           <p className="text-[14px] font-medium text-red-200">feed is down</p>
-          <p className="mt-1 font-mono text-[12px] text-red-200/70">{err}</p>
+          <p className="mt-1 font-mono text-[12px] text-red-200/70">{err || "Something went wrong. Please try again."}</p>
           <button onClick={fetchFeed} className="mt-3 rounded-full bg-white px-4 py-1.5 text-[13px] font-semibold text-[#0a0f1e]">try again</button>
         </div>
       ) : (

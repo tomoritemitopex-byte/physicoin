@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { getSql, isDbConfigured, dbNotConfigured } from "@/lib/db";
 import { registerApiAdapter } from "../api";
 import { registerFeature } from "../features";
+import { logError, getErrorMessage } from "../error";
 
 registerFeature({
   id: "health",
@@ -14,15 +15,21 @@ registerFeature({
 });
 
 async function handleHealth(): Promise<Response> {
-  const sql = getSql();
-  if (!isDbConfigured() || !sql) {
-    return NextResponse.json({ db: false, ...dbNotConfigured() }, { status: 503 });
-  }
   try {
-    await sql`SELECT 1 AS ok`;
-    return NextResponse.json({ ok: true, db: true, at: new Date().toISOString() });
+    const sql = getSql();
+    if (!isDbConfigured() || !sql) {
+      return NextResponse.json({ db: false, ...dbNotConfigured() }, { status: 503 });
+    }
+    try {
+      await sql`SELECT 1 AS ok`;
+      return NextResponse.json({ ok: true, db: true, at: new Date().toISOString() });
+    } catch (e) {
+      logError("DB_UNREACHABLE", e, { route: "/api/health" });
+      return NextResponse.json({ ok: false, db: false, message: getErrorMessage("DB_UNREACHABLE"), code: "DB_UNREACHABLE" }, { status: 503 });
+    }
   } catch (e) {
-    return NextResponse.json({ ok: false, db: false, error: (e as Error).message, code: "DB_UNREACHABLE" }, { status: 503 });
+    logError("HEALTH_CHECK_FAILED", e, { route: "/api/health" });
+    return NextResponse.json({ ok: false, db: false, message: getErrorMessage("HEALTH_CHECK_FAILED"), code: "HEALTH_CHECK_FAILED" }, { status: 503 });
   }
 }
 

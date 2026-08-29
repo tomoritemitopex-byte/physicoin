@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { getSql, isDbConfigured, dbNotConfigured, ensureAllTables } from "@/lib/db";
 import { registerApiAdapter } from "../api";
 import { registerFeature } from "../features";
+import { logError, getErrorMessage } from "../error";
 
 export const miningFeature = {
   id: "mining",
@@ -17,31 +18,52 @@ export const miningFeature = {
 registerFeature(miningFeature);
 
 async function handleMining(req: Request): Promise<Response> {
-  const sql = getSql();
-  if (!isDbConfigured() || !sql) return NextResponse.json(dbNotConfigured(), { status: 503 });
-  if (req.method === "POST") {
-    await ensureAllTables();
-    const b = await req.json().catch(() => null);
-    if (!b?.user_id) return NextResponse.json({ ok: false, code: "BAD_INPUT", error: "user_id required" }, { status: 400 });
-    const u = await sql`SELECT mining_balance, authority_final FROM physi_users WHERE id = ${b.user_id} LIMIT 1`;
-    if (!u.length) return NextResponse.json({ ok: false, code: "USER_NOT_FOUND" }, { status: 404 });
-    const mult = Number((u[0] as { authority_final?: number }).authority_final ?? 1.0);
-    const base = Number(b.base_reward ?? 10);
-    const earned = +(base * mult).toFixed(2);
-    const r = await sql`
+  try {
+    const sql = getSql();
+    if (!isDbConfigured() || !sql) return NextResponse.json(dbNotConfigured(), { status: 503 });
+    if (req.method === "POST") {
+      try {
+        await ensureAllTables();
+      } catch (e) {
+        logError("MINING_CHECKIN_FAILED", e, { route: "/api/mining", phase: "ensure" });
+      }
+      const b = await req.json().catch(() => null);
+      if (!b?.user_id) return NextResponse.json({ ok: false, code: "BAD_INPUT", message: getErrorMessage("BAD_INPUT") }, { status: 400 });
+      try {
+        const u = await sql`SELECT mining_balance, authority_final FROM physi_users WHERE id = ${b.user_id} LIMIT 1`;
+        if (!u.length) return NextResponse.json({ ok: false, code: "USER_NOT_FOUND", message: getErrorMessage("USER_NOT_FOUND") }, { status: 404 });
+        const mult = Number((u[0] as { authority_final?: number }).authority_final ?? 1.0);
+        const base = Number(b.base_reward ?? 10);
+        const earned = +(base * mult).toFixed(2);
+        const r = await sql`
       INSERT INTO physi_mining_logs (user_id, base_reward, authority_multiplier, earned_amount)
       VALUES (${b.user_id}, ${base}, ${mult}, ${earned}) RETURNING *`;
-    await sql`UPDATE physi_users SET mining_balance = mining_balance + ${earned}, updated_at = NOW() WHERE id = ${b.user_id}`;
-    return NextResponse.json({ ok: true, log: r[0], earned });
+        await sql`UPDATE physi_users SET mining_balance = mining_balance + ${earned}, updated_at = NOW() WHERE id = ${b.user_id}`;
+        return NextResponse.json({ ok: true, log: r[0], earned });
+      } catch (e) {
+        logError("MINING_CHECKIN_FAILED", e, { route: "/api/mining", method: "POST" });
+        return NextResponse.json({ ok: false, code: "MINING_CHECKIN_FAILED", message: getErrorMessage("MINING_CHECKIN_FAILED") }, { status: 500 });
+      }
+    }
+    // GET
+    try {
+      await ensureAllTables();
+    } catch (e) {
+      logError("MINING_FETCH_FAILED", e, { route: "/api/mining", phase: "ensure" });
+    }
+    const uid = new URL(req.url).searchParams.get("user_id");
+    if (!uid) return NextResponse.json({ ok: false, code: "BAD_INPUT", message: getErrorMessage("BAD_INPUT") }, { status: 400 });
+    try {
+      const rows = await sql`SELECT * FROM physi_mining_logs WHERE user_id = ${uid} ORDER BY created_at DESC LIMIT 50`;
+      return NextResponse.json({ ok: true, logs: rows });
+    } catch (e) {
+      logError("MINING_FETCH_FAILED", e, { route: "/api/mining", method: "GET" });
+      return NextResponse.json({ ok: false, code: "MINING_FETCH_FAILED", message: getErrorMessage("MINING_FETCH_FAILED") }, { status: 500 });
+    }
+  } catch (e) {
+    logError("INTERNAL", e, { route: "/api/mining", method: req.method });
+    return NextResponse.json({ ok: false, code: "INTERNAL", message: getErrorMessage("INTERNAL") }, { status: 500 });
   }
-  // GET
-  try {
-    await ensureAllTables();
-  } catch {}
-  const uid = new URL(req.url).searchParams.get("user_id");
-  if (!uid) return NextResponse.json({ ok: false, code: "BAD_INPUT", error: "user_id required" }, { status: 400 });
-  const rows = await sql`SELECT * FROM physi_mining_logs WHERE user_id = ${uid} ORDER BY created_at DESC LIMIT 50`;
-  return NextResponse.json({ ok: true, logs: rows });
 }
 
 registerApiAdapter({

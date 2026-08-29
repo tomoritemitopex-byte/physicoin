@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, useMemo } from "react";
+import { logError, getErrorMessage } from "@/lib/adapters/error";
 
 type StoredProfile = {
   id: string;
@@ -167,8 +168,9 @@ export default function ProfilePage() {
       localStorage.setItem("physi_profile", JSON.stringify(user));
       setProfile(user);
       setToast("handle locked — you can now post and your votes count");
-    } catch (e: any) {
-      setErr(e.message || "something broke — try again");
+    } catch (e: unknown) {
+      logError("PROFILE_CREATE_FAILED", e, { page: "profile" });
+      setErr(getErrorMessage("PROFILE_CREATE_FAILED"));
     } finally {
       setSubmitting(false);
     }
@@ -195,8 +197,9 @@ export default function ProfilePage() {
       setProfile(null);
       setConfirmDelete(false);
       setToast("account deleted — handle and votes removed permanently");
-    } catch (e: any) {
-      setErr(e.message || "delete failed — try again");
+    } catch (e: unknown) {
+      logError("PROFILE_DELETE_FAILED", e, { page: "profile" });
+      setErr(getErrorMessage("PROFILE_DELETE_FAILED"));
     } finally {
       setDeleting(false);
     }

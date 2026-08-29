@@ -34,7 +34,22 @@ import "./features/stats";
 import "./features/health";
 
 // Generic registry factory for custom domains
+export * from "./error";
+export {
+  realtimeAdapter,
+  logEvent,
+  getRecentLogs,
+  clearLogs,
+  registerRealtimeAdapter,
+  listRealtimeAdapters,
+  getRealtimeAdapter,
+  logError as realtimeLogError,
+} from "./realtime";
+export type { RealtimeLog, RealtimeLogEventInput, RealtimeAdapter } from "./realtime";
 export * from "./registry";
+
+// Ensure realtime adapter (ring buffer + /api/logs) is registered
+import "./realtime";
 
 // Core helper: list everything plugged in (for /api/health or debug)
 import { listThemes } from "./theme";

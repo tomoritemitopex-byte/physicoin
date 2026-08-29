@@ -3,3 +3,7 @@ node_modules
 .env.local
 dist
 *.log
+!logs/.gitkeep
+!logs/errors.log
+!.github/error-log.md
+!logs/realtime.log
