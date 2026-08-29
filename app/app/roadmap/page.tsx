@@ -498,7 +498,7 @@ export default function RoadmapPage() {
 
   return (
     <div className="relative -mx-4 -mt-5 w-[100vw] max-w-[100vw] sm:-mx-6 lg:-mx-8">
-      <style>{`@keyframes canonicalPop{0%{transform:scale(0.72)}50%{transform:scale(1.22)}100%{transform:scale(1)}} @keyframes tickPulse{0%,100%{opacity:1}50%{opacity:.55}} @keyframes roadShimmer{0%{stroke-dashoffset:0}100%{stroke-dashoffset:28}} @keyframes scaleIn{0%{transform:scale(0.35);opacity:0}60%{transform:scale(1.14);opacity:1}100%{transform:scale(1);opacity:1}} @keyframes nowPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.08);opacity:.92}}`}</style>
+      <style>{`@keyframes canonicalPop{0%{transform:scale(0.72)}50%{transform:scale(1.22)}100%{transform:scale(1)}} @keyframes tickPulse{0%,100%{opacity:1}50%{opacity:.55}} @keyframes roadShimmer{0%{stroke-dashoffset:0}100%{stroke-dashoffset:28}} @keyframes scaleIn{0%{transform:scale(0.35);opacity:0}60%{transform:scale(1.14);opacity:1}100%{transform:scale(1);opacity:1}} @keyframes nowPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.08);opacity:.92}} .road-3d-wrap{perspective:1000px;perspective-origin:50% 38%} .road-3d-inner{transform-style:preserve-3d;transform:rotateX(8deg);transform-origin:center top} .node-3d{transform:translateZ(12px);box-shadow:inset 0 2px 0 rgba(255,255,255,0.65),inset 0 -3px 6px rgba(0,0,0,0.18),0 12px 32px rgba(0,0,0,0.6),0 2px 8px rgba(0,0,0,0.45);transition:transform 220ms cubic-bezier(.2,.8,.3,1),box-shadow 220ms ease} .node-3d:hover{transform:translateZ(22px) scale(1.03);box-shadow:inset 0 2px 0 rgba(255,255,255,0.75),inset 0 -4px 8px rgba(0,0,0,0.22),0 18px 40px rgba(0,0,0,0.65),0 6px 16px rgba(0,0,0,0.5)}`}</style>
       <div className="relative min-h-[calc(100vh-64px)] w-full overflow-hidden" style={{ background: "linear-gradient(180deg, #0d3b2a 0%, #143d2e 42%, #1a5c3a 100%)" }}>
         {/* ambient */}
         <div className="pointer-events-none absolute inset-0">
@@ -561,19 +561,25 @@ export default function RoadmapPage() {
 
         {toast && <div className="fixed bottom-28 left-1/2 z-50 -translate-x-1/2 rounded-full bg-white px-5 py-2.5 text-[13px] font-medium text-black shadow-xl">{toast}</div>}
 
-        {/* SCROLLABLE ROAD CONTAINER — endless winding purple road — infinite illusion with edge fades */}
-        <div
-          ref={scrollRef}
-          className="relative mx-auto flex h-[calc(100vh-64px)] w-full max-w-[560px] justify-center overflow-auto pb-[320px] pt-[112px] sm:pb-[340px] sm:pt-[104px]"
-          style={{
-            scrollBehavior: "smooth",
-            // top/bottom fade to transparent so road has NO visible start/end — truly endless
-            WebkitMaskImage: "linear-gradient(to bottom, transparent 0px, black 72px, black calc(100% - 96px), transparent 100%)",
-            maskImage: "linear-gradient(to bottom, transparent 0px, black 72px, black calc(100% - 96px), transparent 100%)",
-          }}
-        >
-           {/* map card background */}
-          <div className="pointer-events-none absolute left-1/2 top-[104px] h-[86%] w-[96%] -translate-x-1/2 overflow-hidden rounded-[28px] border border-white/[0.10] shadow-[0_20px_80px_rgba(13,59,42,0.75)]" style={{ background: "linear-gradient(180deg, rgba(45,106,79,0.42) 0%, rgba(64,145,108,0.34) 38%, rgba(82,183,136,0.22) 68%, rgba(13,59,42,0.24) 100%), linear-gradient(180deg, #2d6a4f 0%, #40916c 52%, #52b788 100%)", minHeight: svgH }} />
+        {/* SCROLLABLE ROAD CONTAINER — endless winding purple road — 3D Candy Crush depth */}
+        <div className="road-3d-wrap relative mx-auto flex h-[calc(100vh-64px)] w-full max-w-[560px] justify-center overflow-hidden pt-[112px] sm:pt-[104px]" style={{ perspective: "1000px", perspectiveOrigin: "50% 38%" }}>
+          {/* depth gradients on sides — 3D vignette */}
+          <div className="pointer-events-none absolute inset-y-0 left-0 w-[18%] z-[4]" style={{ background: "linear-gradient(to right, rgba(0,0,0,0.38) 0%, rgba(0,0,0,0.18) 42%, transparent 100%)" }} />
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-[18%] z-[4]" style={{ background: "linear-gradient(to left, rgba(0,0,0,0.38) 0%, rgba(0,0,0,0.18) 42%, transparent 100%)" }} />
+          <div
+            ref={scrollRef}
+            className="road-3d-inner relative flex h-full w-full justify-center overflow-auto pb-[320px] sm:pb-[340px]"
+            style={{
+              scrollBehavior: "smooth",
+              transformStyle: "preserve-3d",
+              transform: "rotateX(6deg)",
+              transformOrigin: "center top",
+              WebkitMaskImage: "linear-gradient(to bottom, transparent 0px, black 72px, black calc(100% - 96px), transparent 100%)",
+              maskImage: "linear-gradient(to bottom, transparent 0px, black 72px, black calc(100% - 96px), transparent 100%)",
+            }}
+          >
+            {/* map card background — 3D bevel + drop shadow */}
+            <div className="pointer-events-none absolute left-1/2 top-[104px] h-[86%] w-[96%] -translate-x-1/2 overflow-hidden rounded-[28px] border border-white/[0.14]" style={{ background: "linear-gradient(180deg, rgba(45,106,79,0.42) 0%, rgba(64,145,108,0.34) 38%, rgba(82,183,136,0.22) 68%, rgba(13,59,42,0.24) 100%), linear-gradient(180deg, #2d6a4f 0%, #40916c 52%, #52b788 100%)", minHeight: svgH, boxShadow: "0 12px 32px rgba(0,0,0,0.6), 0 2px 10px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.22), inset 0 -2px 8px rgba(0,0,0,0.22)", transform: "translateZ(0px)", transformStyle: "preserve-3d" }} />
           {/* trees/mountains */}
           <svg viewBox={`0 0 520 ${svgH}`} className="pointer-events-none absolute left-1/2 top-[104px] h-[86%] w-[96%] -translate-x-1/2 rounded-[28px] overflow-hidden" style={{ height: svgH, minHeight: svgH }}>
             <path d="M -10 210 L 90 78 L 170 175 L 250 54 L 340 168 L 430 92 L 560 210 Z" fill="rgba(13,59,42,0.32)" stroke="rgba(255,255,255,0.10)" strokeWidth={1} />
@@ -606,9 +612,13 @@ export default function RoadmapPage() {
               <filter id="nodeGlow"><feDropShadow dx="0" dy="2" stdDeviation={6} floodColor="rgba(255,255,255,0.18)" /></filter>
             </defs>
 
-            {/* purple road */}
+            {/* purple road — 3D depth with shadow layer and bevel */}
             <path d={roadD} fill="none" stroke="#1a1033" strokeWidth={58} strokeLinecap="round" strokeLinejoin="round" opacity={0.95} style={{ filter: "url(#roadShadow)" }} />
-            <path d={roadD} fill="none" stroke="url(#purpleRoad)" strokeWidth={46} strokeLinecap="round" strokeLinejoin="round" />
+            {/* shadow layer: duplicate path offset 8px darker #4c1d95 for 3D extrusion */}
+            <path d={roadD} fill="none" stroke="#4c1d95" strokeWidth={46} strokeLinecap="round" strokeLinejoin="round" opacity={0.95} style={{ transform: "translate(8px, 8px)", filter: "blur(0.6px)" } as any} />
+            <path d={roadD} fill="none" stroke="url(#purpleRoad)" strokeWidth={46} strokeLinecap="round" strokeLinejoin="round" style={{ filter: "drop-shadow(0 6px 14px rgba(0,0,0,0.45))" } as any} />
+            {/* bevel highlight on top edge */}
+            <path d={roadD} fill="none" stroke="rgba(255,255,255,0.22)" strokeWidth={46} strokeLinecap="round" strokeLinejoin="round" opacity={0} style={{ transform: "translate(-1px, -1.5px)" } as any} />
             <path d={roadD} fill="none" stroke="white" strokeWidth={3.2} strokeLinecap="round" strokeDasharray="14 14" opacity={0.92} style={{ animation: "roadShimmer 1.2s linear infinite" }} />
             <path d={roadD} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth={1} opacity={0.5} />
 
@@ -684,13 +694,15 @@ export default function RoadmapPage() {
                       {isActive && <circle cx={p.x} cy={p.y} r={nodeR + 20} fill="white" opacity={0.09} />}
                       <circle cx={p.x} cy={p.y + 6} r={nodeR} fill="black" opacity={0.34} />
                       <g
+                        className="node-3d"
                         style={{
                           transformOrigin: `${p.x}px ${p.y}px`,
-                          transform: (st as any).key === "almost" ? `scale(${scale})` : undefined,
+                          transform: (st as any).key === "almost" ? `translateZ(14px) scale(${scale})` : "translateZ(10px)",
                           animation: isNew ? "scaleIn 720ms cubic-bezier(.2,.8,.3,1.2)" : anim || undefined,
-                        }}
+                          filter: "drop-shadow(0 12px 18px rgba(0,0,0,0.45))",
+                        } as any}
                       >
-                        <circle cx={p.x} cy={p.y} r={nodeR} fill={isPersonal ? "#e7e5e4" : "white"} stroke={outline} strokeWidth={isActive ? 3.8 : 3} filter="url(#nodeGlow)" opacity={isPersonal ? 0.72 : 1} />
+                        <circle cx={p.x} cy={p.y} r={nodeR} fill={isPersonal ? "#e7e5e4" : "white"} stroke={outline} strokeWidth={isActive ? 3.8 : 3} filter="url(#nodeGlow)" opacity={isPersonal ? 0.72 : 1} style={{ transform: isActive ? "translateZ(18px)" : "translateZ(12px)" } as any} />
                         <circle cx={p.x} cy={p.y} r={nodeR - 10} fill={st.key === "canonical" ? "#ecfdf5" : st.key === "almost" ? "#f7fee7" : st.key === "advisory" ? "#fffbeb" : st.key === "waiting" ? "#eff6ff" : "#f4f4f5"} stroke="rgba(0,0,0,0.06)" strokeWidth={1} />
                         <text x={p.x} y={p.y + 6} textAnchor="middle" fontSize={isPersonal ? 10 : st.key === "canonical" ? 17 : 14} fontWeight={800} fill={st.key === "canonical" ? "#065f46" : st.key === "almost" ? "#3f6212" : st.key === "advisory" ? "#92400e" : st.key === "waiting" ? "#1e40af" : "#52525b"} style={{ fontFamily: "ui-monospace, monospace" }}>
                           {isPersonal ? "◐" : st.key === "canonical" ? "✓" : st.key === "advisory" ? "●" : st.key === "almost" ? "◉" : st.key === "waiting" ? "○" : "●"}
@@ -728,6 +740,7 @@ export default function RoadmapPage() {
                   );
                 })}
           </svg>
+          </div>
         </div>
         {/* viewport-fixed infinite edge fades — ensures no hard start/end even without mask support */}
         <div className="pointer-events-none absolute left-1/2 top-[104px] z-[15] h-[72px] w-[96%] max-w-[560px] -translate-x-1/2" style={{ background: "linear-gradient(to bottom, rgba(13,59,42,0.92) 0%, rgba(13,59,42,0.68) 38%, transparent 100%)" }} />
