@@ -1,16 +1,14 @@
-import { NextResponse } from "next/server";
-import { sql, isDbConfigured, dbNotConfigured, ensureAllTables } from "@/lib/db";
+import { getApiAdapter } from "@/lib/adapters";
+import "@/lib/adapters";
 export const dynamic = "force-dynamic";
-// Thin alias — canonical is /api/timetable
+// Thin alias — canonical is ApiAdapter "timetable"
 export async function GET(req: Request) {
-  if (!isDbConfigured() || !sql) return NextResponse.json(dbNotConfigured(), { status: 503 });
-  try { await ensureAllTables(); } catch {}
-  const { searchParams } = new URL(req.url);
-  const limit = Math.min(parseInt(searchParams.get("limit") ?? "50", 10) || 50, 200);
-  const rows = await sql`SELECT * FROM physi_events ORDER BY event_date DESC, event_time DESC LIMIT ${limit}`;
-  return NextResponse.json({ ok: true, events: rows });
+  const a = getApiAdapter("timetable");
+  if (!a) return new Response(JSON.stringify({ ok: false, code: "NO_ADAPTER" }), { status: 500 });
+  return a.handle(req);
 }
 export async function POST(req: Request) {
-  const { POST: create } = await import("../timetable/route");
-  return (create as any)(req);
+  const a = getApiAdapter("timetable");
+  if (!a) return new Response(JSON.stringify({ ok: false, code: "NO_ADAPTER" }), { status: 500 });
+  return a.handle(req);
 }

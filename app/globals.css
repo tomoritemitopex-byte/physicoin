@@ -2,9 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
-/* SRE.ai bespoke — no generic template */
+/* Design tokens via ThemeAdapter — emitted by lib/adapters/theme.ts themeRootCss() */
+/* PHYSI dark #070a12 + forest #0d3b2a stay intact, but now adapter-driven */
 :root {
   --physi-bg: #070a12;
+  --physi-card: rgba(255,255,255,0.03);
+  --physi-border: rgba(255,255,255,0.06);
+  --physi-muted: #94a3b8;
+  --physi-accent: #ffffff;
+  --physi-success: #10b981;
+  --physi-warning: #f59e0b;
+  --physi-forest: #0d3b2a;
 }
 
 html,
@@ -15,6 +23,9 @@ body {
 
 .physi-card {
   @apply rounded-[20px] border border-white/[0.06] bg-white/[0.03];
+}
+.physi-card--forest {
+  @apply border-white/[0.08] bg-white/[0.05];
 }
 
 .physi-pill {

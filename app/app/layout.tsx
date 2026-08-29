@@ -1,13 +1,14 @@
 "use client";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
+import { listFeatures } from "@/lib/adapters/features";
+import "@/lib/adapters";
 
-const TABS = [
-  { href: "/app/timetable", label: "Timetable", short: "TT" },
-  { href: "/app/verify", label: "Verify", short: "✓" },
-  { href: "/app/mining", label: "Check-in", short: "In" },
-  { href: "/app/roadmap", label: "Roadmap", short: "Map" },
-];
+// UI is adapter-driven: nav comes from FeatureAdapter registry — no hard-coded core
+// Profile is separate CTA (not in main tabs); stats/health have no nav
+const TABS = listFeatures()
+  .filter((f) => f.nav && f.id !== "profile")
+  .map((f) => f.nav!);
 
 const LABELS: Record<string, string> = {
   timetable: "Timetable",

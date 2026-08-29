@@ -1,64 +1,21 @@
-import { NextResponse } from "next/server";
-import { sql, isDbConfigured, dbNotConfigured, ensureAllTables } from "@/lib/db";
+import { getApiAdapter } from "@/lib/adapters";
+import "@/lib/adapters";
 
 export const dynamic = "force-dynamic";
 
+// Orchestrator: no SQL here — delegated to ApiAdapter "profile"
 export async function GET(req: Request) {
-  if (!isDbConfigured() || !sql) return NextResponse.json(dbNotConfigured(), { status: 503 });
-  try { await ensureAllTables(); } catch {}
-  const id = new URL(req.url).searchParams.get("id");
-  const nick = new URL(req.url).searchParams.get("nickname");
-  if (!id && !nick) return NextResponse.json({ ok: true, note: "GET ?id=UUID or ?nickname=str" });
-  const rows = id
-    ? await sql`SELECT * FROM physi_users WHERE id = ${id} LIMIT 1`
-    : await sql`SELECT * FROM physi_users WHERE lower(nickname)=lower(${nick!}) LIMIT 1`;
-  if (!rows.length) return NextResponse.json({ ok: false, code: "NOT_FOUND" }, { status: 404 });
-  return NextResponse.json({ ok: true, user: rows[0] });
+  const a = getApiAdapter("profile");
+  if (!a) return new Response(JSON.stringify({ ok: false, code: "NO_ADAPTER" }), { status: 500 });
+  return a.handle(req);
 }
-
-export async function DELETE(req: Request) {
-  if (!isDbConfigured() || !sql) return NextResponse.json(dbNotConfigured(), { status: 503 });
-  try { await ensureAllTables(); } catch {}
-  let id: string | null = new URL(req.url).searchParams.get("id");
-  if (!id) {
-    try {
-      const b = await req.json();
-      id = b?.id ?? b?.userId ?? null;
-    } catch {}
-  }
-  if (!id) return NextResponse.json({ ok: false, code: "BAD_INPUT", error: "id required (?id=UUID or JSON {id})" }, { status: 400 });
-  // explicit cleanup for tables whose FK may be SET NULL or missing CASCADE (verifications/mining_logs already CASCADE, canonical_log promoted_by is SET NULL)
-  try {
-    await sql`DELETE FROM physi_verifications WHERE verifier_id = ${id}`;
-  } catch {}
-  try {
-    await sql`DELETE FROM physi_mining_logs WHERE user_id = ${id}`;
-  } catch {}
-  try {
-    await sql`DELETE FROM physi_canonical_log WHERE promoted_by = ${id}`;
-  } catch {}
-  const rows = await sql`DELETE FROM physi_users WHERE id = ${id} RETURNING id`;
-  if (!rows.length) return NextResponse.json({ ok: false, code: "NOT_FOUND", error: "user not found" }, { status: 404 });
-  return NextResponse.json({ ok: true, deletedId: id }, { status: 200 });
-}
-
 export async function POST(req: Request) {
-  if (!isDbConfigured() || !sql) return NextResponse.json(dbNotConfigured(), { status: 503 });
-  await ensureAllTables();
-  const b = await req.json().catch(() => null);
-  if (!b?.full_name || !b?.nickname || !b?.programme || !b?.level) {
-    return NextResponse.json({ ok: false, code: "BAD_INPUT", error: "full_name, nickname, programme, level required" }, { status: 400 });
-  }
-  try {
-    const r = await sql`
-      INSERT INTO physi_users (full_name, nickname, programme, level, statuses, authority_base, authority_final)
-      VALUES (${b.full_name}, ${b.nickname}, ${b.programme}, ${b.level}, ${JSON.stringify(b.statuses ?? [])}::jsonb, ${b.authority_base ?? 1.0}, ${b.authority_final ?? 1.0})
-      RETURNING *`;
-    return NextResponse.json({ ok: true, user: r[0] }, { status: 201 });
-  } catch (e: any) {
-    if (String(e.message).includes("duplicate") || String(e.message).includes("unique")) {
-      return NextResponse.json({ ok: false, code: "NICKNAME_TAKEN", error: "nickname already exists" }, { status: 409 });
-    }
-    throw e;
-  }
+  const a = getApiAdapter("profile");
+  if (!a) return new Response(JSON.stringify({ ok: false, code: "NO_ADAPTER" }), { status: 500 });
+  return a.handle(req);
+}
+export async function DELETE(req: Request) {
+  const a = getApiAdapter("profile");
+  if (!a) return new Response(JSON.stringify({ ok: false, code: "NO_ADAPTER" }), { status: 500 });
+  return a.handle(req);
 }

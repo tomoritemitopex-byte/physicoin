@@ -1,16 +1,10 @@
-import { NextResponse } from "next/server";
-import { isDbConfigured, dbNotConfigured, sql } from "@/lib/db";
+import { getApiAdapter } from "@/lib/adapters";
+import "@/lib/adapters";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  if (!isDbConfigured() || !sql) {
-    return NextResponse.json({ db: false, ...dbNotConfigured() }, { status: 503 });
-  }
-  try {
-    await sql`SELECT 1 AS ok`;
-    return NextResponse.json({ ok: true, db: true, at: new Date().toISOString() });
-  } catch (e) {
-    return NextResponse.json({ ok: false, db: false, error: (e as Error).message, code: "DB_UNREACHABLE" }, { status: 503 });
-  }
+export async function GET(req: Request) {
+  const a = getApiAdapter("health");
+  if (!a) return new Response(JSON.stringify({ ok: false, code: "NO_ADAPTER" }), { status: 500 });
+  return a.handle(req);
 }

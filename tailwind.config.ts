@@ -1,16 +1,12 @@
 import type { Config } from 'tailwindcss';
+// Design tokens via ThemeAdapter — no hard-coded colors (modular)
+import { tailwindColors } from './lib/adapters/theme';
 
 const config: Config = {
   content: ['./app/**/*.{ts,tsx}', './components/**/*.{ts,tsx}', './lib/**/*.{ts,tsx}'],
   theme: {
     extend: {
-      colors: {
-        physi: {
-          bg: '#070a12',
-          card: 'rgba(255,255,255,0.03)',
-          border: 'rgba(255,255,255,0.06)',
-        },
-      },
+      colors: tailwindColors() as Config['theme'] extends { extend?: { colors?: infer C } } ? C : never,
       fontFamily: {
         mono: ['JetBrains Mono', 'monospace'],
         sans: ['Inter', 'system-ui', 'sans-serif'],
