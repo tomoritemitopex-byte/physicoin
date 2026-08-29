@@ -1,42 +1,20 @@
 /**
- * lib/db.ts — Physicoin DB layer (Bitcoin-scale small core)
+ * lib/db.ts — Physicoin DB layer (env-light, modular)
  *
  * ## Scaling path
  *
  * ```
- * Phase 0 (pilot, now)       Single Neon HTTP DB — one DATABASE_URL.  `sql` is a
- *                             fetch-based client; no TCP pool needed. Cold start
- *                             300-800ms after scale-to-zero — handled by retry in
- *                             ensureAllTables().
- * Phase 1 (growth)           Same code, pooled URL: set DATABASE_URL to
- *                             `*-pooler.*.neon.tech` or add PgBouncer. Adapter
- *                             unchanged; only env changes. See pooling notes below.
- * Phase 2 (multi-branch)     DB_PROVIDER=neon-multi → N Neon branches sharded by
- *                             shardKey(scope_type, scope_value). Call
- *                             getShardSql(scope_type, scope_value) for routed writes;
- *                             fanOutShards() for cross-shard reads. 0 app rewrite.
- * Phase 3 (cache layer)      Wrap hot reads with withCache(key, ttl, fn) from
- *                             ./db/framework — Redis/Upstash write-through. Adapter
- *                             unchanged; opt-in per query.
+ * Phase 0 (pilot, now)       Single Postgres via DATABASE_URL — provider
+ *                             auto-detected via adapter registry (neon /
+ *                             supabase / vercel / postgres). Just swap the URL.
+ * Phase 1 (growth)           Same code, pooled URL — no changes.
+ * Phase 2 (sharded)          DATABASE_URLS=postgres://...,postgres://... — comma-
+ *                             separated. Shard via getShardSql(scope) / fanOutShards.
+ * Phase 3 (cache layer)      withCache(key, ttl, fn) — Redis/Upstash, opt-in.
  * ```
  *
- * ## Connection pooling notes
- *
- * - Neon serverless driver is HTTP/fetch, not pg TCP → no `pg.Pool`. Each query is
- *   a fetch; `neon(url)` just creates a fetch wrapper (cached per URL in
- *   lib/db/framework.ts). Reusing that wrapper avoids re-parsing; Vercel will reuse
- *   the Lambda between invocations (keep-alive).
- * - For pooled TCP (high concurrency), use Neon's pooled endpoint:
- *   `DATABASE_URL=postgres://...@ep-xxx-pooler...neon.tech/neondb?sslmode=require`
- *   No code change — same `sql` tag works, but Neon routes via PgBouncer.
- * - If you later need real pooling (e.g. self-hosted Postgres), swap only
- *   lib/db/framework.ts: replace `neon()` with `new Pool()` and keep this file's
- *   exports stable. Callers never import the driver directly.
- *
- * ## Backward compat
- *
- * All previous exports are preserved (`sql`, `isDbConfigured`, `ensure*`, aliases).
- * New exports (`getSql`, `getShardSql`, `shardKey`, …) are additive.
+ * Env: DATABASE_URL (single) or DATABASE_URLS (comma-separated) — no DB_PROVIDER enum.
+ * Provider is plug-in: see lib/db/framework.ts DbAdapter registry.
  */
 
 import {
@@ -50,11 +28,17 @@ import {
   fanOutShards,
   withCache,
   getProvider,
+  detectProvider,
+  getAdapterForUrl,
+  listAdapters,
+  registerAdapter,
   listShardUrls,
   getSqlForShardIndex,
+  getPrimaryUrl,
 } from "./db/framework";
+import type { DbAdapter, DbProvider, NeonSql } from "./db/framework";
 
-// Re-export adapter & sharding helpers (additive, no breaking change)
+// Re-export adapter & sharding helpers (additive, modular)
 export {
   getShardSql,
   shardKey,
@@ -65,15 +49,17 @@ export {
   fanOutShards,
   withCache,
   getProvider,
+  detectProvider,
+  getAdapterForUrl,
+  listAdapters,
+  registerAdapter,
   listShardUrls,
   getSqlForShardIndex,
+  getPrimaryUrl,
 };
+export type { DbAdapter, DbProvider, NeonSql };
 
-/**
- * Adapter entry — reads DB_PROVIDER env (neon | neon-multi).
- * Use this instead of the bare `sql` const when you need fresh resolution
- * (e.g. tests that mutate env, or per-request shard routing).
- */
+/** Adapter entry — reads DATABASE_URL / DATABASE_URLS. */
 export function getSql(): any {
   return _getSql();
 }
@@ -82,19 +68,20 @@ export function getSql(): any {
 // Backward-compat `sql` singleton — evaluated once at import
 // ---------------------------------------------------------------------------
 
-/** @deprecated prefer getSql() for provider-aware resolution; kept for compat */
+/** @deprecated prefer getSql() for fresh resolution; kept for compat */
 export const sql: any = _getSql();
 
-if (!process.env.DATABASE_URL) console.warn("[db] DATABASE_URL unset — /api/* → 503");
+const hasDbEnv = () => !!(process.env.DATABASE_URL || process.env.DATABASE_URLS);
+if (!hasDbEnv()) console.warn("[db] DATABASE_URL/DATABASE_URLS unset — /api/* → 503");
 
-export const isDbConfigured = (): boolean => !!process.env.DATABASE_URL && !!sql;
+export const isDbConfigured = (): boolean => hasDbEnv() && !!sql;
 
 export function dbNotConfigured() {
   return {
     ok: false as const,
     code: "DB_NOT_CONFIGURED" as const,
     error: "DATABASE_URL not configured. Set in .env.local or Vercel env.",
-    hint: "Vercel → Settings → Environment Variables → DATABASE_URL (all envs) → Redeploy",
+    hint: "Vercel → Settings → Environment Variables → DATABASE_URL (all envs) → Redeploy. For sharding use DATABASE_URLS (comma-separated).",
   };
 }
 
@@ -209,12 +196,8 @@ export async function ensureCanonicalLog(): Promise<void> {
 }
 
 /**
- * Idempotent bootstrap — all DDL uses IF NOT EXISTS / IF NOT EXISTS indexes,
- * so concurrent cold starts and retries are safe. Safe to call on every request
- * (cheap when tables exist: each CREATE is a catalog lookup). For high-traffic
- * phases, gate with withCache("ddl:ensured", 300, ensureAllTables) or a startup flag.
- *
- * Parallel leaves, ordered root; single retry for Neon cold start (500ms wake).
+ * Idempotent bootstrap — safe to call on every request.
+ * Parallel leaves, ordered root; single retry for cold start (500ms wake).
  */
 export async function ensureAllTables(): Promise<void> {
   const c = getSql() ?? sql;
