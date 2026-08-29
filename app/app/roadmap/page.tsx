@@ -117,6 +117,12 @@ export default function RoadmapPage() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const seenIdsRef = useRef<Set<string>>(new Set());
   const [newIds, setNewIds] = useState<Set<string>>(new Set());
+  // swipe verify state
+  const [drag, setDrag] = useState({ x: 0, y: 0, active: false });
+  const [candy, setCandy] = useState<string | null>(null);
+  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
+  const dragPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const draggingRef = useRef(false);
 
   const fetchFeed = useCallback(async () => {
     const ctrl = new AbortController();
@@ -452,6 +458,8 @@ export default function RoadmapPage() {
       });
       const j = await r.json();
       if (!r.ok || j.ok === false) throw new Error(j.error || "vote failed");
+      setCandy("+0.3 Rep");
+      setTimeout(() => setCandy(null), 1100);
       setToast(v === "YES" ? "you said you were there — thanks!" : v === "NO" ? "marked as not there" : "skipped — all good");
       fetchFeed();
     } catch (e: unknown) {
@@ -460,6 +468,39 @@ export default function RoadmapPage() {
     } finally {
       setVoteBusy(null);
     }
+  }
+
+  // swipe handlers for detail bottom sheet (touch + mouse drag)
+  function swipeStart(clientX: number, clientY: number) {
+    dragStartRef.current = { x: clientX, y: clientY };
+    dragPosRef.current = { x: 0, y: 0 };
+    draggingRef.current = true;
+    setDrag({ x: 0, y: 0, active: true });
+  }
+  function swipeMove(clientX: number, clientY: number) {
+    if (!draggingRef.current || !dragStartRef.current) return;
+    const dx = clientX - dragStartRef.current.x;
+    const dy = clientY - dragStartRef.current.y;
+    const cx = Math.max(-160, Math.min(160, dx));
+    const cy = Math.max(-160, Math.min(60, dy));
+    dragPosRef.current = { x: cx, y: cy };
+    setDrag({ x: cx, y: cy, active: true });
+  }
+  function swipeEnd() {
+    if (!draggingRef.current) {
+      setDrag({ x: 0, y: 0, active: false });
+      return;
+    }
+    const { x, y } = dragPosRef.current;
+    draggingRef.current = false;
+    dragStartRef.current = null;
+    const shouldVote = selectedEvent && !selectedPersonal && !voteBusy;
+    if (shouldVote) {
+      if (x > 80) vote(selectedEvent.id, "YES");
+      else if (x < -80) vote(selectedEvent.id, "NO");
+      else if (y < -80) vote(selectedEvent.id, "CANCEL");
+    }
+    setDrag({ x: 0, y: 0, active: false });
   }
 
   function handleCreate(e: React.FormEvent) {
@@ -510,7 +551,7 @@ export default function RoadmapPage() {
 
   return (
     <div className="relative -mx-4 -mt-5 w-[100vw] max-w-[100vw] sm:-mx-6 lg:-mx-8">
-      <style>{`@keyframes canonicalPop{0%{transform:scale(0.72)}50%{transform:scale(1.22)}100%{transform:scale(1)}} @keyframes tickPulse{0%,100%{opacity:1}50%{opacity:.55}} @keyframes roadShimmer{0%{stroke-dashoffset:0}100%{stroke-dashoffset:28}} @keyframes scaleIn{0%{transform:scale(0.35);opacity:0}60%{transform:scale(1.14);opacity:1}100%{transform:scale(1);opacity:1}} @keyframes nowPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.06);opacity:.94}} @keyframes ghostDrift{0%{transform:translateY(0) translateX(0)}25%{transform:translateY(-10px) translateX(7px)}50%{transform:translateY(-16px) translateX(-5px)}75%{transform:translateY(-8px) translateX(4px)}100%{transform:translateY(0) translateX(0)}} @keyframes ghostPulse{0%,100%{opacity:.92}50%{opacity:.56}} .road-3d-wrap{perspective:800px;perspective-origin:50% 28%} .road-3d-inner{transform-style:preserve-3d;transform:perspective(800px) rotateX(4deg);transform-origin:center top;will-change:transform;clip-path:ellipse(96% 88% at 50% 46%);border-radius:28px} .road-3d-inner::before{content:"";position:absolute;inset:0;pointer-events:none;border-radius:28px;box-shadow:inset 0 10px 22px rgba(0,0,0,0.16),inset 0 -8px 16px rgba(0,0,0,0.12)} .node-3d{transform:translateZ(6px);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.55),inset 0 -2px 4px rgba(0,0,0,0.14),0 8px 20px rgba(0,0,0,0.42),0 1px 6px rgba(0,0,0,0.32);transition:transform 220ms cubic-bezier(.2,.8,.3,1),box-shadow 220ms ease} .node-3d:hover{transform:translateZ(12px) scale(1.02);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.65),inset 0 -3px 6px rgba(0,0,0,0.16),0 12px 28px rgba(0,0,0,0.5),0 4px 12px rgba(0,0,0,0.36)}`}</style>
+      <style>{`@keyframes canonicalPop{0%{transform:scale(0.72)}50%{transform:scale(1.22)}100%{transform:scale(1)}} @keyframes tickPulse{0%,100%{opacity:1}50%{opacity:.55}} @keyframes roadShimmer{0%{stroke-dashoffset:0}100%{stroke-dashoffset:28}} @keyframes scaleIn{0%{transform:scale(0.35);opacity:0}60%{transform:scale(1.14);opacity:1}100%{transform:scale(1);opacity:1}} @keyframes nowPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.06);opacity:.94}} @keyframes ghostDrift{0%{transform:translateY(0) translateX(0)}25%{transform:translateY(-10px) translateX(7px)}50%{transform:translateY(-16px) translateX(-5px)}75%{transform:translateY(-8px) translateX(4px)}100%{transform:translateY(0) translateX(0)}} @keyframes ghostPulse{0%,100%{opacity:.92}50%{opacity:.56}} @keyframes candyPop{0%{transform:translate(-50%,-10px) scale(0.5);opacity:0}18%{transform:translate(-50%,-18px) scale(1.18);opacity:1}72%{transform:translate(-50%,-42px) scale(1);opacity:1}100%{transform:translate(-50%,-64px) scale(0.9);opacity:0}} .road-3d-wrap{perspective:800px;perspective-origin:50% 28%} .road-3d-inner{transform-style:preserve-3d;transform:perspective(800px) rotateX(4deg);transform-origin:center top;will-change:transform;clip-path:ellipse(96% 88% at 50% 46%);border-radius:28px} .road-3d-inner::before{content:"";position:absolute;inset:0;pointer-events:none;border-radius:28px;box-shadow:inset 0 10px 22px rgba(0,0,0,0.16),inset 0 -8px 16px rgba(0,0,0,0.12)} .node-3d{transform:translateZ(6px);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.55),inset 0 -2px 4px rgba(0,0,0,0.14),0 8px 20px rgba(0,0,0,0.42),0 1px 6px rgba(0,0,0,0.32);transition:transform 220ms cubic-bezier(.2,.8,.3,1),box-shadow 220ms ease} .node-3d:hover{transform:translateZ(12px) scale(1.02);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.65),inset 0 -3px 6px rgba(0,0,0,0.16),0 12px 28px rgba(0,0,0,0.5),0 4px 12px rgba(0,0,0,0.36)}`}</style>
       <div className="relative min-h-[calc(100vh-64px)] w-full overflow-hidden" style={{ background: "linear-gradient(180deg, #0d3b2a 0%, #143d2e 42%, #1a5c3a 100%)" }}>
         {/* ambient */}
         <div className="pointer-events-none absolute inset-0">
@@ -910,8 +951,25 @@ export default function RoadmapPage() {
                   const pct = rp > 0 ? Math.min(100, Math.round((ap / rp) * 100)) : verified ? 100 : 0;
                   const isAlmost = pct >= 85 && !verified;
                   const isAdvisory = ev.status === "pending" && !verified && !isAlmost;
+                  const swipeBg = drag.active ? (drag.x > 40 ? "rgba(16,185,129,0.18)" : drag.x < -40 ? "rgba(239,68,68,0.16)" : drag.y < -40 ? "rgba(148,163,184,0.16)" : "transparent") : "transparent";
+                  const hint = drag.active ? (drag.x > 80 ? "→ Yes ✓" : drag.x < -80 ? "✕ No ←" : drag.y < -80 ? "↑ Skip" : drag.x > 30 ? "→ swipe right = Yes" : drag.x < -30 ? "swipe left = No ←" : drag.y < -30 ? "↑ swipe up = Skip" : "swipe → Yes · ← No · ↑ Skip") : null;
                   return (
-                    <div>
+                    <div
+                      className="relative select-none rounded-2xl"
+                      style={{
+                        touchAction: "pan-y",
+                        transform: drag.active ? `translate3d(${drag.x * 0.52}px, ${drag.y * 0.42}px, 0) rotate(${drag.x * 0.06}deg)` : "translate3d(0,0,0)",
+                        transition: drag.active ? "none" : "transform 260ms cubic-bezier(.2,.8,.3,1), background 200ms",
+                        background: swipeBg,
+                      }}
+                      onTouchStart={(e) => swipeStart(e.touches[0].clientX, e.touches[0].clientY)}
+                      onTouchMove={(e) => swipeMove(e.touches[0].clientX, e.touches[0].clientY)}
+                      onTouchEnd={swipeEnd}
+                      onMouseDown={(e) => swipeStart(e.clientX, e.clientY)}
+                      onMouseMove={(e) => { if (draggingRef.current) swipeMove(e.clientX, e.clientY); }}
+                      onMouseUp={swipeEnd}
+                      onMouseLeave={swipeEnd}
+                    >
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-center gap-3">
                           <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[15px] font-black text-white shadow ${verified ? "bg-emerald-500" : isAlmost ? "bg-lime-500" : isAdvisory ? "bg-amber-500" : "bg-blue-600"}`}>{verified ? "✓" : isAlmost ? "◉" : isAdvisory ? "●" : "○"}</span>
@@ -940,14 +998,17 @@ export default function RoadmapPage() {
                       {!rp && verified && <p className="mt-4 rounded-xl bg-emerald-500/10 px-3 py-2.5 text-[12.5px] text-emerald-200">Verified — coursemates confirmed this happened.</p>}
                       {!rp && !verified && <p className="mt-4 rounded-xl bg-amber-500/10 px-3 py-2.5 text-[12.5px] text-amber-200">Advisory — fresh gist, waiting for confirmations.</p>}
                       <div className="mt-4">
-                        <p className="font-mono text-[11px] uppercase tracking-wide text-slate-500">Were you there?</p>
+                        <p className="font-mono text-[11px] uppercase tracking-wide text-slate-500">Were you there? <span className="normal-case tracking-normal text-slate-600">· swipe → Yes · ← No · ↑ Skip</span></p>
                         <div className="mt-2.5 flex flex-wrap items-center gap-2">
                           <button onClick={() => vote(ev.id, "YES")} disabled={!!voteBusy} className="rounded-full border border-emerald-500/30 bg-emerald-500/15 px-5 py-2.5 text-[13.5px] font-semibold text-emerald-300 hover:bg-emerald-500 hover:text-white transition disabled:opacity-50">{voteBusy === ev.id + "YES" ? "…" : "Yes ✓"}</button>
                           <button onClick={() => vote(ev.id, "NO")} disabled={!!voteBusy} className="rounded-full border border-white/10 bg-white/[0.05] px-5 py-2.5 text-[13.5px] font-medium text-slate-200 hover:bg-white hover:text-black transition disabled:opacity-50">{voteBusy === ev.id + "NO" ? "…" : "No ✕"}</button>
                           <button onClick={() => vote(ev.id, "CANCEL")} disabled={!!voteBusy} className="rounded-full border border-white/10 bg-white/[0.02] px-5 py-2.5 text-[13.5px] font-medium text-slate-400 hover:bg-white/[0.08] hover:text-white transition disabled:opacity-50">{voteBusy === ev.id + "CANCEL" ? "…" : "Skip"}</button>
                           <span className="font-mono text-[11px] text-slate-600">uses physi_profile</span>
                         </div>
+                        {hint && <p className="mt-2 font-mono text-[12px] font-bold" style={{ color: drag.x > 40 ? "#10b981" : drag.x < -40 ? "#f87171" : drag.y < -40 ? "#94a3b8" : "#a1a1aa" }}>{hint}</p>}
+                        <p className="mt-1 font-mono text-[10px] text-slate-500">swipe card → Yes, ← No, ↑ Skip · buttons are fallback</p>
                       </div>
+                      {candy && <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 -translate-x-1/2 rounded-full bg-gradient-to-r from-amber-400 to-emerald-400 px-4 py-1.5 text-[13px] font-black text-black shadow-xl" style={{ animation: "candyPop 1100ms cubic-bezier(.2,.8,.3,1) forwards" }}>{candy}</div>}
                       <div className="mt-4 flex flex-wrap gap-2">
                         <button onClick={() => fetchFeed()} className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-[13px] font-medium text-slate-200">↻ refresh road</button>
                         <button onClick={() => scrollToNow(true)} className="rounded-full border border-violet-400/20 bg-violet-500/15 px-4 py-2 text-[13px] font-medium text-violet-200">◎ center NOW</button>
