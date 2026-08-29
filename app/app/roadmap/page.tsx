@@ -123,6 +123,22 @@ export default function RoadmapPage() {
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
   const dragPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const draggingRef = useRef(false);
+  // quest
+  const [qTap, setQTap] = useState(false);
+  const [qSwipe, setQSwipe] = useState(false);
+  const [qRep, setQRep] = useState(false);
+  const [questDone, setQuestDone] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
+  // pulse ghost toasts
+  const [pulseMsg, setPulseMsg] = useState<string | null>(null);
+  const [pulseShow, setPulseShow] = useState(false);
+  // FAB direct create
+  const [fabOpen, setFabOpen] = useState(false);
+  const [fabBusy, setFabBusy] = useState(false);
+  const [fabTitle, setFabTitle] = useState("");
+  const [fabVenue, setFabVenue] = useState("");
+  const [fabDate, setFabDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [fabTime, setFabTime] = useState("10:00");
 
   const fetchFeed = useCallback(async () => {
     const ctrl = new AbortController();
@@ -179,6 +195,48 @@ export default function RoadmapPage() {
     fetchStats();
     return () => clearTimeout(fallback);
   }, [fetchFeed, fetchStats]);
+  // quest: load from localStorage
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem("physi_quest_done");
+      if (v === "1" || v === "true") {
+        setQTap(true); setQSwipe(true); setQRep(true); setQuestDone(true);
+      }
+    } catch {}
+  }, []);
+  // quest complete -> confetti + persist
+  const questProgress = (qTap?1:0)+(qSwipe?1:0)+(qRep?1:0);
+  useEffect(() => {
+    if (questProgress===3 && !questDone) {
+      setQuestDone(true);
+      setShowConfetti(true);
+      try { localStorage.setItem("physi_quest_done","1"); } catch {}
+      setToast("Quest complete — +5 Rep! 🎉");
+      setTimeout(()=>setShowConfetti(false), 3200);
+    }
+  }, [questProgress, questDone]);
+  // when candy earned, mark rep
+  useEffect(() => { if (candy) setQRep(true); }, [candy]);
+  // pulse toasts every 12s - pure UI ghosts
+  useEffect(() => {
+    const ghosts = ["zara_11","alex_02","mike_07","nini_04","tomi_09","chidi_12","sola_08","amaka_03"];
+    const courses = ["BIO 101","CHM 111","PHY 101","MTH 101","GST 103","BIO 102","PHY 102"];
+    const verbs = ["verified","confirmed","was there for","checked in to"];
+    let timer: any;
+    let hideTimer: any;
+    function trigger() {
+      const g = ghosts[Math.floor(Math.random()*ghosts.length)];
+      const c = courses[Math.floor(Math.random()*courses.length)];
+      const v = verbs[Math.floor(Math.random()*verbs.length)];
+      const m = 1 + Math.floor(Math.random()*5);
+      setPulseMsg(`${g} ${v} ${c} · ${m}m ago`);
+      setPulseShow(true);
+      clearTimeout(hideTimer);
+      hideTimer = setTimeout(()=> setPulseShow(false), 2800);
+    }
+    const start = setTimeout(()=>{ trigger(); timer = setInterval(trigger, 12000); }, 3500);
+    return ()=>{ clearTimeout(start); clearInterval(timer); clearTimeout(hideTimer); };
+  }, []);
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 2600);
@@ -494,6 +552,7 @@ export default function RoadmapPage() {
     const { x, y } = dragPosRef.current;
     draggingRef.current = false;
     dragStartRef.current = null;
+    if (Math.abs(x) > 30 || y < -30) setQSwipe(true);
     const shouldVote = selectedEvent && !selectedPersonal && !voteBusy;
     if (shouldVote) {
       if (x > 80) vote(selectedEvent.id, "YES");
@@ -546,12 +605,31 @@ export default function RoadmapPage() {
     setFDate(new Date().toISOString().slice(0, 10));
   }
 
+  async function handleFabCreate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!fabTitle.trim() || !fabVenue.trim() || !fabDate || !fabTime) { setToast("fill title, venue, date, time"); return; }
+    setFabBusy(true);
+    try {
+      let createdBy: string | null = null;
+      try { const raw = localStorage.getItem("physi_profile"); if (raw) createdBy = JSON.parse(raw)?.id ?? null; } catch {}
+      const body: any = { title: fabTitle.trim(), venue: fabVenue.trim(), event_date: fabDate, event_time: fabTime, scope_type: "whole_school", scope_value: null, status: "pending", authority_points: 0, required_points: 5 };
+      if (createdBy) body.created_by = createdBy;
+      const r = await fetch("/api/timetable", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      const j = await r.json();
+      if (!r.ok || j.ok === false) throw new Error(j.error || "create failed");
+      setToast(`created “${fabTitle.trim()}” ✓`);
+      setFabOpen(false); setFabTitle(""); setFabVenue(""); setFabTime("10:00"); setFabDate(new Date().toISOString().slice(0,10));
+      fetchFeed();
+    } catch (err:any) { logError("TIMETABLE_CREATE_FAILED", err, { page: "roadmap" }); setToast(getErrorMessage("TIMETABLE_CREATE_FAILED")); }
+    finally { setFabBusy(false); }
+  }
+
   const pastCount = nowIdx;
   const upcomingCount = roadItems.length - nowIdx;
 
   return (
     <div className="relative -mx-4 -mt-5 w-[100vw] max-w-[100vw] sm:-mx-6 lg:-mx-8">
-      <style>{`@keyframes canonicalPop{0%{transform:scale(0.72)}50%{transform:scale(1.22)}100%{transform:scale(1)}} @keyframes tickPulse{0%,100%{opacity:1}50%{opacity:.55}} @keyframes roadShimmer{0%{stroke-dashoffset:0}100%{stroke-dashoffset:28}} @keyframes scaleIn{0%{transform:scale(0.35);opacity:0}60%{transform:scale(1.14);opacity:1}100%{transform:scale(1);opacity:1}} @keyframes nowPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.06);opacity:.94}} @keyframes ghostDrift{0%{transform:translateY(0) translateX(0)}25%{transform:translateY(-10px) translateX(7px)}50%{transform:translateY(-16px) translateX(-5px)}75%{transform:translateY(-8px) translateX(4px)}100%{transform:translateY(0) translateX(0)}} @keyframes ghostPulse{0%,100%{opacity:.92}50%{opacity:.56}} @keyframes candyPop{0%{transform:translate(-50%,-10px) scale(0.5);opacity:0}18%{transform:translate(-50%,-18px) scale(1.18);opacity:1}72%{transform:translate(-50%,-42px) scale(1);opacity:1}100%{transform:translate(-50%,-64px) scale(0.9);opacity:0}} .road-3d-wrap{perspective:800px;perspective-origin:50% 28%} .road-3d-inner{transform-style:preserve-3d;transform:perspective(800px) rotateX(4deg);transform-origin:center top;will-change:transform;clip-path:ellipse(96% 88% at 50% 46%);border-radius:28px} .road-3d-inner::before{content:"";position:absolute;inset:0;pointer-events:none;border-radius:28px;box-shadow:inset 0 10px 22px rgba(0,0,0,0.16),inset 0 -8px 16px rgba(0,0,0,0.12)} .node-3d{transform:translateZ(6px);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.55),inset 0 -2px 4px rgba(0,0,0,0.14),0 8px 20px rgba(0,0,0,0.42),0 1px 6px rgba(0,0,0,0.32);transition:transform 220ms cubic-bezier(.2,.8,.3,1),box-shadow 220ms ease} .node-3d:hover{transform:translateZ(12px) scale(1.02);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.65),inset 0 -3px 6px rgba(0,0,0,0.16),0 12px 28px rgba(0,0,0,0.5),0 4px 12px rgba(0,0,0,0.36)}`}</style>
+      <style>{`@keyframes canonicalPop{0%{transform:scale(0.72)}50%{transform:scale(1.22)}100%{transform:scale(1)}} @keyframes tickPulse{0%,100%{opacity:1}50%{opacity:.55}} @keyframes roadShimmer{0%{stroke-dashoffset:0}100%{stroke-dashoffset:28}} @keyframes scaleIn{0%{transform:scale(0.35);opacity:0}60%{transform:scale(1.14);opacity:1}100%{transform:scale(1);opacity:1}} @keyframes nowPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.06);opacity:.94}} @keyframes ghostDrift{0%{transform:translateY(0) translateX(0)}25%{transform:translateY(-10px) translateX(7px)}50%{transform:translateY(-16px) translateX(-5px)}75%{transform:translateY(-8px) translateX(4px)}100%{transform:translateY(0) translateX(0)}} @keyframes ghostPulse{0%,100%{opacity:.92}50%{opacity:.56}} @keyframes candyPop{0%{transform:translate(-50%,-10px) scale(0.5);opacity:0}18%{transform:translate(-50%,-18px) scale(1.18);opacity:1}72%{transform:translate(-50%,-42px) scale(1);opacity:1}100%{transform:translate(-50%,-64px) scale(0.9);opacity:0}} @keyframes pulseSlideIn{0%{transform:translate(-50%,-18px);opacity:0}12%{transform:translate(-50%,0);opacity:1}88%{transform:translate(-50%,0);opacity:1}100%{transform:translate(-50%,-18px);opacity:0}} @keyframes confettiFall{0%{transform:translateY(-10vh) rotate(0deg);opacity:1}100%{transform:translateY(110vh) rotate(720deg);opacity:0}} @keyframes questFill{0%{width:0}100%{width:var(--fill)}} .road-3d-wrap{perspective:800px;perspective-origin:50% 28%} .road-3d-inner{transform-style:preserve-3d;transform:perspective(800px) rotateX(4deg);transform-origin:center top;will-change:transform;clip-path:ellipse(96% 88% at 50% 46%);border-radius:28px} .road-3d-inner::before{content:"";position:absolute;inset:0;pointer-events:none;border-radius:28px;box-shadow:inset 0 10px 22px rgba(0,0,0,0.16),inset 0 -8px 16px rgba(0,0,0,0.12)} .node-3d{transform:translateZ(6px);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.55),inset 0 -2px 4px rgba(0,0,0,0.14),0 8px 20px rgba(0,0,0,0.42),0 1px 6px rgba(0,0,0,0.32);transition:transform 220ms cubic-bezier(.2,.8,.3,1),box-shadow 220ms ease} .node-3d:hover{transform:translateZ(12px) scale(1.02);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.65),inset 0 -3px 6px rgba(0,0,0,0.16),0 12px 28px rgba(0,0,0,0.5),0 4px 12px rgba(0,0,0,0.36)}`}</style>
       <div className="relative min-h-[calc(100vh-64px)] w-full overflow-hidden" style={{ background: "linear-gradient(180deg, #0d3b2a 0%, #143d2e 42%, #1a5c3a 100%)" }}>
         {/* ambient */}
         <div className="pointer-events-none absolute inset-0">
@@ -611,6 +689,49 @@ export default function RoadmapPage() {
         <p className="absolute left-1/2 top-[92px] z-10 -translate-x-1/2 whitespace-nowrap rounded-full border border-white/10 bg-black/70 px-3 py-1 font-mono text-[10px] tracking-wide text-slate-400 backdrop-blur sm:hidden">
           {loading ? "LOADING ROAD…" : `${pastCount} BEHIND · NOW · ${upcomingCount} AHEAD`}
         </p>
+        {/* Quest bar - 3 dots with progress fill */}
+        <div className="pointer-events-none absolute left-1/2 top-[116px] z-20 flex w-full max-w-[560px] -translate-x-1/2 justify-center px-3 sm:top-[108px] sm:px-6">
+          <div className="pointer-events-auto flex w-full items-center gap-2 rounded-full border border-white/10 bg-black/75 px-3 py-2 backdrop-blur-xl shadow-[0_8px_24px_rgba(0,0,0,0.5)] sm:px-4">
+            <span className="hidden font-mono text-[10px] font-bold tracking-[0.12em] text-amber-300 sm:inline">QUEST</span>
+            <div className="relative flex flex-1 items-center justify-between gap-1">
+              {/* progress line */}
+              <div className="absolute left-[14px] right-[14px] top-1/2 h-[4px] -translate-y-1/2 rounded-full bg-white/10" />
+              <div className="absolute left-[14px] top-1/2 h-[4px] -translate-y-1/2 rounded-full bg-gradient-to-r from-violet-500 to-emerald-400 transition-all duration-700" style={{ width: `calc(${(questProgress/3)*100}% - 28px)`, maxWidth: 'calc(100% - 28px)' }} />
+              {[
+                {label:"Tap node", done:qTap, idx:1},
+                {label:"Swipe", done:qSwipe, idx:2},
+                {label:"Earn Rep", done:qRep, idx:3},
+              ].map(s=> (
+                <div key={s.idx} className="relative z-[1] flex flex-col items-center gap-1">
+                  <div className={`flex h-7 w-7 items-center justify-center rounded-full border-2 text-[11px] font-black transition-all duration-300 ${s.done ? "bg-white border-white text-black scale-105" : "bg-white/10 border-white/20 text-white/60"}`}>{s.done ? "✓" : s.idx}</div>
+                  <span className={`hidden font-mono text-[9px] font-bold tracking-wide sm:inline ${s.done ? "text-white" : "text-slate-400"}`}>{s.label}</span>
+                </div>
+              ))}
+            </div>
+            <span className={`rounded-full px-2.5 py-1 font-mono text-[10px] font-black ${questDone ? "bg-emerald-500 text-white" : "bg-white/10 text-slate-300"}`}>{questDone ? "Done ✓" : `${questProgress}/3`}</span>
+          </div>
+        </div>
+        {/* Live pulse toasts - top center sliding in/out pure UI ghosts */}
+        <div className="pointer-events-none absolute left-1/2 top-[154px] z-30 -translate-x-1/2 sm:top-[148px]">
+          {pulseMsg && (
+            <div className={`rounded-full border border-emerald-400/20 bg-black/80 px-4 py-2 font-mono text-[11px] font-semibold text-white backdrop-blur-xl shadow-[0_8px_24px_rgba(0,0,0,0.5)] transition-all duration-500 ${pulseShow ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-3"}`} style={{ animation: pulseShow ? "pulseSlideIn 3s ease" : undefined }}>
+              <span className="mr-1.5 inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400" />{pulseMsg}
+            </div>
+          )}
+        </div>
+        {/* Confetti on quest complete */}
+        {showConfetti && (
+          <div className="pointer-events-none absolute inset-0 z-40 overflow-hidden" aria-hidden>
+            {Array.from({length: 24}).map((_,i)=> {
+              const left = (i* 4.2 + Math.random()*2) % 100;
+              const delay = (Math.random()*0.6).toFixed(2);
+              const dur = (1.8 + Math.random()*1.2).toFixed(2);
+              const bg = ["#8b5cf6","#10b981","#f59e0b","#ec4899","#06b6d4","#facc15"][i%6];
+              return <div key={i} className="absolute top-0 h-3 w-2 rounded-sm" style={{ left: left+"%", background: bg, animation: `confettiFall ${dur}s ${delay}s ease-in forwards`, transform: `rotate(${Math.random()*360}deg)` }} />;
+            })}
+            <div className="absolute left-1/2 top-[40%] -translate-x-1/2 rounded-full bg-white px-6 py-3 text-sm font-black text-black shadow-xl">🎉 Quest Complete! +5 Rep</div>
+          </div>
+        )}
 
         {toast && <div className="fixed bottom-28 left-1/2 z-50 -translate-x-1/2 rounded-full bg-white px-5 py-2.5 text-[13px] font-medium text-black shadow-xl">{toast}</div>}
 
@@ -782,6 +903,7 @@ export default function RoadmapPage() {
                     <g
                       key={item.id}
                       onClick={() => {
+                        setQTap(true);
                         // use base id so sheet shows canonical event even when clicking tiled duplicates
                         setSelectedId(baseId);
                         setSheetOpen(true);
@@ -883,6 +1005,34 @@ export default function RoadmapPage() {
           </div>
         )}
 
+        {/* FAB candy purple #8b5cf6 */}
+        <button onClick={()=>setFabOpen(true)} aria-label="Create event" className="fixed bottom-[88px] right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[#8b5cf6] text-2xl font-black text-white shadow-[0_8px_24px_rgba(139,92,246,0.5),0_4px_12px_rgba(0,0,0,0.3)] hover:bg-[#7c3aed] hover:scale-105 active:scale-95 transition sm:bottom-[92px] sm:right-6">
+          +
+        </button>
+        {/* FAB create modal - POST /api/timetable */}
+        {fabOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
+            <form onSubmit={handleFabCreate} className="w-full max-w-[420px] rounded-[20px] border border-white/10 bg-[#0b0f1e] p-5 shadow-2xl">
+              <div className="flex items-center justify-between">
+                <h3 className="text-[16px] font-bold text-white">Create event</h3>
+                <button type="button" onClick={()=>setFabOpen(false)} className="rounded-full bg-white/10 px-3 py-1 text-sm text-white">✕</button>
+              </div>
+              <p className="mt-1 text-[12px] text-slate-400">title / venue / date / time → POST /api/timetable</p>
+              <div className="mt-4 grid gap-3">
+                <input value={fabTitle} onChange={e=>setFabTitle(e.target.value)} placeholder="Title e.g. BIO 101 Lecture" className="w-full rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm text-white placeholder:text-slate-500 outline-none focus:border-violet-500" required />
+                <input value={fabVenue} onChange={e=>setFabVenue(e.target.value)} placeholder="Venue e.g. LT1" className="w-full rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm text-white placeholder:text-slate-500 outline-none focus:border-violet-500" required />
+                <div className="grid grid-cols-2 gap-3">
+                  <input type="date" value={fabDate} onChange={e=>setFabDate(e.target.value)} className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm text-white outline-none" required />
+                  <input type="time" value={fabTime} onChange={e=>setFabTime(e.target.value)} className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm text-white outline-none" required />
+                </div>
+              </div>
+              <div className="mt-4 flex gap-2">
+                <button type="submit" disabled={fabBusy} className="flex-1 rounded-full bg-[#8b5cf6] py-2.5 text-sm font-black text-white hover:bg-[#7c3aed] disabled:opacity-60">{fabBusy ? "…" : "Create"}</button>
+                <button type="button" onClick={()=>setFabOpen(false)} className="rounded-full border border-white/15 bg-white/5 px-5 py-2.5 text-sm font-semibold text-white">Cancel</button>
+              </div>
+            </form>
+          </div>
+        )}
         {/* bottom sheet */}
         <div className={`absolute inset-x-0 bottom-0 z-30 flex justify-center px-3 pb-3 sm:px-6 sm:pb-4 transition-transform duration-300 ${sheetOpen ? "translate-y-0" : "translate-y-[calc(100%-44px)]"}`}>
           <div className="w-full max-w-[680px] overflow-hidden rounded-[24px] border border-white/[0.09] bg-[#080c18]/95 shadow-[0_16px_64px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl">
