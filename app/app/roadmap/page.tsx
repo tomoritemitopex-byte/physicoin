@@ -276,12 +276,14 @@ export default function RoadmapPage() {
 
   const wat = useMemo(() => formatWAT(now), [now]);
 
-  // --- infinite loop road constants (no hard start/end) ---
+  // --- infinite loop road constants (no hard start/end — seamless endless) ---
   const STEP_Y = 128;
-  const TOP_BUFFER = 220; // replaces hard START_Y cap — road extends beyond viewport
-  const BOTTOM_BUFFER = 320;
+  const TOP_BUFFER = 320; // replaces hard START_Y cap — road extends far beyond viewport so caps never visible
+  const BOTTOM_BUFFER = 480;
   const MIN_TILE = 18; // ensure road feels endless even with few events
-  const ROAD_EXTEND = 180; // extra path length beyond first/last node
+  const ROAD_EXTEND = 420; // extra path length beyond first/last node — purple striped line never terminates, hidden by fade masks
+  const VIEWPORT_FADE_TOP = 96; // mask fade top
+  const VIEWPORT_FADE_BOT = 128; // mask fade bottom
 
   // tiled display items: duplicate to fill infinite illusion when few events
   const displayItems = useMemo(() => {
@@ -498,7 +500,7 @@ export default function RoadmapPage() {
 
   return (
     <div className="relative -mx-4 -mt-5 w-[100vw] max-w-[100vw] sm:-mx-6 lg:-mx-8">
-      <style>{`@keyframes canonicalPop{0%{transform:scale(0.72)}50%{transform:scale(1.22)}100%{transform:scale(1)}} @keyframes tickPulse{0%,100%{opacity:1}50%{opacity:.55}} @keyframes roadShimmer{0%{stroke-dashoffset:0}100%{stroke-dashoffset:28}} @keyframes scaleIn{0%{transform:scale(0.35);opacity:0}60%{transform:scale(1.14);opacity:1}100%{transform:scale(1);opacity:1}} @keyframes nowPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.08);opacity:.92}} .road-3d-wrap{perspective:1000px;perspective-origin:50% 38%} .road-3d-inner{transform-style:preserve-3d;transform:rotateX(8deg);transform-origin:center top} .node-3d{transform:translateZ(12px);box-shadow:inset 0 2px 0 rgba(255,255,255,0.65),inset 0 -3px 6px rgba(0,0,0,0.18),0 12px 32px rgba(0,0,0,0.6),0 2px 8px rgba(0,0,0,0.45);transition:transform 220ms cubic-bezier(.2,.8,.3,1),box-shadow 220ms ease} .node-3d:hover{transform:translateZ(22px) scale(1.03);box-shadow:inset 0 2px 0 rgba(255,255,255,0.75),inset 0 -4px 8px rgba(0,0,0,0.22),0 18px 40px rgba(0,0,0,0.65),0 6px 16px rgba(0,0,0,0.5)}`}</style>
+      <style>{`@keyframes canonicalPop{0%{transform:scale(0.72)}50%{transform:scale(1.22)}100%{transform:scale(1)}} @keyframes tickPulse{0%,100%{opacity:1}50%{opacity:.55}} @keyframes roadShimmer{0%{stroke-dashoffset:0}100%{stroke-dashoffset:28}} @keyframes scaleIn{0%{transform:scale(0.35);opacity:0}60%{transform:scale(1.14);opacity:1}100%{transform:scale(1);opacity:1}} @keyframes nowPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.08);opacity:.92}} @keyframes warpPulse{0%,100%{transform:perspective(1200px) rotateX(12deg) scale3d(1.015,0.985,1) skewX(0deg)}25%{transform:perspective(1200px) rotateX(12.9deg) scale3d(1.022,0.978,1) skewX(0.35deg)}50%{transform:perspective(1200px) rotateX(13.2deg) scale3d(1.028,0.972,1) skewX(0deg)}75%{transform:perspective(1200px) rotateX(12.5deg) scale3d(1.018,0.982,1) skewX(-0.35deg)}} .road-3d-wrap{perspective:1200px;perspective-origin:50% 32%} .road-3d-inner{transform-style:preserve-3d;transform:perspective(1200px) rotateX(12deg) scale3d(1.015,0.985,1);transform-origin:center top;animation:warpPulse 4s ease-in-out infinite;will-change:transform;clip-path:ellipse(96% 88% at 50% 46%);border-radius:28px} .road-3d-inner::before{content:"";position:absolute;inset:0;pointer-events:none;border-radius:28px;box-shadow:inset 0 18px 40px rgba(0,0,0,0.22),inset 0 -12px 24px rgba(0,0,0,0.18)} .node-3d{transform:translateZ(12px);box-shadow:inset 0 2px 0 rgba(255,255,255,0.65),inset 0 -3px 6px rgba(0,0,0,0.18),0 12px 32px rgba(0,0,0,0.6),0 2px 8px rgba(0,0,0,0.45);transition:transform 220ms cubic-bezier(.2,.8,.3,1),box-shadow 220ms ease} .node-3d:hover{transform:translateZ(22px) scale(1.03);box-shadow:inset 0 2px 0 rgba(255,255,255,0.75),inset 0 -4px 8px rgba(0,0,0,0.22),0 18px 40px rgba(0,0,0,0.65),0 6px 16px rgba(0,0,0,0.5)} @media(prefers-reduced-motion:reduce){.road-3d-inner{animation:none}}`}</style>
       <div className="relative min-h-[calc(100vh-64px)] w-full overflow-hidden" style={{ background: "linear-gradient(180deg, #0d3b2a 0%, #143d2e 42%, #1a5c3a 100%)" }}>
         {/* ambient */}
         <div className="pointer-events-none absolute inset-0">
@@ -562,7 +564,7 @@ export default function RoadmapPage() {
         {toast && <div className="fixed bottom-28 left-1/2 z-50 -translate-x-1/2 rounded-full bg-white px-5 py-2.5 text-[13px] font-medium text-black shadow-xl">{toast}</div>}
 
         {/* SCROLLABLE ROAD CONTAINER — endless winding purple road — 3D Candy Crush depth */}
-        <div className="road-3d-wrap relative mx-auto flex h-[calc(100vh-64px)] w-full max-w-[560px] justify-center overflow-hidden pt-[112px] sm:pt-[104px]" style={{ perspective: "1000px", perspectiveOrigin: "50% 38%" }}>
+        <div className="road-3d-wrap relative mx-auto flex h-[calc(100vh-64px)] w-full max-w-[560px] justify-center overflow-hidden pt-[112px] sm:pt-[104px]" style={{ perspective: "1200px", perspectiveOrigin: "50% 32%" }}>
           {/* depth gradients on sides — 3D vignette */}
           <div className="pointer-events-none absolute inset-y-0 left-0 w-[18%] z-[4]" style={{ background: "linear-gradient(to right, rgba(0,0,0,0.38) 0%, rgba(0,0,0,0.18) 42%, transparent 100%)" }} />
           <div className="pointer-events-none absolute inset-y-0 right-0 w-[18%] z-[4]" style={{ background: "linear-gradient(to left, rgba(0,0,0,0.38) 0%, rgba(0,0,0,0.18) 42%, transparent 100%)" }} />
@@ -572,10 +574,14 @@ export default function RoadmapPage() {
             style={{
               scrollBehavior: "smooth",
               transformStyle: "preserve-3d",
-              transform: "rotateX(6deg)",
+              transform: "perspective(1200px) rotateX(12deg) scale3d(1.015,0.985,1)",
               transformOrigin: "center top",
-              WebkitMaskImage: "linear-gradient(to bottom, transparent 0px, black 72px, black calc(100% - 96px), transparent 100%)",
-              maskImage: "linear-gradient(to bottom, transparent 0px, black 72px, black calc(100% - 96px), transparent 100%)",
+              animation: "warpPulse 4s ease-in-out infinite",
+              willChange: "transform",
+              clipPath: "ellipse(96% 88% at 50% 46%)",
+              borderRadius: "28px",
+              WebkitMaskImage: `linear-gradient(to bottom, transparent 0px, black ${VIEWPORT_FADE_TOP}px, black calc(100% - ${VIEWPORT_FADE_BOT}px), transparent 100%)`,
+              maskImage: `linear-gradient(to bottom, transparent 0px, black ${VIEWPORT_FADE_TOP}px, black calc(100% - ${VIEWPORT_FADE_BOT}px), transparent 100%)`,
             }}
           >
             {/* map card background — 3D bevel + drop shadow */}
@@ -610,6 +616,11 @@ export default function RoadmapPage() {
               </linearGradient>
               <filter id="roadShadow"><feDropShadow dx="0" dy="6" stdDeviation={10} floodColor="rgba(0,0,0,0.55)" /></filter>
               <filter id="nodeGlow"><feDropShadow dx="0" dy="2" stdDeviation={6} floodColor="rgba(255,255,255,0.18)" /></filter>
+              {/* warp 3D SVG barrel warp — subtle candy-crush perspective bend */}
+              <filter id="warpFilter" x="-12%" y="-6%" width="124%" height="112%" colorInterpolationFilters="sRGB">
+                <feTurbulence type="turbulence" baseFrequency="0.012 0.006" numOctaves={2} seed={7} result="warpTurbulence" />
+                <feDisplacementMap in="SourceGraphic" in2="warpTurbulence" scale={7} xChannelSelector="R" yChannelSelector="G" result="warped" />
+              </filter>
             </defs>
 
             {/* purple road — 3D depth with shadow layer and bevel */}
@@ -742,9 +753,9 @@ export default function RoadmapPage() {
           </svg>
           </div>
         </div>
-        {/* viewport-fixed infinite edge fades — ensures no hard start/end even without mask support */}
-        <div className="pointer-events-none absolute left-1/2 top-[104px] z-[15] h-[72px] w-[96%] max-w-[560px] -translate-x-1/2" style={{ background: "linear-gradient(to bottom, rgba(13,59,42,0.92) 0%, rgba(13,59,42,0.68) 38%, transparent 100%)" }} />
-        <div className="pointer-events-none absolute bottom-0 left-1/2 z-[15] h-[108px] w-[96%] max-w-[560px] -translate-x-1/2" style={{ background: "linear-gradient(to top, rgba(13,59,42,0.92) 0%, transparent 100%)" }} />
+        {/* viewport-fixed infinite edge fades — ensures no hard start/end even without mask support — purple road never terminates */}
+        <div className="pointer-events-none absolute left-1/2 top-[104px] z-[15] h-[96px] w-[96%] max-w-[560px] -translate-x-1/2 rounded-t-[28px]" style={{ background: "linear-gradient(to bottom, rgba(13,59,42,0.98) 0%, rgba(13,59,42,0.84) 34%, rgba(13,59,42,0.42) 68%, transparent 100%)" }} />
+        <div className="pointer-events-none absolute bottom-0 left-1/2 z-[15] h-[140px] w-[96%] max-w-[560px] -translate-x-1/2 rounded-b-[28px]" style={{ background: "linear-gradient(to top, rgba(13,59,42,0.98) 0%, rgba(13,59,42,0.72) 36%, transparent 100%)" }} />
 
         {/* create modal */}
         {showCreate && (
