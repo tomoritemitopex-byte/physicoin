@@ -95,6 +95,14 @@ function formatWAT(ts: number) {
   }
 }
 
+const GHOST_REP: { handle: string; rep: number; color: string; bg: string }[] = [
+  { handle: "alex_02", rep: 12.4, color: "#10b981", bg: "#065f46" },
+  { handle: "zara_11", rep: 10.2, color: "#f59e0b", bg: "#78350f" },
+  { handle: "mike_07", rep: 9.8, color: "#0ea5e9", bg: "#0c4a6e" },
+  { handle: "nini_04", rep: 8.1, color: "#8b5cf6", bg: "#4c1d95" },
+  { handle: "tomi_09", rep: 7.5, color: "#ec4899", bg: "#831843" },
+];
+
 export default function RoadmapPage() {
   const [events, setEvents] = useState<EventRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -139,6 +147,13 @@ export default function RoadmapPage() {
   const [fabVenue, setFabVenue] = useState("");
   const [fabDate, setFabDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [fabTime, setFabTime] = useState("10:00");
+  // rep board + streak + invite
+  const [repBoard, setRepBoard] = useState<typeof GHOST_REP>(GHOST_REP);
+  const [repSheetOpen, setRepSheetOpen] = useState(false);
+  const [youHandle, setYouHandle] = useState<string | null>(null);
+  const [streak, setStreak] = useState<number>(0);
+  const [inviteNudge, setInviteNudge] = useState(false);
+  const [inviteCopied, setInviteCopied] = useState(false);
 
   const fetchFeed = useCallback(async () => {
     const ctrl = new AbortController();
@@ -189,12 +204,97 @@ export default function RoadmapPage() {
     } catch {}
   }, []);
 
+  // rep board: poll /api/stats or fallback ghosts, 30s live
+  const fetchRepBoard = useCallback(async () => {
+    try {
+      const r = await fetch("/api/stats", { cache: "no-store" });
+      const j = await r.json().catch(()=> ({} as any));
+      // try to extract top rep list from various shapes, else keep ghosts
+      let list: any[] | null = null;
+      if (Array.isArray(j?.top)) list = j.top;
+      else if (Array.isArray(j?.leaderboard)) list = j.leaderboard;
+      else if (Array.isArray(j?.users)) list = j.users;
+      else if (Array.isArray(j?.ranking)) list = j.ranking;
+      else if (Array.isArray(j?.metrics?.top)) list = (j.metrics as any).top;
+      if (list && list.length) {
+        const mapped = list.slice(0,5).map((u:any, i:number) => {
+          const h = u.nickname || u.handle || u.name || u.id || GHOST_REP[i]?.handle || "user_"+i;
+          const rep = Number(u.authority_final ?? u.rep ?? u.score ?? u.mining_balance ?? GHOST_REP[i]?.rep ?? (10 - i));
+          const g = GHOST_REP[i % GHOST_REP.length];
+          return { handle: String(h), rep: rep || g.rep, color: g.color, bg: g.bg };
+        });
+        if (mapped.length) setRepBoard(mapped);
+      }
+    } catch {}
+  }, []);
+
   useEffect(() => {
     const fallback = setTimeout(() => setLoading(false), 1500);
     fetchFeed();
     fetchStats();
-    return () => clearTimeout(fallback);
-  }, [fetchFeed, fetchStats]);
+    fetchRepBoard();
+    const iv = setInterval(fetchRepBoard, 30000);
+    return () => { clearTimeout(fallback); clearInterval(iv); };
+  }, [fetchFeed, fetchStats, fetchRepBoard]);
+
+  // you highlight via physi_profile + streak via /api/mining or localStorage physi_streak
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("physi_profile");
+      if (raw) {
+        const p = JSON.parse(raw);
+        const h = p?.nickname || p?.handle || p?.name || null;
+        if (h) setYouHandle(String(h).toLowerCase());
+        else if (p?.id) setYouHandle(String(p.id).slice(0,8).toLowerCase());
+      }
+    } catch {}
+    // streak: try localStorage first
+    try {
+      const s = localStorage.getItem("physi_streak");
+      if (s) setStreak(Number(s) || 0);
+    } catch {}
+    // then try server /api/mining?user_id=
+    (async () => {
+      try {
+        const raw = localStorage.getItem("physi_profile");
+        if (!raw) return;
+        const p = JSON.parse(raw);
+        const uid = p?.id;
+        if (!uid) return;
+        const r = await fetch(`/api/mining?user_id=${encodeURIComponent(uid)}`, { cache: "no-store" });
+        const j = await r.json().catch(()=> ({} as any));
+        if (j?.ok && Array.isArray(j.logs) && j.logs.length) {
+          // compute streak: consecutive days with a log (today/yesterday chain)
+          const days = new Set<string>(j.logs.map((l:any)=> String(l.created_at).slice(0,10)));
+          let cur = 0;
+          const d = new Date();
+          for (let i=0;i<30;i++) {
+            const iso = d.toISOString().slice(0,10);
+            if (days.has(iso)) { cur++; d.setDate(d.getDate()-1); } else break;
+          }
+          if (cur>0) {
+            setStreak((prev)=> Math.max(prev, cur));
+            try { localStorage.setItem("physi_streak", String(Math.max(cur, Number(localStorage.getItem("physi_streak")||0)))); } catch {}
+          }
+        }
+      } catch {}
+    })();
+  }, []);
+
+  function bumpStreakDaily() {
+    try {
+      const today = new Date().toISOString().slice(0,10);
+      const last = localStorage.getItem("physi_streak_last");
+      if (last === today) return;
+      const cur = Number(localStorage.getItem("physi_streak") || String(streak) || "0") || 0;
+      const next = cur + 1;
+      localStorage.setItem("physi_streak", String(next));
+      localStorage.setItem("physi_streak_last", today);
+      setStreak(next);
+    } catch {
+      setStreak((s)=> s+1);
+    }
+  }
   // quest: load from localStorage
   useEffect(() => {
     try {
@@ -519,7 +619,11 @@ export default function RoadmapPage() {
       setCandy("+0.3 Rep");
       setTimeout(() => setCandy(null), 1100);
       setToast(v === "YES" ? "you said you were there — thanks!" : v === "NO" ? "marked as not there" : "skipped — all good");
+      setInviteNudge(true);
+      setInviteCopied(false);
+      bumpStreakDaily();
       fetchFeed();
+      fetchRepBoard();
     } catch (e: unknown) {
       logError("VERIFY_SUBMIT_FAILED", e, { page: "roadmap" });
       setToast(getErrorMessage("VERIFY_SUBMIT_FAILED"));
@@ -630,7 +734,7 @@ export default function RoadmapPage() {
   return (
     <div className="relative -mx-4 -mt-5 w-[100vw] max-w-[100vw] sm:-mx-6 lg:-mx-8">
       <style>{`@keyframes canonicalPop{0%{transform:scale(0.72)}50%{transform:scale(1.22)}100%{transform:scale(1)}} @keyframes tickPulse{0%,100%{opacity:1}50%{opacity:.55}} @keyframes roadShimmer{0%{stroke-dashoffset:0}100%{stroke-dashoffset:28}} @keyframes scaleIn{0%{transform:scale(0.35);opacity:0}60%{transform:scale(1.14);opacity:1}100%{transform:scale(1);opacity:1}} @keyframes nowPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.06);opacity:.94}} @keyframes ghostDrift{0%{transform:translateY(0) translateX(0)}25%{transform:translateY(-10px) translateX(7px)}50%{transform:translateY(-16px) translateX(-5px)}75%{transform:translateY(-8px) translateX(4px)}100%{transform:translateY(0) translateX(0)}} @keyframes ghostPulse{0%,100%{opacity:.92}50%{opacity:.56}} @keyframes candyPop{0%{transform:translate(-50%,-10px) scale(0.5);opacity:0}18%{transform:translate(-50%,-18px) scale(1.18);opacity:1}72%{transform:translate(-50%,-42px) scale(1);opacity:1}100%{transform:translate(-50%,-64px) scale(0.9);opacity:0}} @keyframes pulseSlideIn{0%{transform:translate(-50%,-18px);opacity:0}12%{transform:translate(-50%,0);opacity:1}88%{transform:translate(-50%,0);opacity:1}100%{transform:translate(-50%,-18px);opacity:0}} @keyframes confettiFall{0%{transform:translateY(-10vh) rotate(0deg);opacity:1}100%{transform:translateY(110vh) rotate(720deg);opacity:0}} @keyframes questFill{0%{width:0}100%{width:var(--fill)}} .road-3d-wrap{perspective:800px;perspective-origin:50% 28%} .road-3d-inner{transform-style:preserve-3d;transform:perspective(800px) rotateX(4deg);transform-origin:center top;will-change:transform;clip-path:ellipse(96% 88% at 50% 46%);border-radius:28px} .road-3d-inner::before{content:"";position:absolute;inset:0;pointer-events:none;border-radius:28px;box-shadow:inset 0 10px 22px rgba(0,0,0,0.16),inset 0 -8px 16px rgba(0,0,0,0.12)} .node-3d{transform:translateZ(6px);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.55),inset 0 -2px 4px rgba(0,0,0,0.14),0 8px 20px rgba(0,0,0,0.42),0 1px 6px rgba(0,0,0,0.32);transition:transform 220ms cubic-bezier(.2,.8,.3,1),box-shadow 220ms ease} .node-3d:hover{transform:translateZ(12px) scale(1.02);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.65),inset 0 -3px 6px rgba(0,0,0,0.16),0 12px 28px rgba(0,0,0,0.5),0 4px 12px rgba(0,0,0,0.36)}`}</style>
-      <div className="relative min-h-[calc(100vh-64px)] w-full overflow-hidden" style={{ background: "linear-gradient(180deg, #0d3b2a 0%, #143d2e 42%, #1a5c3a 100%)" }}>
+      <div className="relative min-h-[calc(100vh-64px)] w-full overflow-hidden xl:pr-[276px]" style={{ background: "linear-gradient(180deg, #0d3b2a 0%, #143d2e 42%, #1a5c3a 100%)" }}>
         {/* ambient */}
         <div className="pointer-events-none absolute inset-0">
           <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(13,59,42,0.85) 0%, rgba(26,92,58,0.55) 55%, rgba(45,106,79,0.72) 100%)" }} />
@@ -657,6 +761,7 @@ export default function RoadmapPage() {
                 <span className="h-1.5 w-1.5 rounded-full bg-white/80" /> {verifiedCount} ✓
               </span>
               <span className="inline-flex items-center rounded-full bg-amber-500 px-2.5 py-1 text-[11px] font-bold text-white sm:px-3 sm:py-1.5 sm:text-xs">{advisoryCount} ●</span>
+              <span className="hidden items-center gap-1 rounded-full border border-orange-400/20 bg-orange-500/15 px-2.5 py-1 text-[11px] font-black text-orange-200 sm:inline-flex" title="streak"><span>🔥</span>{streak}</span>
               <button onClick={() => setShowCreate(true)} className="rounded-full bg-white px-3.5 py-1.5 text-[12px] font-black text-black hover:bg-slate-100 transition sm:px-4 sm:py-2 sm:text-[13px]">
                 ＋ New gist
               </button>
@@ -709,6 +814,9 @@ export default function RoadmapPage() {
               ))}
             </div>
             <span className={`rounded-full px-2.5 py-1 font-mono text-[10px] font-black ${questDone ? "bg-emerald-500 text-white" : "bg-white/10 text-slate-300"}`}>{questDone ? "Done ✓" : `${questProgress}/3`}</span>
+            <span className="ml-1 inline-flex items-center gap-1 rounded-full border border-orange-400/20 bg-black/75 px-2.5 py-1 font-mono text-[11px] font-black text-orange-300 backdrop-blur" title="daily verify streak">
+              <span>🔥</span>{streak} day{streak===1?"":"s"}
+            </span>
           </div>
         </div>
         {/* Live pulse toasts - top center sliding in/out pure UI ghosts */}
@@ -718,6 +826,58 @@ export default function RoadmapPage() {
               <span className="mr-1.5 inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400" />{pulseMsg}
             </div>
           )}
+        </div>
+        {/* Invite nudge after verify swipe */}
+        {inviteNudge && (
+          <div className="pointer-events-auto absolute left-1/2 top-[188px] z-30 w-full max-w-[560px] -translate-x-1/2 px-3 sm:top-[184px] sm:px-6">
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-violet-400/20 bg-[#0b0f1e]/95 px-4 py-3 backdrop-blur-xl shadow-[0_8px_24px_rgba(0,0,0,0.5)]">
+              <div>
+                <p className="text-[13px] font-bold text-white">Invite course mate → +1 Rep</p>
+                <p className="font-mono text-[11px] text-slate-400">Share your link — they verify, you earn.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={async () => {
+                    const link = typeof window !== "undefined" ? window.location.origin + "/app/roadmap?invite=" + encodeURIComponent(youHandle || "physicoin") : "";
+                    try {
+                      const anyNav: any = navigator as any;
+                      if (anyNav.share) { await anyNav.share({ title: "Physicoin — verify with me", text: "Join me on the endless road — verify lectures together → +1 Rep", url: link }); setInviteCopied(true); setTimeout(()=> setInviteNudge(false), 1800); return; }
+                    } catch {}
+                    try { await navigator.clipboard.writeText(link); setInviteCopied(true); setToast("link copied — send to course mate"); setTimeout(()=> setInviteNudge(false), 2000); } catch { setToast(link); }
+                  }}
+                  className="rounded-full bg-white px-4 py-2 text-[13px] font-black text-black hover:bg-slate-100"
+                >
+                  {inviteCopied ? "Copied ✓" : "Share"}
+                </button>
+                <button onClick={() => setInviteNudge(false)} className="rounded-full bg-white/10 px-3 py-2 text-xs font-semibold text-white">✕</button>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Mobile Rep sheet (collapsible) */}
+        <div className="pointer-events-auto absolute left-1/2 top-[148px] z-20 flex w-full max-w-[560px] -translate-x-1/2 justify-center px-3 xl:hidden" style={{ marginTop: inviteNudge ? "64px" : "0" }}>
+          <div className="w-full rounded-2xl border border-white/10 bg-black/70 backdrop-blur-xl overflow-hidden">
+            <button onClick={() => setRepSheetOpen((v)=>!v)} className="flex w-full items-center justify-between px-4 py-2.5">
+              <span className="flex items-center gap-2 font-mono text-[11px] font-bold tracking-wide text-white"><span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" /> Top 5 Rep <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] text-slate-300">{repBoard.length}</span><span className="ml-2 inline-flex items-center gap-1 rounded-full bg-orange-500/15 px-2 py-0.5 text-[10px] text-orange-300">🔥 {streak}</span></span>
+              <span className="text-xs text-slate-400">{repSheetOpen ? "⌄" : "⌃"} {repSheetOpen ? "hide" : "show"}</span>
+            </button>
+            {repSheetOpen && (
+              <div className="grid gap-1.5 px-3 pb-3">
+                {repBoard.slice(0,5).map((u, i) => {
+                  const isYou = youHandle && String(u.handle).toLowerCase() === youHandle;
+                  return (
+                    <div key={u.handle+"_m_"+i} className={`flex items-center gap-3 rounded-xl px-3 py-2 ${isYou ? "bg-white text-black border border-violet-400/30" : "bg-white/[0.06] text-white"}`}>
+                      <span className="font-mono text-[11px] font-bold text-slate-400 w-4">{i+1}</span>
+                      <span className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-black text-white shrink-0" style={{ background: u.color, boxShadow: `0 0 0 4px ${u.color}22` }}>{String(u.handle).slice(0,2).toUpperCase()}</span>
+                      <span className={`flex-1 font-mono text-[12px] font-bold truncate ${isYou ? "text-black" : "text-white"}`}>{u.handle} {isYou ? "· you" : ""}</span>
+                      <span className={`font-mono text-[11px] font-black ${isYou ? "text-black" : "text-emerald-300"}`}>{Number(u.rep).toFixed(1)}</span>
+                    </div>
+                  );
+                })}
+                <p className="font-mono text-[10px] text-slate-500 px-1">Live poll 30s · from /api/stats or ghosts · candy avatars</p>
+              </div>
+            )}
+          </div>
         </div>
         {/* Confetti on quest complete */}
         {showConfetti && (
@@ -735,6 +895,41 @@ export default function RoadmapPage() {
 
         {toast && <div className="fixed bottom-28 left-1/2 z-50 -translate-x-1/2 rounded-full bg-white px-5 py-2.5 text-[13px] font-medium text-black shadow-xl">{toast}</div>}
 
+        {/* Desktop Right-rail Rep board — fixed right 260px */}
+        <aside className="hidden xl:flex fixed right-4 top-[84px] z-20 w-[260px] flex-col gap-3">
+          <div className="rounded-[20px] border border-white/10 bg-black/75 backdrop-blur-xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.6)]">
+            <div className="flex items-center justify-between">
+              <h3 className="font-mono text-[11px] font-black tracking-[0.12em] text-white">REP BOARD</h3>
+              <span className="rounded-full bg-white/10 px-2 py-0.5 font-mono text-[10px] text-slate-300">Top 5 · live 30s</span>
+            </div>
+            <p className="mt-1 font-mono text-[10px] text-slate-500">Top 5 Rep from /api/stats or ghosts · candy avatars</p>
+            <div className="mt-3 grid gap-2">
+              {repBoard.slice(0,5).map((u,i)=> {
+                const isYou = youHandle && String(u.handle).toLowerCase() === youHandle;
+                return (
+                  <div key={u.handle+"_d_"+i} className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 ${isYou ? "bg-white border-violet-400/30 text-black" : "bg-white/[0.06] border-white/10 text-white"}`}>
+                    <span className="font-mono text-[11px] font-bold w-4 text-center" style={{ color: isYou ? "#000" : "#94a3b8" }}>{i+1}</span>
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full text-[11px] font-black text-white shrink-0 border border-white/20" style={{ background: u.color, boxShadow: `0 0 0 6px ${u.color}22` }}>{String(u.handle).slice(0,2).toUpperCase()}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className={`font-mono text-[12px] font-bold leading-none truncate ${isYou ? "text-black" : "text-white"}`}>{u.handle} {isYou ? "· you" : ""}</p>
+                      <p className={`font-mono text-[10px] ${isYou ? "text-slate-600" : "text-slate-400"}`}>{isYou ? "you" : "ghost"} · {i===0?"🏆":""} </p>
+                    </div>
+                    <span className={`font-mono text-[13px] font-black ${isYou ? "text-black" : "text-emerald-300"}`}>{Number(u.rep).toFixed(1)}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-3 flex items-center justify-between font-mono text-[10px] text-slate-500">
+              <span className="inline-flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />poll 30s</span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-orange-500/15 px-2 py-1 text-orange-300 font-black">🔥 {streak} days</span>
+            </div>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-black/60 backdrop-blur px-4 py-3">
+            <p className="font-mono text-[11px] font-bold text-white">Invite → +1 Rep</p>
+            <p className="font-mono text-[11px] text-slate-400 leading-3 mt-1">Share your road link with a course mate.</p>
+            <button onClick={async ()=>{ const link = typeof window!=="undefined" ? window.location.origin+"/app/roadmap?invite="+encodeURIComponent(youHandle||"physicoin") : ""; try{ const anyNav:any=navigator as any; if(anyNav.share){ await anyNav.share({title:"Physicoin", text:"Join me on endless road", url:link}); return; } }catch{} try{ await navigator.clipboard.writeText(link); setToast("link copied"); }catch{ setToast(link);} }} className="mt-2 w-full rounded-full bg-white py-2 text-xs font-black text-black">Share link</button>
+          </div>
+        </aside>
         {/* SCROLLABLE ROAD CONTAINER — endless winding purple road — subtle 3D emboss */}
         <div className="road-3d-wrap relative mx-auto flex h-[calc(100vh-64px)] w-full max-w-[560px] justify-center overflow-hidden pt-[112px] sm:pt-[104px]" style={{ perspective: "800px", perspectiveOrigin: "50% 28%" }}>
           {/* depth gradients on sides — 3D vignette */}
