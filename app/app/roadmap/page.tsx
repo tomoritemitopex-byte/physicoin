@@ -118,11 +118,14 @@ export default function RoadmapPage() {
   const [newIds, setNewIds] = useState<Set<string>>(new Set());
 
   const fetchFeed = useCallback(async () => {
+    const ctrl = new AbortController();
+    const to = setTimeout(() => ctrl.abort(), 1400);
     try {
       setErr(null);
-      const r = await fetch("/api/timetable?limit=200", { cache: "no-store" });
-      const j = await r.json();
-      if (!r.ok || j.ok === false) throw new Error(j.error || j.hint || "couldn't load");
+      const r = await fetch("/api/timetable?limit=200", { cache: "no-store", signal: ctrl.signal });
+      let j: any = {};
+      try { j = await r.json(); } catch { j = {}; }
+      if (!r.ok || j.ok === false) throw new Error(j.error || j.hint || `timetable ${r.status}`);
       const evs: EventRow[] = j.events ?? [];
       // chronologically ascending by date+time
       evs.sort((a, b) => {
@@ -145,8 +148,11 @@ export default function RoadmapPage() {
       setEvents(evs);
       if (evs.length && !selectedId) setSelectedId(evs[0].id);
     } catch (e: any) {
-      setErr(e.message || "feed failed");
+      if (e?.name === "AbortError") setErr("timetable timeout — showing empty road");
+      else setErr(e?.message || "feed failed");
+      setEvents([]);
     } finally {
+      clearTimeout(to);
       setLoading(false);
     }
   }, [selectedId]);
@@ -161,8 +167,10 @@ export default function RoadmapPage() {
   }, []);
 
   useEffect(() => {
+    const fallback = setTimeout(() => setLoading(false), 1500);
     fetchFeed();
     fetchStats();
+    return () => clearTimeout(fallback);
   }, [fetchFeed, fetchStats]);
   useEffect(() => {
     if (!toast) return;
