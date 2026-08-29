@@ -510,7 +510,7 @@ export default function RoadmapPage() {
 
   return (
     <div className="relative -mx-4 -mt-5 w-[100vw] max-w-[100vw] sm:-mx-6 lg:-mx-8">
-      <style>{`@keyframes canonicalPop{0%{transform:scale(0.72)}50%{transform:scale(1.22)}100%{transform:scale(1)}} @keyframes tickPulse{0%,100%{opacity:1}50%{opacity:.55}} @keyframes roadShimmer{0%{stroke-dashoffset:0}100%{stroke-dashoffset:28}} @keyframes scaleIn{0%{transform:scale(0.35);opacity:0}60%{transform:scale(1.14);opacity:1}100%{transform:scale(1);opacity:1}} @keyframes nowPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.08);opacity:.92}} @keyframes warpPulse{0%,100%{transform:perspective(1200px) rotateX(12deg) scale3d(1.015,0.985,1) skewX(0deg)}25%{transform:perspective(1200px) rotateX(12.9deg) scale3d(1.022,0.978,1) skewX(0.35deg)}50%{transform:perspective(1200px) rotateX(13.2deg) scale3d(1.028,0.972,1) skewX(0deg)}75%{transform:perspective(1200px) rotateX(12.5deg) scale3d(1.018,0.982,1) skewX(-0.35deg)}} .road-3d-wrap{perspective:1200px;perspective-origin:50% 32%} .road-3d-inner{transform-style:preserve-3d;transform:perspective(1200px) rotateX(12deg) scale3d(1.015,0.985,1);transform-origin:center top;animation:warpPulse 4s ease-in-out infinite;will-change:transform;clip-path:ellipse(96% 88% at 50% 46%);border-radius:28px} .road-3d-inner::before{content:"";position:absolute;inset:0;pointer-events:none;border-radius:28px;box-shadow:inset 0 18px 40px rgba(0,0,0,0.22),inset 0 -12px 24px rgba(0,0,0,0.18)} .node-3d{transform:translateZ(12px);box-shadow:inset 0 2px 0 rgba(255,255,255,0.65),inset 0 -3px 6px rgba(0,0,0,0.18),0 12px 32px rgba(0,0,0,0.6),0 2px 8px rgba(0,0,0,0.45);transition:transform 220ms cubic-bezier(.2,.8,.3,1),box-shadow 220ms ease} .node-3d:hover{transform:translateZ(22px) scale(1.03);box-shadow:inset 0 2px 0 rgba(255,255,255,0.75),inset 0 -4px 8px rgba(0,0,0,0.22),0 18px 40px rgba(0,0,0,0.65),0 6px 16px rgba(0,0,0,0.5)} @media(prefers-reduced-motion:reduce){.road-3d-inner{animation:none}}`}</style>
+      <style>{`@keyframes canonicalPop{0%{transform:scale(0.72)}50%{transform:scale(1.22)}100%{transform:scale(1)}} @keyframes tickPulse{0%,100%{opacity:1}50%{opacity:.55}} @keyframes roadShimmer{0%{stroke-dashoffset:0}100%{stroke-dashoffset:28}} @keyframes scaleIn{0%{transform:scale(0.35);opacity:0}60%{transform:scale(1.14);opacity:1}100%{transform:scale(1);opacity:1}} @keyframes nowPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.06);opacity:.94}} .road-3d-wrap{perspective:800px;perspective-origin:50% 28%} .road-3d-inner{transform-style:preserve-3d;transform:perspective(800px) rotateX(4deg);transform-origin:center top;will-change:transform;clip-path:ellipse(96% 88% at 50% 46%);border-radius:28px} .road-3d-inner::before{content:"";position:absolute;inset:0;pointer-events:none;border-radius:28px;box-shadow:inset 0 10px 22px rgba(0,0,0,0.16),inset 0 -8px 16px rgba(0,0,0,0.12)} .node-3d{transform:translateZ(6px);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.55),inset 0 -2px 4px rgba(0,0,0,0.14),0 8px 20px rgba(0,0,0,0.42),0 1px 6px rgba(0,0,0,0.32);transition:transform 220ms cubic-bezier(.2,.8,.3,1),box-shadow 220ms ease} .node-3d:hover{transform:translateZ(12px) scale(1.02);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.65),inset 0 -3px 6px rgba(0,0,0,0.16),0 12px 28px rgba(0,0,0,0.5),0 4px 12px rgba(0,0,0,0.36)}`}</style>
       <div className="relative min-h-[calc(100vh-64px)] w-full overflow-hidden" style={{ background: "linear-gradient(180deg, #0d3b2a 0%, #143d2e 42%, #1a5c3a 100%)" }}>
         {/* ambient */}
         <div className="pointer-events-none absolute inset-0">
@@ -573,8 +573,8 @@ export default function RoadmapPage() {
 
         {toast && <div className="fixed bottom-28 left-1/2 z-50 -translate-x-1/2 rounded-full bg-white px-5 py-2.5 text-[13px] font-medium text-black shadow-xl">{toast}</div>}
 
-        {/* SCROLLABLE ROAD CONTAINER — endless winding purple road — 3D Candy Crush depth */}
-        <div className="road-3d-wrap relative mx-auto flex h-[calc(100vh-64px)] w-full max-w-[560px] justify-center overflow-hidden pt-[112px] sm:pt-[104px]" style={{ perspective: "1200px", perspectiveOrigin: "50% 32%" }}>
+        {/* SCROLLABLE ROAD CONTAINER — endless winding purple road — subtle 3D emboss */}
+        <div className="road-3d-wrap relative mx-auto flex h-[calc(100vh-64px)] w-full max-w-[560px] justify-center overflow-hidden pt-[112px] sm:pt-[104px]" style={{ perspective: "800px", perspectiveOrigin: "50% 28%" }}>
           {/* depth gradients on sides — 3D vignette */}
           <div className="pointer-events-none absolute inset-y-0 left-0 w-[18%] z-[4]" style={{ background: "linear-gradient(to right, rgba(0,0,0,0.38) 0%, rgba(0,0,0,0.18) 42%, transparent 100%)" }} />
           <div className="pointer-events-none absolute inset-y-0 right-0 w-[18%] z-[4]" style={{ background: "linear-gradient(to left, rgba(0,0,0,0.38) 0%, rgba(0,0,0,0.18) 42%, transparent 100%)" }} />
@@ -584,9 +584,8 @@ export default function RoadmapPage() {
             style={{
               scrollBehavior: "smooth",
               transformStyle: "preserve-3d",
-              transform: "perspective(1200px) rotateX(12deg) scale3d(1.015,0.985,1)",
+              transform: "perspective(800px) rotateX(4deg)",
               transformOrigin: "center top",
-              animation: "warpPulse 4s ease-in-out infinite",
               willChange: "transform",
               clipPath: "ellipse(96% 88% at 50% 46%)",
               borderRadius: "28px",
@@ -620,35 +619,30 @@ export default function RoadmapPage() {
           <svg viewBox={`0 0 520 ${svgH}`} className="relative h-auto w-full shrink-0" style={{ minHeight: Math.min(880, svgH), height: svgH }} role="img" aria-label="endless time road">
             <defs>
               <linearGradient id="purpleRoad" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stopColor="#6d28d9" />
-                <stop offset="50%" stopColor="#7c3aed" />
-                <stop offset="100%" stopColor="#a855f7" />
+                <stop offset="0%" stopColor="#6e45d0" />
+                <stop offset="50%" stopColor="#8b5cf6" />
+                <stop offset="100%" stopColor="#a78bfa" />
               </linearGradient>
-              <filter id="roadShadow"><feDropShadow dx="0" dy="6" stdDeviation={10} floodColor="rgba(0,0,0,0.55)" /></filter>
-              <filter id="nodeGlow"><feDropShadow dx="0" dy="2" stdDeviation={6} floodColor="rgba(255,255,255,0.18)" /></filter>
-              {/* warp 3D SVG barrel warp — subtle candy-crush perspective bend */}
-              <filter id="warpFilter" x="-12%" y="-6%" width="124%" height="112%" colorInterpolationFilters="sRGB">
-                <feTurbulence type="turbulence" baseFrequency="0.012 0.006" numOctaves={2} seed={7} result="warpTurbulence" />
-                <feDisplacementMap in="SourceGraphic" in2="warpTurbulence" scale={7} xChannelSelector="R" yChannelSelector="G" result="warped" />
-              </filter>
+              <filter id="roadShadow"><feDropShadow dx="0" dy="4" stdDeviation={6} floodColor="rgba(0,0,0,0.42)" /></filter>
+              <filter id="nodeGlow"><feDropShadow dx="0" dy="2" stdDeviation={5} floodColor="rgba(255,255,255,0.14)" /></filter>
             </defs>
 
-            {/* purple road — 3D depth with shadow layer and bevel */}
-            <path d={roadD} fill="none" stroke="#1a1033" strokeWidth={58} strokeLinecap="round" strokeLinejoin="round" opacity={0.95} style={{ filter: "url(#roadShadow)" }} />
-            {/* shadow layer: duplicate path offset 8px darker #4c1d95 for 3D extrusion */}
-            <path d={roadD} fill="none" stroke="#4c1d95" strokeWidth={46} strokeLinecap="round" strokeLinejoin="round" opacity={0.95} style={{ transform: "translate(8px, 8px)", filter: "blur(0.6px)" } as any} />
-            <path d={roadD} fill="none" stroke="url(#purpleRoad)" strokeWidth={46} strokeLinecap="round" strokeLinejoin="round" style={{ filter: "drop-shadow(0 6px 14px rgba(0,0,0,0.45))" } as any} />
+            {/* purple road — subtle depth */}
+            <path d={roadD} fill="none" stroke="#1a1033" strokeWidth={52} strokeLinecap="round" strokeLinejoin="round" opacity={0.92} style={{ filter: "url(#roadShadow)" }} />
+            {/* soft offset for emboss */}
+            <path d={roadD} fill="none" stroke="#4c1d95" strokeWidth={44} strokeLinecap="round" strokeLinejoin="round" opacity={0.88} style={{ transform: "translate(4px, 4px)" } as any} />
+            <path d={roadD} fill="none" stroke="url(#purpleRoad)" strokeWidth={44} strokeLinecap="round" strokeLinejoin="round" style={{ filter: "drop-shadow(0 3px 8px rgba(0,0,0,0.32))" } as any} />
             {/* bevel highlight on top edge */}
             <path d={roadD} fill="none" stroke="rgba(255,255,255,0.22)" strokeWidth={46} strokeLinecap="round" strokeLinejoin="round" opacity={0} style={{ transform: "translate(-1px, -1.5px)" } as any} />
             <path d={roadD} fill="none" stroke="white" strokeWidth={3.2} strokeLinecap="round" strokeDasharray="14 14" opacity={0.92} style={{ animation: "roadShimmer 1.2s linear infinite" }} />
             <path d={roadD} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth={1} opacity={0.5} />
 
-            {/* NOW marker — pulsing across road */}
-            <g style={{ animation: "nowPulse 1.6s ease-in-out infinite" }}>
+            {/* NOW marker — big pulse */}
+            <g style={{ animation: "nowPulse 1.4s ease-in-out infinite" }}>
               <line x1={90} y1={nowY} x2={430} y2={nowY} stroke="rgba(255,255,255,0.92)" strokeWidth={1.2} strokeDasharray="8 6" />
-              <rect x={192} y={nowY - 14} width={136} height={28} rx={14} fill="#fff" stroke="#7c3aed" strokeWidth={2} />
+              <rect x={188} y={nowY - 16} width={144} height={32} rx={16} fill="#fff" stroke="#8b5cf6" strokeWidth={2.2} />
               <text x={260} y={nowY + 5.5} textAnchor="middle" fontSize={11} fontWeight={900} fill="#5b21b6" style={{ fontFamily: "ui-monospace, monospace", letterSpacing: "0.08em" }}>◉ NOW · WAT</text>
-              <circle cx={260} cy={nowY} r={4.5} fill="#7c3aed" stroke="white" strokeWidth={1.5} />
+              <circle cx={260} cy={nowY} r={5} fill="#8b5cf6" stroke="white" strokeWidth={1.5} />
             </g>
             <text x={260} y={nowY + 26} textAnchor="middle" fontSize={7.5} fontWeight={700} fill="rgba(255,255,255,0.92)" style={{ fontFamily: "ui-monospace, monospace", textShadow: "0 1px 6px rgba(0,0,0,0.7)" }}>{wat.timePart} · {wat.datePart}</text>
 

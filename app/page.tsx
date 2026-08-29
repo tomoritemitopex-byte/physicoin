@@ -65,7 +65,7 @@ export default function LandingPage() {
             </div>
 
             <p className="mt-4 max-w-[620px] font-mono text-[11px] leading-4 text-slate-500">
-              TEST-PHYSI is play energy — no cash value, expires in 24h. Advisory only — always confirm exams with your department. Green tick = your coursemates confirmed it.
+              <a href="/terms" className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 font-mono text-[11px] font-medium text-amber-200 hover:bg-amber-400/15 transition">Advisory · TEST-PHYSI has no cash value — see Terms →</a>
             </p>
 
             {/* trust row — compact, cruip-style */}
@@ -121,12 +121,8 @@ export default function LandingPage() {
                 </div>
               </div>
             </div>
-            {/* floating badge */}
-            <div className="absolute -bottom-3 -left-2 hidden sm:flex items-center gap-2 rounded-full border border-white/[0.08] bg-[#0f1320] px-3.5 py-2 shadow-xl">
-              <Sparkles className="h-3.5 w-3.5 text-amber-300" />
-              <span className="font-mono text-[11px] text-slate-300">TEST-PHYSI: daily streak · expires 24h · no cash value</span>
+            {/* Advisory pill links to consolidated Terms — single source of truth */}
             </div>
-          </div>
         </section>
 
         {/* === social proof strip — Cruip logos/testimonial bar style, Naija-specific === */}
@@ -231,7 +227,7 @@ export default function LandingPage() {
             <a href="/app/profile" className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-6 py-2.5 text-[14px] font-medium text-slate-200 backdrop-blur hover:bg-white/[0.08] transition">Create profile</a>
             <a href="/app/timetable" className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-6 py-2.5 text-[14px] font-medium text-slate-200 backdrop-blur hover:bg-white/[0.08] transition">Login</a>
           </div>
-          <p className="mx-auto mt-4 max-w-[640px] font-mono text-[11px] leading-4 text-slate-500">TEST-PHYSI has no cash value — expires in 24h, just a health-style streak for being active. Advisory only — always confirm exams with your department.</p>
+          <p className="mx-auto mt-4 max-w-[640px] font-mono text-[11px] leading-4 text-slate-500"><a href="/terms" className="underline decoration-white/20 hover:text-slate-300">Terms · Advisory only · TEST-PHYSI no cash value →</a></p>
         </section>
 
         <p className="py-8 text-center font-mono text-[11px] tracking-wide text-slate-600">

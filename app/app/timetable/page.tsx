@@ -526,8 +526,8 @@ export default function TimetablePage() {
         </>
       )}
 
-      <div className="rounded-2xl border border-amber-400/10 bg-amber-400/[0.04] px-4 py-3">
-        <p className="font-mono text-[11px] leading-4 text-amber-200/70">Heads up: this is student gist, not an official circular. Green tick just means your coursemates confirmed it with their own eyes. For exams, tests, or anything that can carry over — confirm with your course rep or department notice board.</p>
+      <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-center">
+        <a href="/terms" className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 font-mono text-[11px] font-medium text-amber-200 hover:bg-amber-400/15 transition">Advisory · TEST-PHYSI no cash value — see Terms →</a>
       </div>
 
       {toast && <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-full border border-white/10 bg-[#0f172a] px-4 py-2 text-[13px] font-medium text-white shadow-[0_8px_30px_rgba(0,0,0,0.5)]">{toast}</div>}

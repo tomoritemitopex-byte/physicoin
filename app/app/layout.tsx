@@ -222,7 +222,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="border-t border-amber-400/10 bg-amber-400/[0.04] backdrop-blur">
           <div className="mx-auto max-w-[1280px] px-4 py-[6px] sm:px-6 lg:px-8">
             <p className="text-center font-mono text-[10.5px] leading-3 tracking-wide text-amber-200/70">
-              advisory feed — green tick means your coursemates confirmed it · always double-check exams with your department
+              <a href="/terms" className="hover:text-amber-100 transition">advisory feed — green tick means your coursemates confirmed it · Terms →</a>
             </p>
           </div>
         </div>
@@ -240,7 +240,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <footer className={isFullBleed ? "w-full border-t border-white/[0.04] px-4 py-6 sm:px-6 lg:px-8" : "mx-auto max-w-[1280px] border-t border-white/[0.04] px-4 py-6 sm:px-6 lg:px-8"}>
         <div className="flex flex-col items-center justify-between gap-3 sm:flex-row">
           <p className="font-mono text-[10.5px] text-slate-600">
-            PHYSI · built by students, for students · TEST-PHYSI has no cash value — expires in 24h · advisory only
+            PHYSI · built by students, for students · <a href="/terms" className="underline decoration-white/20 hover:text-slate-400">Terms · advisory only · TEST-PHYSI no cash value →</a>
           </p>
           <div className="flex items-center gap-2 font-mono text-[10.5px] text-slate-500">
             <a href="/app/timetable" className="hover:text-slate-300 transition">
