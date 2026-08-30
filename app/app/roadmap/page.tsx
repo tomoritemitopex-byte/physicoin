@@ -196,6 +196,10 @@ export default function RoadmapPage() {
   const [myLevel, setMyLevel] = useState<string|null>(null);
   const [myRep, setMyRep] = useState<number>(0);
   const [parallaxY, setParallaxY] = useState(0);
+  // shareable Rep card
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareImg, setShareImg] = useState<string | null>(null);
+  const shareCanvasRef = useRef<HTMLCanvasElement>(null);
 
   const fetchFeed = useCallback(async () => {
     const ctrl = new AbortController();
@@ -297,6 +301,139 @@ export default function RoadmapPage() {
       setMyRep(prev=> r>prev? r : prev);
     }
   }, [repBoard, youHandle]);
+
+  // read ?filter=advisory from URL (zombie verify redirect)
+  useEffect(()=>{
+    try{
+      const sp = new URLSearchParams(window.location.search);
+      const f = sp.get("filter");
+      if(f && ["all","my_level","today","verified","advisory"].includes(f)){
+        setFilter(f as any);
+      }
+    }catch{}
+  }, []);
+
+  // generate share card image when modal opens
+  useEffect(()=>{
+    if(!shareOpen) return;
+    // defer to next frame so canvas exists
+    const t = setTimeout(()=> generateShareCard(), 50);
+    return ()=> clearTimeout(t);
+  }, [shareOpen, myRep, streak, youHandle, levelInfo.lvl, levelInfo.name]);
+
+  function generateShareCard(){
+    const c = shareCanvasRef.current;
+    if(!c) return;
+    const W=1080, H=1350;
+    c.width=W; c.height=H;
+    const ctx=c.getContext("2d");
+    if(!ctx) return;
+    // forest bg
+    const g=ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0,"#0d3b2a");
+    g.addColorStop(0.45,"#143d2e");
+    g.addColorStop(1,"#52b788");
+    ctx.fillStyle=g;
+    ctx.fillRect(0,0,W,H);
+    // subtle radial highlight
+    const rg=ctx.createRadialGradient(W/2,H*0.28,0,W/2,H*0.28,W*0.7);
+    rg.addColorStop(0,"rgba(82,183,136,0.32)");
+    rg.addColorStop(1,"transparent");
+    ctx.fillStyle=rg;
+    ctx.fillRect(0,0,W,H);
+    // white card behind
+    const cardX=56, cardY=420, cardW=W-112, cardH=560, r=32;
+    ctx.fillStyle="rgba(255,255,255,0.96)";
+    ctx.beginPath();
+    // @ts-ignore roundRect
+    if(ctx.roundRect) ctx.roundRect(cardX,cardY,cardW,cardH,r);
+    else { ctx.rect(cardX,cardY,cardW,cardH); }
+    ctx.fill();
+    ctx.fillStyle="rgba(0,0,0,0.08)";
+    // candy avatar — pick color from level
+    const candyColors:Record<number,string>={1:"#10b981",2:"#0ea5e9",3:"#8b5cf6",4:"#f59e0b",5:"#fbbf24"};
+    const col=candyColors[levelInfo.lvl]||"#10b981";
+    const avX=W/2, avY=360, avR=110;
+    // glow
+    ctx.fillStyle=col+"33";
+    ctx.beginPath(); ctx.arc(avX,avY,avR+22,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle=col;
+    ctx.beginPath(); ctx.arc(avX,avY,avR,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle="rgba(255,255,255,0.9)";
+    ctx.lineWidth=6;
+    ctx.stroke();
+    // initials
+    const initials=(youHandle||"YOU").slice(0,2).toUpperCase();
+    ctx.fillStyle="white";
+    ctx.font="900 64px system-ui, sans-serif";
+    ctx.textAlign="center"; ctx.textBaseline="middle";
+    ctx.fillText(initials, avX, avY+4);
+    // texts on card
+    ctx.fillStyle="#0f172a";
+    ctx.font="900 42px system-ui, sans-serif";
+    ctx.fillText((youHandle? "@"+youHandle : "@you"), W/2, cardY+92);
+    ctx.fillStyle="#475569";
+    ctx.font="700 22px system-ui, sans-serif";
+    ctx.fillText(`${levelInfo.name}  ·  Lvl ${levelInfo.lvl}`, W/2, cardY+138);
+    // Rep big
+    ctx.fillStyle="#0f172a";
+    ctx.font="900 72px system-ui, sans-serif";
+    ctx.fillText(`${myRep.toFixed(1)} Rep`, W/2, cardY+236);
+    // streak + progress bar
+    ctx.fillStyle="#f97316";
+    ctx.font="900 28px system-ui, sans-serif";
+    ctx.fillText(`🔥 ${streak} day${streak===1?"":"s"} streak`, W/2, cardY+290);
+    // progress bar
+    const barX=cardX+64, barW=cardW-128, barY=cardY+340, barH=18;
+    ctx.fillStyle="rgba(0,0,0,0.08)";
+    if(ctx.roundRect){ ctx.beginPath(); ctx.roundRect(barX,barY,barW,barH,9); ctx.fill(); } else ctx.fillRect(barX,barY,barW,barH);
+    ctx.fillStyle=levelInfo.lvl===5? "#fbbf24" : "#10b981";
+    const pw=Math.max(8, barW*levelInfo.progress);
+    if(ctx.roundRect){ ctx.beginPath(); ctx.roundRect(barX,barY,pw,barH,9); ctx.fill(); } else ctx.fillRect(barX,barY,pw,barH);
+    ctx.fillStyle="#64748b";
+    ctx.font="600 18px system-ui, sans-serif";
+    const nextTxt=levelInfo.nextAt? `${(levelInfo.nextAt-myRep).toFixed(1)} to L${levelInfo.lvl+1}` : "MAX — Legend";
+    ctx.fillText(levelInfo.lvl===5? "MAX L5 Legend" : nextTxt, W/2, barY+52);
+    // footer
+    ctx.fillStyle="rgba(255,255,255,0.92)";
+    ctx.font="700 20px system-ui, sans-serif";
+    ctx.fillText("physicoin · endless road · WAT", W/2, H-72);
+    ctx.fillStyle="rgba(255,255,255,0.64)";
+    ctx.font="500 16px system-ui, sans-serif";
+    ctx.fillText(window.location.origin+"/app/roadmap", W/2, H-42);
+    try{ setShareImg(c.toDataURL("image/png")); }catch{ setShareImg(null); }
+  }
+
+  async function handleShareCard(){
+    const c=shareCanvasRef.current;
+    if(!c){ setToast("card not ready"); return; }
+    // try Web Share with file
+    try{
+      const blob: Blob | null = await new Promise(res=> c.toBlob(b=>res(b),"image/png",0.92));
+      if(blob && (navigator as any).canShare){
+        const file=new File([blob],"physicoin-rep.png",{type:"image/png"});
+        if((navigator as any).canShare({files:[file]})){
+          await (navigator as any).share({title:"My Physicoin Rep", text:`Lvl ${levelInfo.lvl} ${levelInfo.name} · ${myRep.toFixed(1)} Rep · 🔥 ${streak} days`, files:[file]});
+          setToast("shared ✓");
+          return;
+        }
+      }
+      if((navigator as any).share && shareImg){
+        // fallback text share with url
+        await (navigator as any).share({title:"My Physicoin Rep", text:`Lvl ${levelInfo.lvl} ${levelInfo.name} · ${myRep.toFixed(1)} Rep · 🔥 ${streak} days — ${window.location.href}`, url: window.location.href});
+        setToast("shared ✓");
+        return;
+      }
+    }catch{}
+    // download fallback
+    try{
+      const url=c.toDataURL("image/png");
+      const a=document.createElement("a");
+      a.href=url; a.download=`physicoin-lvl${levelInfo.lvl}-${(youHandle||"you")}.png`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setToast("image downloaded");
+    }catch{ setToast("could not share — long-press image to save"); }
+  }
 
   // you highlight via physi_profile + streak via /api/mining or localStorage physi_streak
   useEffect(() => {
@@ -493,19 +630,42 @@ export default function RoadmapPage() {
   const advisoryCount = useMemo(() => events.filter((e) => !isVerified(e) && e.status === "pending").length, [events]);
 
   // combined road items chronologically sorted
-  type RoadItem = { kind: "personal"; p: PersonalBubble; id: string; ms: number } | { kind: "event"; ev: EventRow; id: string; ms: number };
+  type DemoItem = { kind: "demo"; localId: string; id: string; ms: number; title: string; venue: string; event_date: string; event_time: string; hint: string };
+  type RoadItem = { kind: "personal"; p: PersonalBubble; id: string; ms: number } | { kind: "event"; ev: EventRow; id: string; ms: number } | DemoItem;
   const roadItems: RoadItem[] = useMemo(() => {
     const pers: RoadItem[] = personal.map((p) => ({ kind: "personal", p, id: p.localId, ms: eventInstant(p.event_date, p.event_time) } as RoadItem));
     const evs: RoadItem[] = events.map((ev) => ({ kind: "event", ev, id: ev.id, ms: eventInstant(ev.event_date, ev.event_time) } as RoadItem));
-    const all = [...pers, ...evs];
+    let all: RoadItem[] = [...pers, ...evs];
+    // 3 local-only demo nodes when empty (hidden once real events exist, no DB)
+    if (events.length === 0) {
+      const nowMs = Date.now();
+      // use today date for demo nodes so they land near NOW
+      const today = new Date(nowMs);
+      const isoDate = today.toISOString().slice(0,10);
+      // stagger times around now: -30min, +90min, +240min
+      const timeFromOffset = (mins: number)=>{
+        const d=new Date(nowMs + mins*60*1000);
+        return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
+      };
+      const demos: RoadItem[] = [
+        { kind:"demo", localId:"demo_welcome", id:"demo_welcome", title:"Welcome — tap me", venue:"LT1", event_date: isoDate, event_time: timeFromOffset(-30), ms: eventInstant(isoDate, timeFromOffset(-30)), hint:"Tap a node to see details" },
+        { kind:"demo", localId:"demo_swipe", id:"demo_swipe", title:"Swipe demo → Yes", venue:"LT2", event_date: isoDate, event_time: timeFromOffset(90), ms: eventInstant(isoDate, timeFromOffset(90)), hint:"Swipe card → Yes · ← No" },
+        { kind:"demo", localId:"demo_create", id:"demo_create", title:"+ to gist", venue:"LT3", event_date: isoDate, event_time: timeFromOffset(240), ms: eventInstant(isoDate, timeFromOffset(240)), hint:"Hit + to post your gist" },
+      ];
+      all = [...all, ...demos];
+    }
     all.sort((a, b) => a.ms - b.ms);
     return all;
   }, [personal, events]);
 
   // filtered road items by chip
   const filteredRoadItems: RoadItem[] = useMemo(()=>{
+    // demo nodes bypass filter (always visible when empty) — but keep filtering for real items
+    const hasDemo = roadItems.some(r=> r.kind==="demo");
+    if(hasDemo && events.length===0) return roadItems;
     if(filter==="all") return roadItems;
     return roadItems.filter(it=>{
+      if(it.kind==="demo") return true;
       if(it.kind==="personal") return filter!=="verified"; // personal never verified
       const ev = it.ev;
       if(filter==="verified") return isVerified(ev);
@@ -523,7 +683,7 @@ export default function RoadmapPage() {
       }
       return true;
     });
-  }, [roadItems, filter, myLevel]);
+  }, [roadItems, filter, myLevel, events.length]);
 
   // find NOW index (first item after now) — based on filtered view
   const nowIdx = useMemo(() => {
@@ -534,6 +694,8 @@ export default function RoadmapPage() {
     if (idx === -1) idx = src.length;
     return idx;
   }, [filteredRoadItems, roadItems, now]);
+
+  const selectedDemo = useMemo(() => roadItems.find(r=> r.kind==="demo" && (r.id===selectedId || (r as DemoItem).localId===selectedId)) as DemoItem | null ?? null, [roadItems, selectedId]);
 
   const wat = useMemo(() => formatWAT(now), [now]);
 
@@ -673,6 +835,9 @@ export default function RoadmapPage() {
   function stateFor(item: RoadItem) {
     if (item.kind === "personal") {
       return { key: "personal", label: "light off", color: "#a1a1aa", outline: "#52525b", dimmed: true } as const;
+    }
+    if (item.kind === "demo") {
+      return { key: "demo", label: item.hint, color: "#8b5cf6", outline: "#8b5cf6", dashed: true } as const;
     }
     const ev = item.ev;
     const ap = Number(ev.authority_points ?? 0);
@@ -842,14 +1007,14 @@ export default function RoadmapPage() {
         <div className="pointer-events-none absolute left-0 right-0 top-0 z-20 flex justify-center px-3 pt-3 sm:px-6">
           <div className="pointer-events-auto flex w-full max-w-[900px] items-center justify-between gap-2">
             <div className="flex items-center gap-2 rounded-full border border-white/[0.09] bg-black/70 px-3 py-2 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.6)] sm:px-4">
-              <span className={`hidden h-7 w-7 items-center justify-center rounded-full text-[11px] font-black sm:flex ${levelInfo.lvl===5 ? "bg-amber-400 text-black ring-2 ring-amber-300" : "bg-white text-black"}`}>◉</span>
+              <button onClick={()=> setShareOpen(true)} className={`hidden h-7 w-7 items-center justify-center rounded-full text-[11px] font-black sm:flex hover:scale-110 transition ${levelInfo.lvl===5 ? "bg-amber-400 text-black ring-2 ring-amber-300" : "bg-white text-black"}`}>◉</button>
               <div>
                 <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400 sm:text-[11px]">endless time road · WAT</p>
                 <p className="hidden text-[12px] font-semibold leading-none text-white sm:block">
                   {loading ? "Loading live road…" : roadItems.length ? `${pastCount} past · NOW · ${upcomingCount} ahead · tap a node` : "tap a node · create your gist"}
                 </p>
                 <div className="hidden sm:flex items-center gap-2 mt-1">
-                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-mono text-[10px] font-black ${levelInfo.lvl===5 ? "bg-gradient-to-r from-amber-400 to-yellow-300 text-black ring-1 ring-amber-400" : "bg-white/10 text-white"}`}>Lvl {levelInfo.lvl} · {levelInfo.name}</span>
+                  <button onClick={()=> setShareOpen(true)} className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-mono text-[10px] font-black hover:scale-105 transition ${levelInfo.lvl===5 ? "bg-gradient-to-r from-amber-400 to-yellow-300 text-black ring-1 ring-amber-400" : "bg-white/10 text-white"}`}>Lvl {levelInfo.lvl} · {levelInfo.name}</button>
                   <span className="font-mono text-[10px] text-slate-400">{myRep.toFixed(1)} Rep</span>
                   <div className="h-1.5 w-16 overflow-hidden rounded-full bg-white/10"><div className={`h-full ${levelInfo.lvl===5 ? "bg-gradient-to-r from-amber-400 to-yellow-300" : "bg-emerald-400"}`} style={{ width: `${levelInfo.progress*100}%` }} /></div>
                   <span className="font-mono text-[9px] text-slate-500">{levelInfo.nextAt ? `${(levelInfo.nextAt - myRep).toFixed(1)} to L${levelInfo.lvl+1}` : "MAX"}</span>
@@ -981,7 +1146,7 @@ export default function RoadmapPage() {
         <div className="pointer-events-auto absolute left-1/2 top-[148px] z-20 flex w-full max-w-[560px] -translate-x-1/2 justify-center px-3 xl:hidden" style={{ marginTop: inviteNudge ? "64px" : "0" }}>
           <div className="w-full rounded-2xl border border-white/10 bg-black/70 backdrop-blur-xl overflow-hidden">
             <button onClick={() => setRepSheetOpen((v)=>!v)} className="flex w-full items-center justify-between px-4 py-2.5">
-              <span className="flex items-center gap-2 font-mono text-[11px] font-bold tracking-wide text-white"><span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" /> Top 5 Rep <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] text-slate-300">{repBoard.length}</span><span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black ${levelInfo.lvl===5 ? "bg-gradient-to-r from-amber-400 to-yellow-300 text-black ring-1 ring-amber-500" : "bg-white/10 text-white"}`}>Lvl {levelInfo.lvl} {levelInfo.name}</span><span className="ml-1 inline-flex items-center gap-1 rounded-full bg-orange-500/15 px-2 py-0.5 text-[10px] text-orange-300">🔥 {streak}</span></span>
+              <span className="flex items-center gap-2 font-mono text-[11px] font-bold tracking-wide text-white"><span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" /> Top 5 Rep <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] text-slate-300">{repBoard.length}</span><span onClick={(e:any)=>{ e.stopPropagation(); setShareOpen(true); }} className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black hover:scale-105 transition cursor-pointer ${levelInfo.lvl===5 ? "bg-gradient-to-r from-amber-400 to-yellow-300 text-black ring-1 ring-amber-500" : "bg-white/10 text-white"}`}>Lvl {levelInfo.lvl} {levelInfo.name}</span><span className="ml-1 inline-flex items-center gap-1 rounded-full bg-orange-500/15 px-2 py-0.5 text-[10px] text-orange-300">🔥 {streak}</span></span>
               <span className="text-xs text-slate-400">{repSheetOpen ? "⌄" : "⌃"} {repSheetOpen ? "hide" : "show"}</span>
             </button>
             {repSheetOpen && (
@@ -1024,7 +1189,7 @@ export default function RoadmapPage() {
           <div className="rounded-[20px] border border-white/10 bg-black/75 backdrop-blur-xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.6)]">
             <div className="flex items-center justify-between">
               <h3 className="font-mono text-[11px] font-black tracking-[0.12em] text-white">REP BOARD</h3>
-              <span className={`rounded-full px-2 py-0.5 font-mono text-[10px] font-black ${levelInfo.lvl===5 ? "bg-gradient-to-r from-amber-400 to-yellow-300 text-black ring-1 ring-amber-500" : "bg-white/10 text-slate-300"}`}>Lvl {levelInfo.lvl} · {levelInfo.name} · {myRep.toFixed(1)} Rep</span>
+              <button onClick={()=> setShareOpen(true)} className={`rounded-full px-2 py-0.5 font-mono text-[10px] font-black hover:scale-105 transition ${levelInfo.lvl===5 ? "bg-gradient-to-r from-amber-400 to-yellow-300 text-black ring-1 ring-amber-500" : "bg-white/10 text-slate-300"}`}>Lvl {levelInfo.lvl} · {levelInfo.name} · {myRep.toFixed(1)} Rep</button>
             </div>
             <div className="mt-2 flex items-center gap-2"><div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10"><div className={`h-full ${levelInfo.lvl===5 ? "bg-gradient-to-r from-amber-400 to-yellow-300" : "bg-emerald-400"}`} style={{ width: `${levelInfo.progress*100}%` }} /></div><span className="font-mono text-[9px] text-slate-500">{levelInfo.nextAt ? `${(levelInfo.nextAt - myRep).toFixed(1)} to L${levelInfo.lvl+1}` : "MAX"}</span>{levelInfo.lvl===5 && <span className="h-2.5 w-2.5 rounded-full bg-amber-400 ring-2 ring-amber-300 animate-pulse" />}</div>
             <p className="mt-1 font-mono text-[10px] text-slate-500">Top 5 Rep from /api/stats or ghosts · candy avatars</p>
@@ -1186,6 +1351,7 @@ export default function RoadmapPage() {
                   const isActive = selectedId === item.id || selectedId === baseId;
                   const isNew = newIds.has(item.id) || newIds.has(baseId);
                   const isPersonal = item.kind === "personal";
+                  const isDemo = (item as any).kind === "demo";
                   const leftSide = p.x < 260;
                   const isPast = item.ms <= now;
                   let nodeR = 30;
@@ -1202,19 +1368,22 @@ export default function RoadmapPage() {
                     outline = (st as any).outline;
                   } else if ((st as any).key === "personal") {
                     nodeR = 27;
+                  } else if ((st as any).key === "demo") {
+                    nodeR = 30;
+                    outline = "#8b5cf6";
                   }
-                  const title = isPersonal ? item.p.title : item.ev.title;
-                  const venue = isPersonal ? item.p.venue : item.ev.venue;
-                  const date = isPersonal ? item.p.event_date : item.ev.event_date;
-                  const time = isPersonal ? item.p.event_time : item.ev.event_time;
+                  const title = isPersonal ? item.p.title : isDemo ? (item as DemoItem).title : (item as any).ev.title;
+                  const venue = isPersonal ? item.p.venue : isDemo ? (item as DemoItem).venue : (item as any).ev.venue;
+                  const date = isPersonal ? item.p.event_date : isDemo ? (item as DemoItem).event_date : (item as any).ev.event_date;
+                  const time = isPersonal ? item.p.event_time : isDemo ? (item as DemoItem).event_time : (item as any).ev.event_time;
                   const label = title.length > 18 ? title.slice(0, 18) + "…" : title;
                   const pillW = Math.max(136, Math.min(188, label.length * 7.2 + 36));
                   const pillX = leftSide ? p.x + 44 : p.x - pillW - 12;
-                  const pctVal = !isPersonal
+                  const pctVal = !isPersonal && !isDemo
                     ? (() => {
-                        const ap = Number(item.ev.authority_points ?? 0);
-                        const rp = Number(item.ev.required_points ?? 0);
-                        return rp > 0 ? Math.min(100, Math.round((ap / rp) * 100)) : isVerified(item.ev) ? 100 : 0;
+                        const ap = Number((item as any).ev.authority_points ?? 0);
+                        const rp = Number((item as any).ev.required_points ?? 0);
+                        return rp > 0 ? Math.min(100, Math.round((ap / rp) * 100)) : isVerified((item as any).ev) ? 100 : 0;
                       })()
                     : null;
                   const showPct = pctVal !== null && pctVal > 0 && !isVerified((item as any).ev);
@@ -1224,6 +1393,13 @@ export default function RoadmapPage() {
                       key={item.id}
                       onClick={() => {
                         setQTap(true);
+                        // demo nodes: toast + open sheet, no DB
+                        if(isDemo){
+                          const d=(item as DemoItem);
+                          if(d.localId==="demo_welcome") setToast("Welcome — tap a purple node to see real gist");
+                          else if(d.localId==="demo_swipe") { setToast("Swipe demo — try swiping the card below!"); setQSwipe(true); }
+                          else if(d.localId==="demo_create") setShowCreate(true);
+                        }
                         // use base id so sheet shows canonical event even when clicking tiled duplicates
                         setSelectedId(baseId);
                         setSheetOpen(true);
@@ -1244,10 +1420,10 @@ export default function RoadmapPage() {
                           filter: "drop-shadow(0 12px 18px rgba(0,0,0,0.45))",
                         } as any}
                       >
-                        <circle cx={p.x} cy={p.y} r={nodeR} fill={isPersonal ? "#e7e5e4" : "white"} stroke={outline} strokeWidth={isActive ? 3.8 : 3} filter="url(#nodeGlow)" opacity={isPersonal ? 0.72 : 1} style={{ transform: isActive ? "translateZ(18px)" : "translateZ(12px)" } as any} />
-                        <circle cx={p.x} cy={p.y} r={nodeR - 10} fill={st.key === "canonical" ? "#ecfdf5" : st.key === "almost" ? "#f7fee7" : st.key === "advisory" ? "#fffbeb" : st.key === "waiting" ? "#eff6ff" : "#f4f4f5"} stroke="rgba(0,0,0,0.06)" strokeWidth={1} />
-                        <text x={p.x} y={p.y + 6} textAnchor="middle" fontSize={isPersonal ? 10 : st.key === "canonical" ? 17 : 14} fontWeight={800} fill={st.key === "canonical" ? "#065f46" : st.key === "almost" ? "#3f6212" : st.key === "advisory" ? "#92400e" : st.key === "waiting" ? "#1e40af" : "#52525b"} style={{ fontFamily: "ui-monospace, monospace" }}>
-                          {isPersonal ? "◐" : st.key === "canonical" ? "✓" : st.key === "advisory" ? "●" : st.key === "almost" ? "◉" : st.key === "waiting" ? "○" : "●"}
+                        <circle cx={p.x} cy={p.y} r={nodeR} fill={isPersonal ? "#e7e5e4" : "white"} stroke={outline} strokeWidth={isActive ? 3.8 : 3} strokeDasharray={isDemo ? "8 6" : undefined} filter="url(#nodeGlow)" opacity={isPersonal ? 0.72 : isDemo ? 0.96 : 1} style={{ transform: isActive ? "translateZ(18px)" : "translateZ(12px)" } as any} />
+                        <circle cx={p.x} cy={p.y} r={nodeR - 10} fill={isDemo ? "#f5f3ff" : st.key === "canonical" ? "#ecfdf5" : st.key === "almost" ? "#f7fee7" : st.key === "advisory" ? "#fffbeb" : st.key === "waiting" ? "#eff6ff" : "#f4f4f5"} stroke={isDemo ? "#8b5cf6" : "rgba(0,0,0,0.06)"} strokeWidth={1} strokeDasharray={isDemo ? "4 3" : undefined} />
+                        <text x={p.x} y={p.y + 6} textAnchor="middle" fontSize={isDemo ? 13 : isPersonal ? 10 : st.key === "canonical" ? 17 : 14} fontWeight={800} fill={isDemo ? "#6d28d9" : st.key === "canonical" ? "#065f46" : st.key === "almost" ? "#3f6212" : st.key === "advisory" ? "#92400e" : st.key === "waiting" ? "#1e40af" : "#52525b"} style={{ fontFamily: "ui-monospace, monospace" }}>
+                          {isDemo ? ( (item as DemoItem).localId==="demo_welcome" ? "✦" : (item as DemoItem).localId==="demo_swipe" ? "↔" : "+" ) : isPersonal ? "◐" : st.key === "canonical" ? "✓" : st.key === "advisory" ? "●" : st.key === "almost" ? "◉" : st.key === "waiting" ? "○" : "●"}
                         </text>
                       </g>
                       {isPast && <text x={p.x} y={p.y + nodeR + 36} textAnchor="middle" fontSize={6.5} fontWeight={700} fill="rgba(255,255,255,0.55)" style={{ fontFamily: "ui-monospace,monospace" }}>PAST</text>}
@@ -1412,6 +1588,33 @@ export default function RoadmapPage() {
                     <p className="mt-3 font-mono text-[10px] text-slate-600">Whole school vs level quorum: whole_school needs more actives. Level gist broadcasts faster.</p>
                   </div>
                 ); })()
+              ) : selectedDemo ? (
+                <div>
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#8b5cf6] text-sm font-black text-white border-2 border-dashed border-white/60">✦</span>
+                    <div>
+                      <h2 className="text-[17px] font-bold leading-tight text-white">{selectedDemo.title} <span className="ml-2 rounded-full border border-dashed border-violet-400/40 bg-violet-500/10 px-2 py-0.5 text-[10px] font-bold tracking-wide text-violet-200">demo · dashed</span></h2>
+                      <p className="font-mono text-[11px] tracking-wide text-slate-500">{selectedDemo.venue} · {fmtDate(selectedDemo.event_date)} {fmtTime(selectedDemo.event_time)} · demo · local-only</p>
+                    </div>
+                  </div>
+                  <div className="mt-4 rounded-2xl border border-dashed border-violet-400/30 bg-violet-500/10 p-4">
+                    <p className="text-[13px] font-semibold text-violet-100">{selectedDemo.hint}</p>
+                    <p className="mt-1 text-[12.5px] leading-5 text-slate-400">This is a local demo node — it doesn&apos;t hit the DB. It&apos;s only shown when your feed is empty to teach tap / swipe / + create. Once real events exist it disappears.</p>
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {selectedDemo.localId==="demo_swipe" ? (
+                      <>
+                        <button onClick={()=>{ setQSwipe(true); setToast("Swipe the card → Yes · ← No · ↑ Skip"); }} className="rounded-full bg-[#8b5cf6] px-5 py-2.5 text-sm font-bold text-white">Try swipe →</button>
+                        <button onClick={()=> setQSwipe(true)} className="rounded-full border border-white/10 bg-white/5 px-5 py-2.5 text-sm font-medium text-slate-200">Mark swipe done</button>
+                      </>
+                    ) : selectedDemo.localId==="demo_create" ? (
+                      <button onClick={()=> setShowCreate(true)} className="rounded-full bg-white px-5 py-2.5 text-sm font-bold text-black">＋ Create gist (demo)</button>
+                    ) : (
+                      <button onClick={()=> { setQTap(true); setToast("Tapped ✓ — now try Swipe demo"); }} className="rounded-full bg-white px-5 py-2.5 text-sm font-bold text-black">Tap ✓</button>
+                    )}
+                  </div>
+                  <p className="mt-3 font-mono text-[10px] text-slate-500">Dashed = local only · not broadcast · hidden once real events arrive</p>
+                </div>
               ) : selectedEvent ? (
                 (() => {
                   const ev = selectedEvent;
@@ -1503,6 +1706,27 @@ export default function RoadmapPage() {
             </div>
           </div>
         </div>
+        {/* Share Rep card modal — canvas-generated forest bg + candy avatar */}
+        {shareOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm" onClick={()=> setShareOpen(false)}>
+            <div onClick={e=> e.stopPropagation()} className="w-full max-w-[360px] rounded-[24px] border border-white/10 bg-[#0b0f1e] p-5 shadow-2xl max-h-[90vh] overflow-auto">
+              <div className="flex items-center justify-between">
+                <h3 className="text-[15px] font-black text-white">Your Rep Card</h3>
+                <button onClick={()=> setShareOpen(false)} className="rounded-full bg-white/10 px-3 py-1 text-sm text-white">✕</button>
+              </div>
+              <p className="mt-1 font-mono text-[11px] text-slate-400">Tap Share to send your forest card — candy avatar + Lvl + Rep + streak</p>
+              <div className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-black">
+                <canvas ref={shareCanvasRef} className="h-auto w-full" style={{ display: shareImg ? "none" : "block" }} />
+                {shareImg && <img src={shareImg} alt="Rep card" className="h-auto w-full" />}
+              </div>
+              <div className="mt-4 grid gap-2">
+                <button onClick={handleShareCard} className="w-full rounded-full bg-white py-3 text-[14px] font-black text-black hover:bg-slate-100">Share — navigator.share or download</button>
+                <button onClick={()=> generateShareCard()} className="w-full rounded-full border border-white/10 bg-white/5 py-2.5 text-[13px] font-semibold text-white">↻ Regenerate</button>
+              </div>
+              <p className="mt-2 text-center font-mono text-[10px] text-slate-500">Forest green bg · candy avatar · Lvl {levelInfo.lvl} {levelInfo.name} · {myRep.toFixed(1)} Rep · 🔥 {streak}</p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

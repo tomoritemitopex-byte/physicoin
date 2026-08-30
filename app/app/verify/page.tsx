@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { logError, getErrorMessage } from "@/lib/adapters/error";
 
 type StoredProfile = {
@@ -28,6 +29,17 @@ type EventRow = {
 };
 
 export default function VerifyPage() {
+  const router = useRouter();
+  const [redirecting, setRedirecting] = useState(false);
+  // auto-redirect to roadmap advisory filter — zombie route
+  useEffect(() => {
+    setRedirecting(true);
+    const t = setTimeout(() => {
+      router.replace("/app/roadmap?filter=advisory");
+    }, 900);
+    return () => clearTimeout(t);
+  }, [router]);
+
   const [events, setEvents] = useState<EventRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -108,6 +120,20 @@ export default function VerifyPage() {
 
   return (
     <div className="space-y-4">
+      {/* zombie redirect banner — keep route but auto-redirect to roadmap advisory */}
+      {redirecting && (
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3">
+          <p className="text-[13px] font-medium text-amber-100">
+            This page moved — redirecting to <span className="font-mono text-amber-200">roadmap · advisory filter</span>…
+          </p>
+          <a
+            href="/app/roadmap?filter=advisory"
+            className="shrink-0 rounded-full bg-white px-4 py-1.5 text-[13px] font-bold text-black hover:bg-slate-100"
+          >
+            Go now →
+          </a>
+        </div>
+      )}
       {/* header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
