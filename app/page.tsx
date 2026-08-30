@@ -263,6 +263,73 @@ export default function LandingPage() {
             </div>
         </section>
 
+        {/* How it works — 3 candy steps — between hero peek and live proof (forest #0d3b2a, Fredoka, lollipop) */}
+        <section aria-label="How it works" className="mt-6 rounded-[20px] border border-white/[0.08] bg-white/[0.04] px-4 py-5 backdrop-blur sm:px-6">
+          <div className="flex items-center justify-between">
+            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-emerald-100/60">How it works — 3 steps</p>
+            <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 font-mono text-[11px] text-emerald-100/70">Fredoka · candy · forest #0d3b2a</span>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            {/* ① Hear gist */}
+            <div className="group relative overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-br from-white/[0.06] to-white/[0.02] px-4 py-5">
+              <div className="flex items-center gap-3">
+                <span className="flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-[#52b788] text-white shadow-[0_2px_10px_rgba(0,0,0,0.3)]" style={{fontFamily:"var(--font-fredoka), Fredoka, system-ui"}}>①</span>
+                <span className="relative inline-flex h-9 w-9 items-center justify-center" aria-hidden>
+                  <span className="absolute bottom-0 h-2.5 w-1.5 rounded-full bg-[#5a3e1b]" />
+                  <span className="absolute bottom-1.5 h-6 w-6 rounded-full border border-white/20 bg-[#52b788]" />
+                  <span className="absolute bottom-2.5 h-2 w-2 rounded-full bg-white/15" />
+                  <span className="absolute bottom-4 right-1 h-2 w-2 rounded-full border border-white/90 bg-[#fbbf24]" />
+                </span>
+                <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2 py-0.5 font-mono text-[10px] font-bold text-amber-100">gist</span>
+              </div>
+              <p className="mt-3 text-[15px] font-bold text-white" style={{fontFamily:"var(--font-fredoka), Fredoka, system-ui"}}>① Hear gist</p>
+              <p className="mt-1.5 text-[13px] leading-5 text-emerald-50/70">Lecturer whispers “shift to Hall B”? Post it — shows instantly as advisory on the road.</p>
+              <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-black/30 px-2.5 py-1 font-mono text-[11px] text-emerald-100/70"><Megaphone className="h-3 w-3" /> ANA 201 → Hall B · 8AM</div>
+            </div>
+            {/* ② Confirm on road */}
+            <div className="group relative overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-br from-violet-500/[0.08] to-white/[0.02] px-4 py-5">
+              <div className="flex items-center gap-3">
+                <span className="flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-[#8b5cf6] text-white shadow-[0_2px_10px_rgba(0,0,0,0.3)]" style={{fontFamily:"var(--font-fredoka), Fredoka, system-ui"}}>②</span>
+                <span className="relative inline-flex h-9 w-9 items-center justify-center" aria-hidden>
+                  <span className="absolute bottom-0 h-2.5 w-1.5 rounded-full bg-[#5a3e1b]" />
+                  <span className="absolute bottom-1.5 h-6 w-6 rounded-full border border-white/20 bg-[#40916c]" />
+                  <span className="absolute bottom-2.5 h-2 w-2 rounded-full bg-white/10" />
+                  <span className="absolute bottom-4 right-1 h-2 w-2 rounded-full border border-white/90 bg-[#a78bfa]" />
+                </span>
+                <span className="rounded-full border border-violet-400/20 bg-violet-500/15 px-2 py-0.5 font-mono text-[10px] font-bold text-violet-100">swipe to verify</span>
+              </div>
+              <p className="mt-3 text-[15px] font-bold text-white" style={{fontFamily:"var(--font-fredoka), Fredoka, system-ui"}}>② Confirm on road</p>
+              <p className="mt-1.5 text-[13px] leading-5 text-emerald-50/70">Tap node, swipe Yes/No. Quorum lights the road.</p>
+              <div className="mt-3 rounded-xl border border-white/10 bg-black/40 px-3 py-2.5">
+                <div className="flex items-center justify-between font-mono text-[10px] font-bold text-white"><span>7/8 · 88%</span><span className="text-amber-300">1 more!</span></div>
+                <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-white/10"><div className="h-full w-[87.5%] rounded-full bg-emerald-400" /></div>
+                <p className="mt-1.5 font-mono text-[10px] text-emerald-100/60">← swipe quorum bar · violet road</p>
+              </div>
+            </div>
+            {/* ③ Earn Rep+Llv */}
+            <div className="group relative overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-br from-emerald-500/[0.08] to-white/[0.02] px-4 py-5">
+              <div className="flex items-center gap-3">
+                <span className="flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-emerald-600 text-white shadow-[0_2px_10px_rgba(0,0,0,0.3)]" style={{fontFamily:"var(--font-fredoka), Fredoka, system-ui"}}>③</span>
+                <span className="relative inline-flex h-9 w-9 items-center justify-center" aria-hidden>
+                  <span className="absolute bottom-0 h-2.5 w-1.5 rounded-full bg-[#5a3e1b]" />
+                  <span className="absolute bottom-1.5 h-6 w-6 rounded-full border border-white/20 bg-[#2d6a4f]" />
+                  <span className="absolute bottom-2.5 h-2 w-2 rounded-full bg-white/10" />
+                  <span className="absolute bottom-4 right-1 h-2 w-2 rounded-full border border-white/90 bg-emerald-300" />
+                </span>
+                <span className="rounded-full border border-emerald-400/20 bg-emerald-500/15 px-2 py-0.5 font-mono text-[10px] font-bold text-emerald-100">Rep & Level</span>
+              </div>
+              <p className="mt-3 text-[15px] font-bold text-white" style={{fontFamily:"var(--font-fredoka), Fredoka, system-ui"}}>③ Earn Rep + Lvl</p>
+              <p className="mt-1.5 text-[13px] leading-5 text-emerald-50/70">Verified gist → Rep up, Level climbs. Track your sparkline.</p>
+              <div className="mt-3 flex items-center gap-2 rounded-xl border border-white/10 bg-black/40 px-3 py-2.5">
+                <span className="font-mono text-[11px] font-black text-emerald-300">+5 Rep</span>
+                <svg width="64" height="16" viewBox="0 0 64 16" aria-hidden className="shrink-0"><path d="M 2 12 L 14 10 L 26 7 L 38 8 L 50 4 L 62 2" fill="none" stroke="#10b981" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /><path d="M 2 12 L 14 10 L 26 7 L 38 8 L 50 4 L 62 2 L 62 14 L 2 14 Z" fill="#10b981" opacity="0.14" /></svg>
+                <span className="ml-auto rounded-full bg-white px-2 py-0.5 font-mono text-[10px] font-black text-black">Lvl 2 · Scout</span>
+              </div>
+            </div>
+          </div>
+          <p className="mt-3 flex items-center gap-1.5 font-mono text-[11px] text-emerald-100/60"><span className="h-1 w-1 rounded-full bg-emerald-400" /> Lollipop trees · Fredoka numbers · candy sprinkles · endless road #8b5cf6</p>
+        </section>
+
         {/* live proof strip — fetched from /api/stats + ticker — anchor for See live */}
         <section id="live-proof" className="mt-6 scroll-mt-20 flex flex-col gap-3 rounded-[20px] border border-white/[0.08] bg-white/[0.05] px-5 py-4 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-3">

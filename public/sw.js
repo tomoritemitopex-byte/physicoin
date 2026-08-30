@@ -1,5 +1,5 @@
 const CACHE_NAME = "physi-shell-v1";
-const SHELL_URLS = ["/", "/app/roadmap", "/app/timetable", "/app/profile", "/manifest.json", "/ref1.jpg", "/ref2.jpg"];
+const SHELL_URLS = ["/", "/app/roadmap", "/app/timetable", "/app/profile", "/manifest.json", "/ref1.webp", "/ref2.webp"];
 const OFFLINE_QUEUE_DB = "physi-offline-queue";
 const OFFLINE_STORE = "posts";
 

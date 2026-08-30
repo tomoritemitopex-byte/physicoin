@@ -284,6 +284,7 @@ function RoadmapInner() {
   const [filter, setFilter] = useState<"all"|"my_level"|"today"|"verified"|"advisory"|"mine">("all");
   const [viewMode, setViewMode] = useState<"map"|"list">("map");
   const [searchQuery, setSearchQuery] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false); // mobile drawer — frees 80px when closed
   const [searchPulseId, setSearchPulseId] = useState<string | null>(null);
   const [myLevel, setMyLevel] = useState<string|null>(null);
   const [myRep, setMyRep] = useState<number>(0);
@@ -1607,16 +1608,17 @@ function RoadmapInner() {
         <div className="pointer-events-none absolute left-1/2 top-[162px] z-20 flex w-full max-w-[560px] -translate-x-1/2 justify-center px-3 sm:hidden">
           <span className={`rounded-full border border-amber-400/20 bg-black/75 px-3 py-1 ${fredoka.className} text-[14px] font-black tracking-tight text-amber-200 backdrop-blur`}>Verify 3 today → +5 bonus · {dailyCount}/3 {dailyBonusDone ? "✓ done" : ""}</span>
         </div>
-        {/* Filter chips row - under quest bar (pushed for daily label on mobile) */}
-        <div className="pointer-events-none absolute left-1/2 top-[148px] z-20 flex w-full max-w-[560px] -translate-x-1/2 justify-center px-3 sm:top-[116px] sm:px-6">
+        {/* mobile Filters drawer toggle — frees 80px when collapsed (mobile only) */}
+        <div className="pointer-events-none absolute left-1/2 top-[126px] z-20 flex w-full max-w-[560px] -translate-x-1/2 justify-center px-3 sm:hidden">
+          <button onClick={()=> setFiltersOpen(o=>!o)} className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-black/75 px-4 py-2 font-mono text-[11px] font-bold text-white backdrop-blur-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)]">Filters {filtersOpen ? '▴' : '▾'} <span className="rounded-full bg-white/15 px-1.5 py-0.5 text-[10px]">{filter} · {viewMode}</span></button>
+        </div>
+        {/* desktop View+Filter+Search row — always visible */}
+        <div className="pointer-events-none absolute left-1/2 top-[116px] z-20 hidden w-full max-w-[560px] -translate-x-1/2 justify-center gap-2 px-6 sm:flex">
           <div className="pointer-events-auto flex items-center gap-1 rounded-full border border-white/10 bg-black/70 px-1.5 py-1 backdrop-blur-xl">
             <button onClick={()=> setViewMode("map")} className={`rounded-full px-3 py-1.5 font-mono text-[11px] font-bold transition ${viewMode==="map" ? "bg-white text-black shadow" : "bg-white/10 text-slate-300 hover:bg-white/15"}`}>⬢ Map</button>
             <button onClick={()=> setViewMode("list")} className={`rounded-full px-3 py-1.5 font-mono text-[11px] font-bold transition ${viewMode==="list" ? "bg-white text-black shadow" : "bg-white/10 text-slate-300 hover:bg-white/15"}`}>▦ List</button>
-            <span className="ml-1 hidden font-mono text-[10px] text-slate-500 sm:inline">{filteredRoadItems.length} items · same filter</span>
           </div>
-        </div>
-        <div className="pointer-events-none absolute left-1/2 top-[188px] z-20 flex w-full max-w-[560px] -translate-x-1/2 justify-center px-3 sm:top-[148px] sm:px-6">
-          <div className="pointer-events-auto flex items-center gap-1.5 overflow-x-auto rounded-full border border-white/10 bg-black/70 px-2 py-1.5 backdrop-blur-xl scrollbar-none">
+          <div className="pointer-events-auto flex items-center gap-1 rounded-full border border-white/10 bg-black/70 px-1.5 py-1 backdrop-blur-xl overflow-x-auto scrollbar-none">
             {([
               { k: "all", label: "All" },
               { k: "mine", label: "Mine" },
@@ -1640,14 +1642,45 @@ function RoadmapInner() {
             })}
           </div>
         </div>
-        {/* Search bar — extracted to components/road/SearchBar */}
-        <div className="pointer-events-none absolute left-1/2 top-[228px] z-20 flex w-full max-w-[560px] -translate-x-1/2 justify-center px-3 sm:top-[184px] sm:px-6">
-          <div className="pointer-events-auto w-full">
-            <SearchBar searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchMatchCount={searchMatchCount} onJump={handleJump} />
-          </div>
+        <div className="pointer-events-none absolute left-1/2 top-[148px] z-20 hidden w-full max-w-[560px] -translate-x-1/2 justify-center px-6 sm:flex">
+          <div className="pointer-events-auto w-full"><SearchBar searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchMatchCount={searchMatchCount} onJump={handleJump} /></div>
         </div>
+        {/* mobile collapsible drawer — Filters+Search+View */}
+        {filtersOpen && (
+          <div className="pointer-events-none absolute left-1/2 top-[162px] z-20 flex w-full max-w-[560px] -translate-x-1/2 flex-col gap-2 px-3 sm:hidden">
+            <div className="pointer-events-auto flex items-center justify-center gap-1 rounded-full border border-white/10 bg-black/70 px-1.5 py-1 backdrop-blur-xl">
+              <button onClick={()=> setViewMode("map")} className={`rounded-full px-3 py-1.5 font-mono text-[11px] font-bold transition ${viewMode==="map" ? "bg-white text-black shadow" : "bg-white/10 text-slate-300"}`}>⬢ Map</button>
+              <button onClick={()=> setViewMode("list")} className={`rounded-full px-3 py-1.5 font-mono text-[11px] font-bold transition ${viewMode==="list" ? "bg-white text-black shadow" : "bg-white/10 text-slate-300"}`}>▦ List</button>
+              <span className="ml-1 font-mono text-[10px] text-slate-400">{filteredRoadItems.length} items</span>
+            </div>
+            <div className="pointer-events-auto flex items-center gap-1.5 overflow-x-auto rounded-full border border-white/10 bg-black/70 px-2 py-1.5 backdrop-blur-xl scrollbar-none">
+              {([
+                { k: "all", label: "All" },
+                { k: "mine", label: "Mine" },
+                { k: "my_level", label: myLevel ? myLevel : "My Level" },
+                { k: "today", label: "Today" },
+                { k: "verified", label: "Verified" },
+                { k: "advisory", label: "Advisory" },
+              ] as const).map(ch=> {
+                const active = filter===ch.k;
+                const isMine = ch.k==="mine";
+                return (
+                  <button
+                    key={ch.k}
+                    onClick={()=> setFilter(ch.k as any)}
+                    className={`relative shrink-0 rounded-full px-3 py-1.5 font-mono text-[11px] font-bold transition ${active ? "bg-white text-black shadow" : "bg-white/10 text-slate-300"}`}
+                  >
+                    {ch.label}
+                    {isMine && mineHasNew && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-black animate-pulse" />}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="pointer-events-auto w-full"><SearchBar searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchMatchCount={searchMatchCount} onJump={handleJump} /></div>
+          </div>
+        )}
         {/* Live pulse toasts - top center sliding in/out pure UI ghosts */}
-        <div className="pointer-events-none absolute left-1/2 top-[268px] z-30 -translate-x-1/2 sm:top-[222px]">
+        <div className={`pointer-events-none absolute left-1/2 z-30 -translate-x-1/2 ${filtersOpen ? 'top-[268px] sm:top-[222px]' : 'top-[166px] sm:top-[222px]'}`}>
           {pulseMsg && (
             <div className={`rounded-full border border-emerald-400/20 bg-black/80 px-4 py-2 font-mono text-[11px] font-semibold text-white backdrop-blur-xl shadow-[0_8px_24px_rgba(0,0,0,0.5)] transition-all duration-500 ${pulseShow ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-3"}`} style={{ animation: pulseShow ? "pulseSlideIn 3s ease" : undefined }}>
               <span className="mr-1.5 inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400" />{pulseMsg}
