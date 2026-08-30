@@ -1,0 +1,25 @@
+{
+  "name": "PHYSI",
+  "short_name": "PHYSI",
+  "description": "Student-powered timetable — share what you hear, confirm what you see. Advisory feed.",
+  "theme_color": "#0d3b2a",
+  "background_color": "#070a12",
+  "display": "standalone",
+  "orientation": "portrait",
+  "start_url": "/app/roadmap",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/ref1.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/ref2.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ]
+}

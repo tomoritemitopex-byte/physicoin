@@ -1299,6 +1299,56 @@ function RoadmapInner() {
     } catch {}
   }
 
+  // ghost quorum — pure UI, no DB write. After user YES vote, 2-3s pick 1-2 ghosts, bump authority_points locally, show 7/8→8/8 and canonical pop/confetti.
+  const ghostTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function triggerGhostQuorum(eventId: string) {
+    if (ghostTimerRef.current) clearTimeout(ghostTimerRef.current);
+    const delay = 2000 + Math.random() * 1000; // 2-3s
+    ghostTimerRef.current = setTimeout(() => {
+      const count = Math.random() > 0.45 ? 2 : 1;
+      const picks = [...GHOST_REP].sort(() => 0.5 - Math.random()).slice(0, count);
+      let didCanonical = false;
+      setEvents((prev) =>
+        prev.map((e) => {
+          if (e.id !== eventId) return e;
+          const ap = Number(e.authority_points ?? 0);
+          const rpRaw = Number(e.required_points ?? 0);
+          const rp = rpRaw > 0 ? rpRaw : quorumThreshold || 8;
+          const newAp = ap + picks.length;
+          const wasCanonical = rp > 0 ? ap >= rp : false;
+          const nowCanonical = newAp >= rp;
+          if (!wasCanonical && nowCanonical) didCanonical = true;
+          // update status to verified if threshold reached for pop animation
+          return { ...e, authority_points: newAp, status: nowCanonical ? "verified" : e.status } as EventRow;
+        })
+      );
+      // facepile boost — add ghosts to YES pile locally
+      setFacepile((prev) => {
+        if (!prev) return prev;
+        const ghosts = picks.map((g, i) => ({ id: `ghost_${g.handle}_${Date.now()}_${i}`, handle: g.handle, color: g.color, bg: g.bg }));
+        return { ...prev, yes: [...prev.yes, ...ghosts], yesCount: prev.yesCount + picks.length };
+      });
+      setFacepileTick((t) => t + 1);
+      if (didCanonical) {
+        vibrate(60);
+        playPop();
+        setShowConfetti(true);
+        setTimeout(() => setShowConfetti(false), 3200);
+        setToast(`ghost quorum — ${picks.map((p) => p.handle).join(", ")} verified → canonical ✓`);
+        setCandy("canonical ✓");
+        setTimeout(() => setCandy(null), 1400);
+      } else {
+        vibrate(30);
+        const cur = events.find((x) => x.id === eventId);
+        const ap0 = cur ? Number(cur.authority_points ?? 0) + 1 /* user already +1 optimistically */ : 7;
+        const rp0 = cur ? Number(cur.required_points ?? 0) || quorumThreshold || 8 : 8;
+        const after = ap0 + picks.length;
+        setToast(`ghost quorum — ${picks.map((p) => p.handle).join(", ")} also verified · ${after}/${rp0}`);
+      }
+    }, delay);
+  }
+  useEffect(() => () => { if (ghostTimerRef.current) clearTimeout(ghostTimerRef.current); }, []);
+
   async function vote(id: string, v: "YES" | "NO" | "CANCEL", isFlag?: boolean) {
     let verifierId: string | null = null;
     try {
@@ -1334,6 +1384,8 @@ function RoadmapInner() {
       setInviteNudge(true);
       setInviteCopied(false);
       bumpStreakDaily();
+      // ghost quorum — pure UI, no DB, after Yes vote
+      if (v === "YES" && !isFlag) triggerGhostQuorum(id);
       fetchFeed();
       fetchRepBoard();
       setFacepileTick(t=>t+1);

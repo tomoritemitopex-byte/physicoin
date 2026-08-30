@@ -143,6 +143,27 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  // PWA: service worker registration + offline queue flush
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!("serviceWorker" in navigator)) return;
+    const url = "/sw.js";
+    navigator.serviceWorker.register(url).then((reg) => {
+      // try background sync if available
+      try { (reg as any).sync?.register?.("physi-flush").catch(()=>{}); } catch {}
+      const onOnline = () => {
+        try { navigator.serviceWorker.controller?.postMessage({ type: "FLUSH_QUEUE" }); } catch {}
+        try { (reg as any).sync?.register?.("physi-flush").catch(()=>{}); } catch {}
+      };
+      window.addEventListener("online", onOnline);
+      // listen for queued messages
+      navigator.serviceWorker.addEventListener("message", (e: any) => {
+        if (e.data?.type === "OFFLINE_QUEUED") {
+          // could toast offline queued
+        }
+      });
+    }).catch(()=>{});
+  }, []);
   useEffect(() => {
     const on = () => setScrolled(window.scrollY > 8);
     window.addEventListener("scroll", on, { passive: true });
