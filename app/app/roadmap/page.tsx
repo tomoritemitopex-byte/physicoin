@@ -378,6 +378,13 @@ function RoadmapInner() {
   const [stakeOn, setStakeOn] = useState(false);
   const [ghostModal, setGhostModal] = useState<{ open:boolean; ev: EventRow|null; forkIx?: number; voters?: any[] }|null>(null);
   const [ghostConfetti, setGhostConfetti] = useState(false);
+  // Ghost Bazaar shop modal + Rep spend
+  const [bazaarOpen, setBazaarOpen] = useState(false);
+  // Oracle fork betting 0.5 Rep before quorum, payout 1.5x
+  const [oracleBets, setOracleBets] = useState<{ key:string; ix:number; amt:number; ts:number; settled?:boolean }[]>([]);
+  // Road chat 24h ephemeral
+  const [chatMsgs, setChatMsgs] = useState<{ user:string; text:string; ts:number }[]>([{user:"zara_11", text:"road is live 🌱", ts: Date.now()- 60*60*1000},{user:"zara_11", text:"who's at LT2?", ts: Date.now()- 30*60*1000}]);
+  const [chatDraft, setChatDraft] = useState("");
 
   const fetchFeed = useCallback(async () => {
     const ctrl = new AbortController();
@@ -1769,6 +1776,73 @@ function RoadmapInner() {
       setToast(isWin ? "Stake won +0.7 Rep 🎉" : "Stake lost -0.2 Rep");
     }catch{}
   }
+  // --- Ghost Bazaar helpers: 3 Rep pin 24h, 5 Rep blast ---
+  function deductRep(cost:number): boolean {
+    if(myRep < cost){ setToast(`Need ${cost} Rep — you have ${myRep.toFixed(1)}`); return false; }
+    const next = Math.max(0, Number((myRep - cost).toFixed(1)));
+    setMyRep(next);
+    try{ const raw=localStorage.getItem("physi_profile"); if(raw){ const p=JSON.parse(raw); p.mining_balance=next; localStorage.setItem("physi_profile", JSON.stringify(p)); } }catch{}
+    return true;
+  }
+  function buyPin(){ if(!deductRep(3)) return; try{ localStorage.setItem("physi_bazaar_pin", String(Date.now()+24*3600*1000)); }catch{} setCandy("-3 Rep pin 24h"); setTimeout(()=> setCandy(null), 1200); setToast("Pinned 24h 📌 -3 Rep"); setBazaarOpen(false); }
+  function buyBlast(){ if(!deductRep(5)) return; try{ localStorage.setItem("physi_bazaar_blast", String(Date.now()+24*3600*1000)); }catch{} setCandy("-5 Rep blast"); setTimeout(()=> setCandy(null), 1200); setToast("Blast sent 🚀 -5 Rep"); setBazaarOpen(false); }
+  // --- Oracle helpers: bet 0.5 Rep on fork branch before quorum, payout 1.5x if win ---
+  function oracleBet(forkKey:string, branchIx:number){
+    const ap0 = conflictGroups.find((g)=> g.map((e)=> String(e.id)).join("__fork__")==forkKey)?.[branchIx] ? Number(conflictGroups.find((g)=> g.map((e)=> String(e.id)).join("__fork__")==forkKey)![branchIx].authority_points||0) : 0;
+    // also check if fork already has winner
+    const grp = conflictGroups.find(g=> g.map(e=> String(e.id)).join("__fork__")==forkKey);
+    if(grp && grp.some(e=> Number(e.authority_points||0) >= FORK_THRESHOLD)){ setToast("Quorum reached — betting closed"); return; }
+    if(oracleBets.some(b=> b.key===forkKey && !b.settled)){ setToast("Already bet on this fork"); return; }
+    if(!deductRep(0.5)) return;
+    const bet = { key: forkKey, ix: branchIx, amt:0.5, ts: Date.now(), settled:false };
+    const next=[...oracleBets, bet]; setOracleBets(next); try{ localStorage.setItem("physi_oracle_bets", JSON.stringify(next)); }catch{}
+    setCandy("-0.5 oracle bet"); setTimeout(()=> setCandy(null), 900); setToast(`Oracle bet 0.5 on branch ${branchIx+1} — payout 1.5x if win`);
+  }
+  // hydrate bazaar/oracle/chat from localStorage
+  useEffect(()=>{ try{ const r=localStorage.getItem("physi_oracle_bets"); if(r) setOracleBets(JSON.parse(r)); const c=localStorage.getItem("physi_road_chat"); if(c){ const a=JSON.parse(c); if(Array.isArray(a)){ const f=a.filter((m:any)=> Date.now()-Number(m.ts) < 24*3600*1000); if(f.length!==a.length) localStorage.setItem("physi_road_chat", JSON.stringify(f)); if(f.length) setChatMsgs(f); } } }catch{} },[]);
+  useEffect(()=>{ try{ localStorage.setItem("physi_oracle_bets", JSON.stringify(oracleBets)); }catch{} },[oracleBets]);
+  useEffect(()=>{ try{ localStorage.setItem("physi_road_chat", JSON.stringify(chatMsgs)); }catch{} },[chatMsgs]);
+  // oracle payout watcher: when fork resolves (>=8), pay 1.5x
+  useEffect(()=>{
+    if(oracleBets.length===0 || conflictGroups.length===0) return;
+    let changed=false; let payout=0;
+    const updated = oracleBets.map(b=>{
+      if(b.settled) return b;
+      const grp = conflictGroups.find(g=> g.map(e=> String(e.id)).join("__fork__")==b.key);
+      if(!grp) return b;
+      const winnerIx = grp.findIndex(e=> Number(e.authority_points||0) >= FORK_THRESHOLD);
+      if(winnerIx===-1) return b;
+      changed=true;
+      if(b.ix===winnerIx){ payout += 0.75; }
+      return {...b, settled:true};
+    });
+    if(changed){
+      setOracleBets(updated);
+      try{ localStorage.setItem("physi_oracle_bets", JSON.stringify(updated)); }catch{}
+      if(payout>0){
+        const next = Math.max(0, Number((myRep + payout).toFixed(1)));
+        setMyRep(next);
+        try{ const raw=localStorage.getItem("physi_profile"); if(raw){ const p=JSON.parse(raw); p.mining_balance=next; localStorage.setItem("physi_profile", JSON.stringify(p)); } }catch{}
+        setCandy(`+${payout.toFixed(2)} oracle win`); setTimeout(()=> setCandy(null), 1600);
+        setToast(`Oracle win +${payout.toFixed(2)} Rep 🎉`);
+        setShowConfetti(true); setTimeout(()=> setShowConfetti(false), 3200);
+      } else {
+        setToast("Oracle bet lost");
+      }
+    }
+  },[events, conflictGroups]);
+  function sendChat(){
+    const t=chatDraft.trim(); if(!t) return;
+    if(t.length>200){ setToast("max 200 chars"); return; }
+    const user = (youHandle || "you").slice(0,16);
+    const msg={ user, text: t.slice(0,200), ts: Date.now() };
+    const filtered=[...chatMsgs.filter(m=> Date.now()-m.ts < 24*3600*1000), msg].slice(-50);
+    setChatMsgs(filtered);
+    try{ localStorage.setItem("physi_road_chat", JSON.stringify(filtered)); }catch{}
+    setChatDraft("");
+    // ghost reply 1s later from zara_11
+    setTimeout(()=>{ const replies=["fr fr","seen 👀","LT2 now?","on my way","bet","noted ✓"]; const r=replies[Math.floor(Math.random()*replies.length)]; setChatMsgs(prev=>{ const a=[...prev.filter(m=> Date.now()-m.ts<24*3600*1000), {user:"zara_11", text:r, ts:Date.now()}].slice(-50); try{ localStorage.setItem("physi_road_chat", JSON.stringify(a)); }catch{} return a; }); }, 900);
+  }
 
   return (
     <div className={`${fredoka.className} ${fredoka.variable} relative -mx-4 -mt-5 w-[100vw] max-w-[100vw] sm:-mx-6 lg:-mx-8`}>
@@ -1872,6 +1946,7 @@ function RoadmapInner() {
             <button onClick={() => scrollToNow(true)} className="hidden rounded-full border border-violet-400/30 bg-violet-500/20 px-3 py-1.5 text-[11px] font-bold text-violet-200 backdrop-blur hover:bg-violet-500 hover:text-white transition sm:inline-flex">◎ NOW</button>
           </div>
           <div className="pointer-events-auto hidden gap-2 sm:flex">
+            <button onClick={() => setBazaarOpen(true)} className="rounded-full border border-emerald-400/30 bg-emerald-500/20 px-3.5 py-1.5 text-xs font-black text-emerald-200 backdrop-blur hover:bg-emerald-500 hover:text-white">🛒 Bazaar</button>
             <button onClick={() => { navigator.clipboard?.writeText(window.location.href); setToast("link copied — share the road"); }} className="rounded-full border border-white/10 bg-black/70 px-3.5 py-1.5 text-xs font-semibold text-white backdrop-blur">↗ Share</button>
             <button onClick={() => setToast("saved to your map")} className="rounded-full border border-white/10 bg-black/70 px-3.5 py-1.5 text-xs font-semibold text-white backdrop-blur">♡ Save</button>
             <button onClick={() => scrollToNow(true)} className="rounded-full border border-white/10 bg-black/70 px-3.5 py-1.5 text-xs font-semibold text-white backdrop-blur sm:hidden">◎ NOW</button>
@@ -1881,6 +1956,7 @@ function RoadmapInner() {
             </label>
           </div>
           <button onClick={() => scrollToNow(true)} className="pointer-events-auto rounded-full border border-violet-400/30 bg-violet-500 px-3 py-1.5 text-[11px] font-black text-white sm:hidden">◎ NOW</button>
+          <button onClick={()=> setBazaarOpen(true)} className="pointer-events-auto flex sm:hidden rounded-full border border-emerald-400/30 bg-emerald-500/20 px-2.5 py-1.5 text-[10px] font-black text-emerald-200 backdrop-blur">🛒 Bazaar</button>
           <label className="pointer-events-auto flex sm:hidden items-center gap-1 rounded-full border border-amber-400/30 bg-black/70 px-2.5 py-1.5 cursor-pointer backdrop-blur">
             <input type="checkbox" checked={stakeOn} onChange={e=> setStakeOn(e.target.checked)} className="h-3 w-3 accent-amber-500" />
             <span className="font-mono text-[10px] font-bold text-amber-200">0.5 stake</span>
@@ -2333,7 +2409,8 @@ function RoadmapInner() {
                                 <rect x={bx - 42} y={p.y + 42} width={Math.max(0, Math.min(84, Math.round(84*Math.min(100,pct)/100)))} height={6} rx={3} fill={isWinner ? "#10b981" : "#8b5cf6"} opacity={0.95} />
                                 <text x={bx - 42} y={p.y + 38} textAnchor="start" fontSize={6} fontWeight={800} fill={isWinner ? "#6ee7b7" : "rgba(255,255,255,0.92)"} style={{fontFamily:"ui-monospace,monospace"}}>{ap}/{FORK_THRESHOLD} {pct}%{isWinner?" · WIN":""}</text>
                               </g>
-                              {isPastFork && <text x={bx} y={p.y+62} textAnchor="middle" fontSize={6} fontWeight={700} fill="rgba(255,255,255,0.45)" style={{fontFamily:"ui-monospace,monospace"}}>FORK · PAST</text>}
+                              {!hasWinner && (()=>{ const fk=(item.ids as string[]).join("__fork__"); const bet=oracleBets.find(b=> b.key===fk && b.ix===bIdx); const already=oracleBets.some(b=> b.key===fk && !b.settled); return <foreignObject x={bx-42} y={p.y+52} width={84} height={22}><div style={{display:"flex", justifyContent:"center"}}><button onClick={(e)=>{e.stopPropagation(); oracleBet(fk,bIdx);}} disabled={!!already} style={{fontSize:"8px", fontWeight:900, padding:"2px 6px", borderRadius:"999px", background: already ? "#334155" : "#f59e0b", color: already ? "#94a3b8" : "black", border:"1px solid rgba(255,255,255,0.3)", cursor: already? "not-allowed":"pointer"}}>{bet ? (bet.settled ? (bet.ix===winnerIdx? "won":"lost") : "bet 0.5✓") : "bet 0.5"}</button></div></foreignObject>; })()}
+                              {isPastFork && <text x={bx} y={p.y+74} textAnchor="middle" fontSize={6} fontWeight={700} fill="rgba(255,255,255,0.45)" style={{fontFamily:"ui-monospace,monospace"}}>FORK · PAST</text>}
                             </g>
                           );
                         })}
@@ -2848,6 +2925,20 @@ function RoadmapInner() {
                   <p className="mt-3 font-mono text-[10px] text-slate-500">Road sorts by WAT time · NOW at center · {wat.timePart}</p>
                 </div>
               )}
+              {/* Road chat 24h ephemeral */}
+              <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                <p className="font-mono text-[11px] font-bold tracking-wide text-white">Road chat · 24h ephemeral</p>
+                <p className="font-mono text-[10px] text-slate-500">localStorage · shows zara_11: msgs</p>
+                <div className="mt-2 max-h-[120px] overflow-auto space-y-1 rounded-xl bg-black/30 p-2">
+                  {chatMsgs.filter(m=> Date.now()-m.ts < 24*3600*1000).slice(-20).map((m,i)=> (
+                    <p key={i} className="font-mono text-[11px] leading-4"><span className="font-bold text-violet-300">{m.user}:</span> <span className="text-slate-200">{m.text}</span></p>
+                  ))}
+                </div>
+                <div className="mt-2 flex gap-2">
+                  <textarea value={chatDraft} onChange={e=> setChatDraft(e.target.value)} placeholder="say something…" rows={1} className="flex-1 resize-none rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-[12px] text-white placeholder:text-slate-500 outline-none focus:border-violet-500" />
+                  <button onClick={sendChat} className="rounded-full bg-white px-4 py-2 text-[12px] font-black text-black hover:bg-slate-100">Send</button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -2882,6 +2973,25 @@ function RoadmapInner() {
         {/* Share Rep card modal — lazy-loaded heavy canvas */}
         {shareOpen && <ShareCard open={shareOpen} onClose={()=> setShareOpen(false)} myRep={myRep} streak={streak} youHandle={youHandle} levelInfo={levelInfo} />}
         <RepExplainer open={repExplainerOpen} onClose={()=> setRepExplainerOpen(false)} rep={myRep} levelInfo={levelInfo} />
+        {bazaarOpen && (
+          <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm" onClick={()=> setBazaarOpen(false)}>
+            <div onClick={e=>e.stopPropagation()} className="w-full max-w-[360px] rounded-[22px] border border-white/10 bg-[#0b0f1e] p-5 shadow-2xl">
+              <div className="flex items-center justify-between"><h3 className="text-[15px] font-black text-white">Ghost Bazaar</h3><button onClick={()=> setBazaarOpen(false)} className="rounded-full bg-white/10 px-3 py-1 text-xs text-white">✕</button></div>
+              <p className="mt-1 font-mono text-[11px] text-slate-400">Spend Rep · localStorage deduction</p>
+              <div className="mt-3 grid gap-2">
+                <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.04] p-3">
+                  <div><p className="text-[13px] font-bold text-white">📌 Pin 24h</p><p className="font-mono text-[11px] text-slate-400">3 Rep · pinned 24h</p></div>
+                  <button onClick={buyPin} className="rounded-full bg-emerald-500 px-4 py-2 text-[12px] font-black text-white hover:bg-emerald-600">Buy 3 Rep</button>
+                </div>
+                <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.04] p-3">
+                  <div><p className="text-[13px] font-bold text-white">🚀 Blast</p><p className="font-mono text-[11px] text-slate-400">5 Rep · blast to all</p></div>
+                  <button onClick={buyBlast} className="rounded-full bg-violet-500 px-4 py-2 text-[12px] font-black text-white hover:bg-violet-600">Buy 5 Rep</button>
+                </div>
+              </div>
+              <p className="mt-2 text-center font-mono text-[10px] text-slate-500">Balance: {myRep.toFixed(1)} Rep</p>
+            </div>
+          </div>
+        )}
         {/* Ghost replay modal: past fork loser tappable */}
         {ghostModal?.open && ghostModal.ev && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm" onClick={()=> setGhostModal(null)}>
