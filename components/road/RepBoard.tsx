@@ -1,6 +1,29 @@
 "use client";
 import { useEffect, useState } from "react";
 
+const SEASON_DAYS = 30;
+const SEASON_KEY = "physicoin_season_start";
+const SEASON_WINNER_KEY = "physicoin_season_winner";
+function getSeasonStart(): number {
+  try {
+    const v = localStorage.getItem(SEASON_KEY);
+    if (v) { const n = Number(v); if (isFinite(n) && n>0) return n; }
+    const now = Date.now();
+    localStorage.setItem(SEASON_KEY, String(now));
+    return now;
+  } catch { return Date.now(); }
+}
+function daysLeft(start: number): number {
+  const elapsed = (Date.now() - start) / 86400000;
+  const left = Math.ceil(SEASON_DAYS - elapsed);
+  return left;
+}
+function seasonLabel(start: number): string {
+  const left = daysLeft(start);
+  if (left <= 0) return "Season ended — resetting";
+  return `${left}d left · 30d season`;
+}
+
 type BoardEntry = { handle: string; rep: number; color: string; bg: string };
 type LevelInfo = { lvl: number; name: string; progress: number; nextAt: number|null };
 
@@ -49,6 +72,9 @@ function MiniSparkline({ rep }: { rep: number }) {
   );
 }
 
+function WinnerBadge({ handle }: { handle: string }) {
+  return <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-400 to-yellow-300 px-2 py-0.5 text-[10px] font-black text-black ring-1 ring-amber-500">🏆 Winner {handle}</span>;
+}
 export default function RepBoard({ repBoard, youHandle, streak, myRep, levelInfo, onShare, repSheetOpen, setRepSheetOpen }: {
   repBoard: BoardEntry[];
   youHandle: string | null;
@@ -59,13 +85,39 @@ export default function RepBoard({ repBoard, youHandle, streak, myRep, levelInfo
   repSheetOpen: boolean;
   setRepSheetOpen: (v: boolean | ((p:boolean)=>boolean)) => void;
 }) {
+  const [seasonStart, setSeasonStart] = useState<number>(() => {
+    try { const v = localStorage.getItem(SEASON_KEY); if (v) return Number(v)||Date.now(); } catch {}
+    return Date.now();
+  });
+  const [seasonWinner, setSeasonWinner] = useState<string|null>(() => {
+    try { return localStorage.getItem(SEASON_WINNER_KEY); } catch { return null; }
+  });
+  useEffect(() => {
+    try {
+      let s = Number(localStorage.getItem(SEASON_KEY) || "");
+      if (!s || !isFinite(s) || s<=0) { s = Date.now(); localStorage.setItem(SEASON_KEY, String(s)); }
+      setSeasonStart(s);
+      const left = daysLeft(s);
+      if (left <= 0) {
+        // season reset: pick winner top rep
+        const top = repBoard && repBoard.length ? repBoard[0]?.handle : null;
+        if (top) { localStorage.setItem(SEASON_WINNER_KEY, String(top)); setSeasonWinner(String(top)); }
+        const now = Date.now();
+        localStorage.setItem(SEASON_KEY, String(now));
+        setSeasonStart(now);
+      } else {
+        const w = localStorage.getItem(SEASON_WINNER_KEY);
+        if (w) setSeasonWinner(w);
+      }
+    } catch {}
+  }, [repBoard]);
   return (
     <>
       {/* Mobile collapsible */}
       <div className="xl:hidden">
         <div className="w-full rounded-2xl border border-white/10 bg-black/70 backdrop-blur-xl overflow-hidden">
           <button onClick={() => setRepSheetOpen((v: boolean)=>!v)} className="flex w-full items-center justify-between px-4 py-2.5">
-            <span className="flex items-center gap-2 font-mono text-[11px] font-bold tracking-wide text-white"><span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" /> Top 5 Rep <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] text-slate-300">{repBoard.length}</span><span onClick={(e:any)=>{ e.stopPropagation(); onShare(); }} className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black hover:scale-105 transition cursor-pointer ${levelInfo.lvl===5 ? "bg-gradient-to-r from-amber-400 to-yellow-300 text-black ring-1 ring-amber-500" : "bg-white/10 text-white"}`}>Lvl {levelInfo.lvl} {levelInfo.name}</span><span className="ml-1 inline-flex items-center gap-1 rounded-full bg-orange-500/15 px-2 py-0.5 text-[10px] text-orange-300\">🔥 {streak}</span></span>
+            <span className="flex items-center gap-2 font-mono text-[11px] font-bold tracking-wide text-white"><span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" /> Top 5 Rep <span className="rounded-full bg-amber-400/15 px-1.5 py-0.5 text-[9px] font-bold text-amber-200">{seasonLabel(seasonStart)}</span> {seasonWinner && <span className="rounded-full bg-gradient-to-r from-amber-400 to-yellow-300 px-1.5 py-0.5 text-[9px] font-black text-black">🏆 {seasonWinner}</span>} <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] text-slate-300">{repBoard.length}</span><span onClick={(e:any)=>{ e.stopPropagation(); onShare(); }} className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black hover:scale-105 transition cursor-pointer ${levelInfo.lvl===5 ? "bg-gradient-to-r from-amber-400 to-yellow-300 text-black ring-1 ring-amber-500" : "bg-white/10 text-white"}`}>Lvl {levelInfo.lvl} {levelInfo.name}</span><span className="ml-1 inline-flex items-center gap-1 rounded-full bg-orange-500/15 px-2 py-0.5 text-[10px] text-orange-300\">🔥 {streak}</span></span>
             <span className="text-xs text-slate-400">{repSheetOpen ? "⌄" : "⌃"} {repSheetOpen ? "hide" : "show"}</span>
           </button>
           {repSheetOpen && (
@@ -92,10 +144,12 @@ export default function RepBoard({ repBoard, youHandle, streak, myRep, levelInfo
         <div className="rounded-[20px] border border-white/10 bg-black/75 backdrop-blur-xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.6)]">
           <div className="flex items-center justify-between">
             <h3 className="font-mono text-[11px] font-black tracking-[0.12em] text-white">REP BOARD</h3>
+            <span className="rounded-full bg-amber-400/15 px-2 py-0.5 font-mono text-[9px] font-bold text-amber-200">{seasonLabel(seasonStart)}</span>
             <button onClick={onShare} className={`rounded-full px-2 py-0.5 font-mono text-[10px] font-black hover:scale-105 transition ${levelInfo.lvl===5 ? "bg-gradient-to-r from-amber-400 to-yellow-300 text-black ring-1 ring-amber-500" : "bg-white/10 text-slate-300"}`}>Lvl {levelInfo.lvl} · {levelInfo.name} · {myRep.toFixed(1)} Rep</button>
           </div>
           <div className="mt-2 flex items-center gap-2"><div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10"><div className={`h-full ${levelInfo.lvl===5 ? "bg-gradient-to-r from-amber-400 to-yellow-300" : "bg-emerald-400"}`} style={{ width: `${levelInfo.progress*100}%` }} /></div><MiniSparkline rep={myRep} /><span className="font-mono text-[9px] text-slate-500">{levelInfo.nextAt ? `${(levelInfo.nextAt - myRep).toFixed(1)} to L${levelInfo.lvl+1}` : "MAX"}</span>{levelInfo.lvl===5 && <span className="h-2.5 w-2.5 rounded-full bg-amber-400 ring-2 ring-amber-300 animate-pulse" />}</div>
-          <p className="mt-1 font-mono text-[10px] text-slate-500 flex items-center gap-2">Top 5 · 7-day <MiniSparkline rep={myRep} /> · candy avatars</p>
+          {seasonWinner && <p className="mt-1 font-mono text-[10px] font-bold text-amber-300 flex items-center gap-1">🏆 Season winner: {seasonWinner} · resets every 30d</p>}
+          <p className="mt-1 font-mono text-[10px] text-slate-500 flex items-center gap-2">Top 5 · Season 30d · 7-day <MiniSparkline rep={myRep} /> · candy avatars</p>
           <div className="mt-3 grid gap-2">
             {repBoard.slice(0,5).map((u,i)=> {
               const isYou = youHandle && String(u.handle).toLowerCase() === youHandle;

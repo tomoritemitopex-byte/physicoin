@@ -5,6 +5,7 @@ import { useEffect, useState, useCallback, useMemo, useRef, Suspense } from "rea
 import { useSearchParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { logError, getErrorMessage } from "@/lib/adapters/error";
+import { checkPresenceAward, requestGeolocation, persistPresence, getPresenceScore } from "@/lib/adapters/presence";
 import SearchBar from "@/components/road/SearchBar";
 import QuorumBar from "@/components/road/QuorumBar";
 const RepExplainer = dynamic(()=> import("@/components/road/RepExplainer"), { ssr: false, loading: ()=> null }) as any;
@@ -282,6 +283,10 @@ function RoadmapInner() {
   const [repSheetOpen, setRepSheetOpen] = useState(false);
   const [youHandle, setYouHandle] = useState<string | null>(null);
   const [streak, setStreak] = useState<number>(0);
+  // Proof-of-Presence state
+  const [presence, setPresence] = useState<{ isWitness: boolean; award: number; dist: number | null; label: string } | null>(null);
+  const [presenceScore, setPresenceScore] = useState<number>(0);
+  const [presenceBusy, setPresenceBusy] = useState(false);
   const [inviteNudge, setInviteNudge] = useState(false);
   const [inviteCopied, setInviteCopied] = useState(false);
   // inline handle picker modal
@@ -479,6 +484,9 @@ function RoadmapInner() {
     try {
       const s = localStorage.getItem("physi_streak");
       if (s) setStreak(Number(s) || 0);
+      const ps = localStorage.getItem("physi_presence_score");
+      if (ps) setPresenceScore(Number(ps) || 0);
+      try { checkStreakDailyPersist(); } catch {}
     } catch {}
     // then try server /api/mining?user_id=
     (async () => {
@@ -508,20 +516,78 @@ function RoadmapInner() {
     })();
   }, []);
 
+  function daysBetween(a: string, b: string): number {
+    try { const da = new Date(a).getTime(); const db = new Date(b).getTime(); return Math.round(Math.abs(db - da) / 86400000); } catch { return 99; }
+  }
+  function applyRepDelta(delta: number) {
+    setMyRep(prev => {
+      const next = Math.max(0, Number((prev + delta).toFixed(1)));
+      try {
+        const raw = localStorage.getItem("physi_profile");
+        if (raw) { const p = JSON.parse(raw); p.mining_balance = next; localStorage.setItem("physi_profile", JSON.stringify(p)); }
+        const histRaw = localStorage.getItem("physi_rep_history");
+        let arr: number[] = [];
+        try { if (histRaw) { const p = JSON.parse(histRaw); if (Array.isArray(p)) arr = p.map((n:any)=>Number(n)).filter((n:number)=>isFinite(n)); } } catch {}
+        arr.push(next); if (arr.length>30) arr=arr.slice(-30); localStorage.setItem("physi_rep_history", JSON.stringify(arr));
+      } catch {}
+      return next;
+    });
+  }
   function bumpStreakDaily() {
     try {
       const today = new Date().toISOString().slice(0,10);
       const last = localStorage.getItem("physi_streak_last");
       if (last === today) return;
-      const cur = Number(localStorage.getItem("physi_streak") || String(streak) || "0") || 0;
+      let cur = Number(localStorage.getItem("physi_streak") || String(streak) || "0") || 0;
+      if (last) {
+        const gap = daysBetween(last, today);
+        if (gap > 1) {
+          const missed = gap - 1;
+          const slash = -2 * missed;
+          applyRepDelta(slash);
+          cur = 0;
+          setToast(`Missed ${missed} day${missed>1?"s":""} — slash ${slash} Rep`);
+        }
+      }
       const next = cur + 1;
       localStorage.setItem("physi_streak", String(next));
       localStorage.setItem("physi_streak_last", today);
+      localStorage.setItem("physi_streak_check", today);
       setStreak(next);
+      if (next % 7 === 0) {
+        applyRepDelta(5);
+        setCandy("+5 streak bonus!");
+        setTimeout(()=> setCandy(null), 1600);
+        setToast("7-day streak — +5 bonus!");
+        try { const h=JSON.parse(localStorage.getItem("physi_streak_hist")||"[]"); h.push({at:Date.now(), streak:next, bonus:5}); localStorage.setItem("physi_streak_hist", JSON.stringify(h.slice(-50))); } catch {}
+      }
     } catch {
       setStreak((s)=> s+1);
     }
   }
+  function checkStreakDailyPersist() {
+    try {
+      const today = new Date().toISOString().slice(0,10);
+      const last = localStorage.getItem("physi_streak_last");
+      if (!last) { localStorage.setItem("physi_streak_check", today); return; }
+      if (last === today) return;
+      const gap = daysBetween(last, today);
+      if (gap > 1) {
+        const missed = gap - 1;
+        applyRepDelta(-2 * missed);
+        localStorage.setItem("physi_streak", "0");
+        setStreak(0);
+        setToast(`Missed ${missed} day${missed>1?"s":""} — slash ${-2*missed} Rep`);
+      }
+    } catch {}
+  }
+  // streak daily persist — check every 60s for missed day slash
+  useEffect(() => {
+    checkStreakDailyPersist();
+    const iv = setInterval(checkStreakDailyPersist, 60000);
+    return () => clearInterval(iv);
+  }, []);
+
   // quest: load from localStorage + daily quest WAT reset
   useEffect(() => {
     try {
@@ -1316,6 +1382,21 @@ function RoadmapInner() {
   useEffect(() => () => { if (ghostTimerRef.current) clearTimeout(ghostTimerRef.current); }, []);
 
   async function vote(id: string, v: "YES" | "NO" | "CANCEL", isFlag?: boolean) {
+    // Proof-of-Presence: request geolocation, check 150m + 30min -> +1.0 Witness gold vs +0.3 Remote grey
+    let presAward = 0.3;
+    try {
+      setPresenceBusy(true);
+      const evRow = events.find(e=> String(e.id)===String(id) || String(e.id).split("__tile")[0]===String(id).split("__tile")[0]);
+      if (evRow) {
+        const coords = await requestGeolocation(4500);
+        const r = checkPresenceAward({ venue: evRow.venue, event_date: evRow.event_date, event_time: evRow.event_time, userCoords: coords });
+        presAward = r.award;
+        setPresence({ isWitness: r.isWitness, award: r.award, dist: r.distanceM, label: r.label });
+        setPresenceScore(getPresenceScore() + r.award);
+        persistPresence({ eventId: String(id).split("__tile")[0], isWitness: r.isWitness, award: r.award });
+        setTimeout(()=> setPresence(null), 3200);
+      }
+    } catch {} finally { setPresenceBusy(false); }
     let verifierId: string | null = null;
     try {
       const raw = localStorage.getItem("physi_profile");
@@ -1347,9 +1428,10 @@ function RoadmapInner() {
     const prevRep = myRep;
     vibrate(v === "CANCEL" ? 20 : 35);
     playPop();
-    setCandy("+0.3 Rep");
-    setMyRep((prev)=> prev + 0.3);
-    try{ const raw=localStorage.getItem("physi_profile"); if(raw){ const p=JSON.parse(raw); const nb=Number(p.mining_balance||0)+0.3; p.mining_balance=nb; localStorage.setItem("physi_profile", JSON.stringify(p)); } }catch{}
+    const _award = presAward;
+    setCandy(_award>=1 ? "+1.0 gold Witness" : "+0.3 grey Remote");
+    setMyRep((prev)=> prev + _award);
+    try{ const raw=localStorage.getItem("physi_profile"); if(raw){ const p=JSON.parse(raw); const nb=Number(p.mining_balance||0)+_award; p.mining_balance=nb; localStorage.setItem("physi_profile", JSON.stringify(p)); } }catch{}
     setTimeout(() => setCandy(null), 1100);
     // optimistic event authority bump
     setEvents((prev)=> prev.map(e=> e.id===id ? { ...e, authority_points: Number(e.authority_points||0)+ (v==="YES"?1:0) } as any : e));
@@ -1388,7 +1470,7 @@ function RoadmapInner() {
         try{ const raw=localStorage.getItem("physi_profile"); if(raw){ const p=JSON.parse(raw); p.mining_balance=revertRep; localStorage.setItem("physi_profile", JSON.stringify(p)); } }catch{}
       } else {
         setMyRep(prevRep);
-        try{ const raw=localStorage.getItem("physi_profile"); if(raw){ const p=JSON.parse(raw); const nb=Math.max(0, Number(p.mining_balance||0)-0.3); p.mining_balance=nb; localStorage.setItem("physi_profile", JSON.stringify(p)); } }catch{}
+        try{ const raw=localStorage.getItem("physi_profile"); if(raw){ const p=JSON.parse(raw); const nb=Math.max(0, Number(p.mining_balance||0)-presAward); p.mining_balance=nb; localStorage.setItem("physi_profile", JSON.stringify(p)); } }catch{}
       }
       logError("VERIFY_SUBMIT_FAILED", e, { page: "roadmap" });
       setToast(getErrorMessage("VERIFY_SUBMIT_FAILED"));
@@ -1708,6 +1790,7 @@ function RoadmapInner() {
               </span>
               <span className="inline-flex items-center rounded-full bg-amber-500 px-2.5 py-1 text-[11px] font-bold text-white sm:px-3 sm:py-1.5 sm:text-xs">{advisoryCount} ●</span>
               <span className="hidden items-center gap-1 rounded-full border border-orange-400/20 bg-orange-500/15 px-2.5 py-1 text-[11px] font-black text-orange-200 sm:inline-flex" title="streak"><span>🔥</span>{streak}</span>
+              <span className={`hidden sm:inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-black ${presence?.isWitness ? "border-amber-400/30 bg-gradient-to-r from-amber-400 to-yellow-300 text-black" : "border-white/10 bg-black/40 text-slate-300"}`} title="presence score"><span className={`h-2 w-2 rounded-full ${presence?.isWitness ? "bg-amber-600" : "bg-slate-500"}`} /> {presenceScore.toFixed(1)} {presence?.isWitness ? "gold Witness" : "Remote"}</span>
               <button onClick={() => setShowCreate(true)} className="rounded-full bg-white px-3.5 py-1.5 text-[12px] font-black text-black hover:bg-slate-100 transition sm:px-4 sm:py-2 sm:text-[13px]">
                 ＋ New gist
               </button>
@@ -2650,6 +2733,14 @@ function RoadmapInner() {
                       </div>
                       <div className="mt-4">
                         <p className="font-mono text-[11px] uppercase tracking-wide text-slate-500">Were you there? <span className="normal-case tracking-normal text-slate-600">· swipe → Yes · ← No · ↑ Skip</span></p>
+                        {presence && (
+                          <div className={`mt-3 flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-bold ${presence.isWitness ? "border-amber-400/40 bg-gradient-to-r from-amber-400 to-yellow-300 text-black" : "border-white/15 bg-white/10 text-slate-300"}`}>
+                            <span className={`h-2 w-2 rounded-full ${presence.isWitness ? "bg-amber-600 animate-pulse" : "bg-slate-400"}`} />
+                            {presence.isWitness ? "Witness +1.0 gold" : "Remote +0.3 grey"} {presence.dist!==null ? `· ${Math.round(presence.dist)}m` : ""} {presenceBusy ? "· locating" : ""}
+                            <span className="ml-1 font-mono text-[10px]">score {presenceScore.toFixed(1)}</span>
+                          </div>
+                        )}
+                        {presenceBusy && !presence && <p className="mt-2 font-mono text-[11px] text-amber-200">checking presence — requesting location…</p>}
                         <div className="mt-2.5 flex flex-wrap items-center gap-2">
                           <button onClick={() => vote(ev.id, "YES")} disabled={!!voteBusy} className="rounded-full border border-emerald-500/30 bg-emerald-500/15 px-5 py-2.5 text-[13.5px] font-semibold text-emerald-300 hover:bg-emerald-500 hover:text-white transition disabled:opacity-50">{voteBusy === ev.id + "YES" ? "…" : "Yes ✓"}</button>
                           <button onClick={() => vote(ev.id, "NO")} disabled={!!voteBusy} className="rounded-full border border-white/10 bg-white/[0.05] px-5 py-2.5 text-[13.5px] font-medium text-slate-200 hover:bg-white hover:text-black transition disabled:opacity-50">{voteBusy === ev.id + "NO" ? "…" : "No ✕"}</button>
