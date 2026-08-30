@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState, useCallback, useMemo, useRef, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { logError, getErrorMessage } from "@/lib/adapters/error";
 
 type EventRow = {
@@ -144,6 +144,7 @@ const GHOST_REP: { handle: string; rep: number; color: string; bg: string }[] = 
 
 function RoadmapInner() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [events, setEvents] = useState<EventRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -215,6 +216,10 @@ function RoadmapInner() {
   const [myLevel, setMyLevel] = useState<string|null>(null);
   const [myRep, setMyRep] = useState<number>(0);
   const [parallaxY, setParallaxY] = useState(0);
+  // facepile — voters for selectedEvent
+  const [facepile, setFacepile] = useState<{ yes: { id:string; handle:string; color:string; bg:string }[]; yesCount:number; noCount:number } | null>(null);
+  const [facepileLoading, setFacepileLoading] = useState(false);
+  const [facepileTick, setFacepileTick] = useState(0);
   // shareable Rep card
   const [shareOpen, setShareOpen] = useState(false);
   const [shareImg, setShareImg] = useState<string | null>(null);
@@ -321,16 +326,37 @@ function RoadmapInner() {
     }
   }, [repBoard, youHandle]);
 
-  // read ?filter=advisory from URL (zombie verify redirect)
+  // read ?filter=advisory from URL (zombie verify redirect) + view + event handled via searchParams
   useEffect(()=>{
     try{
       const sp = new URLSearchParams(window.location.search);
       const f = sp.get("filter");
-      if(f && ["all","my_level","today","verified","advisory"].includes(f)){
+      if(f && ["all","my_level","today","verified","advisory","mine"].includes(f)){
         setFilter(f as any);
+      }
+      const v = sp.get("view");
+      if(v && ["map","list"].includes(v)){
+        setViewMode(v as any);
       }
     }catch{}
   }, []);
+
+  // URL sync — on filter/viewMode/deepPulseId/selectedId change, router.replace keeping existing params
+  useEffect(()=>{
+    try{
+      const sp = new URLSearchParams(window.location.search);
+      sp.set("filter", filter);
+      sp.set("view", viewMode);
+      const ev = (deepPulseId ? String(deepPulseId).split("__tile")[0] : (selectedId ? String(selectedId).split("__tile")[0] : ""));
+      if(ev) sp.set("event", ev);
+      else sp.delete("event");
+      const qs = sp.toString();
+      const cur = typeof window !== "undefined" ? window.location.search.replace(/^\?/,"") : "";
+      if(qs !== cur){
+        router.replace(`?${qs}`, { scroll: false } as any);
+      }
+    }catch{}
+  }, [filter, viewMode, deepPulseId, selectedId, router]);
 
   // generate share card image when modal opens
   useEffect(()=>{
@@ -559,10 +585,11 @@ function RoadmapInner() {
   useEffect(() => {
     try {
       const ev = searchParams.get("event");
+      const f = searchParams.get("filter");
+      if (f && ["all","my_level","today","verified","advisory","mine"].includes(f)) setFilter(f as any);
+      const v = searchParams.get("view");
+      if (v && ["map","list"].includes(v)) setViewMode(v as any);
       if (ev) {
-        // allow filter=advisory etc also
-        const f = searchParams.get("filter");
-        if (f && ["all","my_level","today","verified","advisory","mine"].includes(f)) setFilter(f as any);
         // set deep pulse id immediately; actual scroll happens when events loaded
         setDeepPulseId(ev);
         // if we already have events, select now
@@ -570,9 +597,6 @@ function RoadmapInner() {
           setSelectedId(ev);
           setSheetOpen(true);
         }
-      } else {
-        const f = searchParams.get("filter");
-        if (f && ["all","my_level","today","verified","advisory","mine"].includes(f)) setFilter(f as any);
       }
     } catch {}
   }, [searchParams]);
@@ -788,6 +812,60 @@ function RoadmapInner() {
   const selectedPersonal = useMemo(() => personal.find((p) => p.localId === selectedId) ?? null, [personal, selectedId]);
   const verifiedCount = useMemo(() => events.filter(isVerified).length, [events]);
   const advisoryCount = useMemo(() => events.filter((e) => !isVerified(e) && e.status === "pending").length, [events]);
+
+  // Facepile — fetch verifications for selectedEvent, show YES voters candy avatars
+  useEffect(()=>{
+    if(!selectedEvent){
+      setFacepile(null);
+      return;
+    }
+    let cancelled=false;
+    const baseId = String(selectedEvent.id).split("__tile")[0];
+    setFacepileLoading(true);
+    (async()=>{
+      try{
+        const r = await fetch(`/api/verify?event_id=${encodeURIComponent(baseId)}`, { cache:"no-store" });
+        const j = await r.json().catch(()=> ({} as any));
+        const rows: any[] = j.verifications ?? j.rows ?? j.data ?? [];
+        const yesRows = rows.filter((x:any)=> String(x.vote).toUpperCase()==="YES");
+        const noRows = rows.filter((x:any)=> String(x.vote).toUpperCase()==="NO");
+        const yes: { id:string; handle:string; color:string; bg:string }[] = [];
+        for(let i=0;i<yesRows.length;i++){
+          const v = yesRows[i];
+          let handle: string | null = null;
+          let color = GHOST_REP[i % GHOST_REP.length].color;
+          let bg = GHOST_REP[i % GHOST_REP.length].bg;
+          try{
+            const pr = await fetch(`/api/profile?id=${encodeURIComponent(String(v.verifier_id))}`, { cache:"no-store" });
+            const pj = await pr.json().catch(()=> ({} as any));
+            if(pj?.user?.nickname) handle = String(pj.user.nickname);
+            else if(pj?.user?.handle) handle = String(pj.user.handle);
+            else if(pj?.user?.name) handle = String(pj.user.name);
+            if(handle){
+              // use profile candy color if present
+              const c = (pj.user as any)?.candy_color || (pj.user as any)?.color || null;
+              if(c && typeof c === "string" && /^#/.test(c)) color = c;
+            }
+          }catch{}
+          if(!handle){
+            const g = GHOST_REP[i % GHOST_REP.length];
+            handle = g.handle;
+            color = g.color;
+            bg = g.bg;
+          }
+          yes.push({ id: String(v.verifier_id), handle: handle!, color, bg });
+        }
+        if(!cancelled){
+          setFacepile({ yes, yesCount: yesRows.length, noCount: noRows.length });
+        }
+      }catch{
+        if(!cancelled) setFacepile({ yes: [], yesCount: 0, noCount: 0 });
+      } finally {
+        if(!cancelled) setFacepileLoading(false);
+      }
+    })();
+    return ()=>{ cancelled=true; };
+  }, [selectedEvent?.id, facepileTick]);
 
   // combined road items chronologically sorted
   type DemoItem = { kind: "demo"; localId: string; id: string; ms: number; title: string; venue: string; event_date: string; event_time: string; hint: string };
@@ -1082,6 +1160,7 @@ function RoadmapInner() {
       bumpStreakDaily();
       fetchFeed();
       fetchRepBoard();
+      setFacepileTick(t=>t+1);
     } catch (e: unknown) {
       // revert optimistic on failure
       setEvents(prevEvents);
@@ -2022,6 +2101,40 @@ function RoadmapInner() {
                       )}
                       {!rp && verified && <p className="mt-4 rounded-xl bg-emerald-500/10 px-3 py-2.5 text-[12.5px] text-emerald-200">Verified — coursemates confirmed this happened.</p>}
                       {!rp && !verified && <p className="mt-4 rounded-xl bg-amber-500/10 px-3 py-2.5 text-[12.5px] text-amber-200">Advisory — fresh gist, waiting for confirmations.</p>}
+                      {/* Facepile — YES voters candy avatars + counts */}
+                      <div className="mt-3 flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
+                        <div className="flex -space-x-1.5">
+                          {facepileLoading ? (
+                            <span className="h-7 w-7 rounded-full bg-white/10 animate-pulse border-2 border-[#080c18]" />
+                          ) : facepile && facepile.yes.length > 0 ? (
+                            <>
+                              {facepile.yes.slice(0,5).map((u) => (
+                                <span key={u.id} title={u.handle} className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#080c18] text-[9px] font-black text-white shadow" style={{ background: u.color }}>
+                                  {String(u.handle).slice(0,2).toUpperCase()}
+                                </span>
+                              ))}
+                              {facepile.yes.length > 5 && (
+                                <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#080c18] bg-white/10 text-[10px] font-bold text-white">
+                                  +{facepile.yes.length - 5}
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#080c18] bg-white/5 text-[9px] font-bold text-slate-400">∅</span>
+                          )}
+                        </div>
+                        <span className="font-mono text-[11px] font-bold text-slate-300">
+                          {facepileLoading ? "loading voters…" : `Yes ${facepile?.yesCount ?? 0} · No ${facepile?.noCount ?? 0}`}
+                        </span>
+                        {facepile && facepile.yes.length > 0 && (
+                          <span className="hidden sm:inline font-mono text-[10px] text-slate-500 truncate">
+                            {facepile.yes.slice(0,3).map(u=> `@${u.handle}`).join(" · ")}{facepile.yes.length>3 ? " …" : ""}
+                          </span>
+                        )}
+                        {!facepileLoading && (!facepile || (facepile.yesCount===0 && facepile.noCount===0)) && (
+                          <span className="font-mono text-[10px] text-slate-500">no votes yet — be first</span>
+                        )}
+                      </div>
                       <div className="mt-4">
                         <p className="font-mono text-[11px] uppercase tracking-wide text-slate-500">Were you there? <span className="normal-case tracking-normal text-slate-600">· swipe → Yes · ← No · ↑ Skip</span></p>
                         <div className="mt-2.5 flex flex-wrap items-center gap-2">
