@@ -1,0 +1,10 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "installCommand": "npm install",
+  "regions": ["iad1"],
+  "env": {
+    "DATABASE_URL": { "description": "Postgres connection string (Neon/Supabase/Vercel Postgres)", "value": "@database-url" }
+  }
+}

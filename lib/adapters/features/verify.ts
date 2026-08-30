@@ -44,6 +44,34 @@ async function handleVerify(req: Request): Promise<Response> {
         VALUES (${b.verifier_id}, ${b.event_id}, ${b.vote}, ${w})
         ON CONFLICT (verifier_id, event_id) DO UPDATE SET vote = EXCLUDED.vote, authority_weight = EXCLUDED.authority_weight
         RETURNING *`;
+          // quorum check + canonical promotion + notify (fire-and-forget, never blocks response)
+          try {
+            const agg = await sql`SELECT vote, SUM(authority_weight)::float as w FROM physi_verifications WHERE event_id=${b.event_id} GROUP BY vote`;
+            let yesW = 0, noW = 0, total = 0;
+            for (const row of agg as Array<{vote:string; w:number}>) {
+              const weight = Number(row.w) || 0;
+              total += weight;
+              if (row.vote === "YES") yesW = weight;
+              if (row.vote === "NO") noW = weight;
+            }
+            const ratio = total > 0 ? yesW / total : 0;
+            // quorum: at least 3 YES weight (or 3 votes) and >=60% YES, total >=3
+            const quorumReached = yesW >= 3 && ratio >= 0.6 && total >= 3;
+            if (quorumReached) {
+              const evRows = await sql`SELECT * FROM physi_events WHERE id=${b.event_id} LIMIT 1`;
+              const ev = evRows?.[0] as Record<string, unknown> | undefined;
+              if (ev && ev.status !== "verified") {
+                await sql`UPDATE physi_events SET status='verified', authority_points=${yesW}, required_points=${total}, updated_at=NOW() WHERE id=${b.event_id}`;
+                try { await sql`INSERT INTO physi_canonical_log (event_id, yes_weight, total_weight, yes_ratio, promoted_by) VALUES (${b.event_id}, ${yesW}, ${total}, ${ratio}, ${b.verifier_id})`; } catch {}
+                // notify canonical (Telegram or log)
+                try {
+                  const { notifyCanonical } = await import("@/lib/adapters/notify");
+                  // don't await blocking telegram on hot path — fire and log
+                  notifyCanonical({ id: String(ev.id ?? b.event_id), title: String((ev as {title?:string}).title ?? ""), venue: String((ev as {venue?:string}).venue ?? ""), event_date: String((ev as {event_date?:string}).event_date ?? ""), event_time: String((ev as {event_time?:string}).event_time ?? ""), yes_weight: yesW, total_weight: total, yes_ratio: ratio }).catch(()=>{});
+                } catch {}
+              }
+            }
+          } catch (e) { console.warn("[verify] quorum check failed:", (e as Error).message); }
           return NextResponse.json({ ok: true, verification: r[0] });
         } catch (e: unknown) {
           logError("VERIFY_FAILED", e, { route: "/api/verify", method: "POST" });

@@ -84,6 +84,81 @@ function MiniRoadPeek(){
   );
 }
 
+function SnapTimetable(){
+  const [preview, setPreview] = useState<string|null>(null);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState<string|null>(null);
+  const [showFormat, setShowFormat] = useState(true);
+  const [copied, setCopied] = useState(false);
+  const pipeTemplate = `PHYSI | BIO 101 | LT2 | 2026-09-01 | 08:00 | 100L | Advisory
+PHYSI | ANA 201 | Hall B | 2026-09-02 | 10:00 | 200L | Advisory
+PHYSI | CHM 112 | New Lab | 2026-09-03 | 14:00 | general | Advisory`;
+  const copyTemplate = async ()=>{
+    try{ await navigator.clipboard.writeText(pipeTemplate); setCopied(true); setTimeout(()=>setCopied(false), 1400);}catch{ setError("Copy failed — select and copy manually"); }
+  };
+  async function onFile(e: React.ChangeEvent<HTMLInputElement>){
+    const f = e.target.files?.[0];
+    if(!f) return;
+    setError(null); setResult(null);
+    const reader = new FileReader();
+    reader.onload = ()=> setPreview(String(reader.result));
+    reader.readAsDataURL(f);
+  }
+  async function onSnap(){
+    const input = document.getElementById('snap-file') as HTMLInputElement | null;
+    const f = input?.files?.[0];
+    if(!f){ setError("Choose an image first"); return; }
+    setLoading(true); setError(null); setResult(null);
+    try{
+      const fd = new FormData();
+      fd.append("file", f);
+      const r = await fetch("/api/vision/parse", { method: "POST", body: fd });
+      const j = await r.json().catch(()=>null);
+      if(!r.ok || !j?.ok) throw new Error(j?.message || j?.error || `Snap failed ${r.status}`);
+      setResult(j);
+    }catch(err){ setError((err as Error).message); } finally{ setLoading(false); }
+  }
+  return (
+    <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] p-4 backdrop-blur">
+      <div className="flex items-center justify-between">
+        <p className="text-[13px] font-bold text-white" style={{fontFamily:"var(--font-fredoka), Fredoka, system-ui"}}>📸 Snap timetable</p>
+        <span className="rounded-full border border-white/10 bg-black/20 px-2 py-0.5 font-mono text-[10px] text-emerald-100/70">NVIDIA vision · llama-3.2-11b</span>
+      </div>
+      <p className="mt-1 font-mono text-[11px] leading-4 text-emerald-100/60">Snap a photo of a notice board / broadcast timetable — auto-extracts course, venue, date, time → creates advisory events.</p>
+      {/* Format guide — distinct + copyable */}
+      <div className="mt-3 rounded-xl border border-amber-400/20 bg-amber-400/10">
+        <button onClick={()=>setShowFormat(v=>!v)} className="flex w-full items-center justify-between px-3 py-2 text-left">
+          <span className="font-mono text-[11px] font-bold text-amber-100">📋 Pipe format — distinct & scannable {showFormat ? "▾" : "▸"}</span>
+          <span onClick={(e)=>{e.stopPropagation(); copyTemplate();}} className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 font-mono text-[11px] font-black text-black hover:bg-amber-50 transition">{copied ? "✓ Copied" : "📋 Copy format"}</span>
+        </button>
+        {showFormat && (
+          <div className="border-t border-amber-400/20 px-3 py-2">
+            <p className="font-mono text-[10px] font-bold uppercase tracking-wide text-amber-200">Template — one line per event, pipes distinct</p>
+            <pre className="mt-1 overflow-x-auto rounded-lg border border-white/10 bg-black/40 p-2 font-mono text-[11px] leading-4 text-amber-50">{pipeTemplate}</pre>
+            <p className="mt-1.5 font-mono text-[10px] leading-3 text-amber-100/70">PHYSI | COURSE | VENUE | YYYY-MM-DD | HH:MM | SCOPE (100L/200L/general) | STATUS — also accepts freeform tables/grids.</p>
+            <p className="mt-1 font-mono text-[10px] text-white/50">Example image text: “BIO 101 — LT2 — Mon 1 Sep 8:00” → parsed as PHYSI | BIO 101 | LT2 | 2026-09-01 | 08:00 | 100L | Advisory</p>
+          </div>
+        )}
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <input id="snap-file" type="file" accept="image/*" onChange={onFile} className="block w-full max-w-[220px] rounded-full border border-white/10 bg-white/[0.06] px-3 py-2 font-mono text-[11px] text-white file:mr-2 file:rounded-full file:border-0 file:bg-white file:px-3 file:py-1 file:text-[11px] file:font-bold file:text-black" />
+        <button onClick={onSnap} disabled={loading} className="inline-flex items-center gap-1.5 rounded-full bg-white px-5 py-2 text-[13px] font-black text-black disabled:opacity-50 hover:bg-slate-100 transition">{loading ? "Parsing…" : "Snap → Create"}</button>
+        <a href="/app/roadmap" className="font-mono text-[11px] text-emerald-100/60 hover:text-white">View road →</a>
+      </div>
+      {preview && <div className="mt-3 overflow-hidden rounded-xl border border-white/10 bg-black/30"><img src={preview} alt="preview" className="max-h-[220px] w-full object-contain" /><p className="px-2 py-1 font-mono text-[10px] text-white/50">preview · {preview.slice(0,22)}…</p></div>}
+      {error && <p className="mt-2 rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2 font-mono text-[11px] text-red-200">{error}</p>}
+      {result && (
+        <div className="mt-2 rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2">
+          <p className="font-mono text-[11px] font-bold text-emerald-100">Parsed {result.parsed?.length ?? 0} · Created {result.created?.length ?? result.count ?? 0}</p>
+          {Array.isArray(result.parsed) && result.parsed.length>0 && <ul className="mt-1 list-disc pl-4 font-mono text-[11px] text-emerald-50/80">{result.parsed.slice(0,5).map((e:any,i:number)=>(<li key={i}>{e.title} · {e.venue} · {e.date} {e.time} · {e.scope_type}</li>))}</ul>}
+          {result.warning && <p className="mt-1 font-mono text-[10px] text-amber-200">{result.warning}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function LandingPage() {
   const [stats, setStats] = useState<any>(null);
   const [ticker, setTicker] = useState<string[]>([]);
@@ -439,6 +514,34 @@ export default function LandingPage() {
             ))}
           </div>
           <p className="mt-3 font-mono text-[11px] leading-4 text-emerald-100/50">Illustrative quotes from pilot interviews — not scraped reviews. Real confirmations happen inside the timetable.</p>
+        </section>
+
+        {/* 📸 Snap timetable — distinct pipe format */}
+        <section id="snap" className="mt-8 scroll-mt-20">
+          <SnapTimetable />
+        </section>
+
+        {/* Deploy PHYSI for my school — Clone */}
+        <section id="deploy" className="mt-6 scroll-mt-20 rounded-[20px] border border-white/[0.08] bg-gradient-to-br from-violet-500/[0.08] via-white/[0.03] to-emerald-500/[0.06] px-6 py-6 backdrop-blur">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-violet-200">Deploy PHYSI for my school</p>
+              <h3 className="mt-1 text-[18px] font-bold text-white" style={{fontFamily:"var(--font-fredoka), Fredoka, system-ui"}}>Clone to your campus in 2 minutes</h3>
+              <p className="mt-1 max-w-[560px] font-mono text-[11px] leading-4 text-emerald-100/60">One-click Vercel clone → set <code className="rounded bg-white/10 px-1 py-0.5 text-violet-200">DATABASE_URL</code> (Neon/Supabase) → timetable is yours. Config lives in <code className="rounded bg-white/10 px-1 py-0.5">public/school.json</code>.</p>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <a href="https://vercel.com/new/clone?repository-url=https://github.com/tomoritemitopex-byte/physicoin&env=DATABASE_URL" target="_blank" rel="noopener" className="inline-flex items-center gap-1.5 rounded-full bg-white px-5 py-2.5 text-[13px] font-black text-black shadow hover:bg-slate-100 transition">▲ Deploy with Vercel <ArrowRight className="h-3.5 w-3.5" /></a>
+                <a href="/school.json" target="_blank" className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 font-mono text-[11px] text-white hover:bg-white hover:text-black transition">View school.json →</a>
+                <a href="https://github.com/tomoritemitopex-byte/physicoin" target="_blank" rel="noopener" className="font-mono text-[11px] text-emerald-100/60 hover:text-white">GitHub →</a>
+              </div>
+            </div>
+            <div className="shrink-0 rounded-2xl border border-white/10 bg-black/30 p-3 font-mono text-[11px] leading-4 text-emerald-50/80">
+              <p className="font-bold text-white">Env required</p>
+              <p>DATABASE_URL</p>
+              <p className="mt-2 font-bold text-white">Optional</p>
+              <p>NVIDIA_API_KEY · TELEGRAM_BOT_TOKEN</p>
+              <p className="mt-2 text-[10px] text-white/50">vercel.json → framework nextjs</p>
+            </div>
+          </div>
         </section>
 
         {/* Final CTA — forest */}
