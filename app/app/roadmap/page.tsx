@@ -174,6 +174,9 @@ export default function RoadmapPage() {
   const [qRep, setQRep] = useState(false);
   const [questDone, setQuestDone] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
+  // daily quest: Verify 3 today → +5 bonus (WAT date, localStorage)
+  const [dailyCount, setDailyCount] = useState(0);
+  const [dailyBonusDone, setDailyBonusDone] = useState(false);
   // pulse ghost toasts
   const [pulseMsg, setPulseMsg] = useState<string | null>(null);
   const [pulseShow, setPulseShow] = useState(false);
@@ -496,7 +499,7 @@ export default function RoadmapPage() {
       setStreak((s)=> s+1);
     }
   }
-  // quest: load from localStorage
+  // quest: load from localStorage + daily quest WAT reset
   useEffect(() => {
     try {
       const v = localStorage.getItem("physi_quest_done");
@@ -504,6 +507,36 @@ export default function RoadmapPage() {
         setQTap(true); setQSwipe(true); setQRep(true); setQuestDone(true);
       }
     } catch {}
+    // daily quest init: check WAT date reset
+    try {
+      const today = todayWAT();
+      const storedDate = localStorage.getItem("physi_daily_date");
+      const storedCnt = parseInt(localStorage.getItem("physi_daily_verified") || "0", 10) || 0;
+      const storedBonus = localStorage.getItem("physi_daily_bonus") === "1";
+      if (storedDate !== today) {
+        localStorage.setItem("physi_daily_date", today);
+        localStorage.setItem("physi_daily_verified", "0");
+        localStorage.removeItem("physi_daily_bonus");
+        setDailyCount(0); setDailyBonusDone(false);
+      } else {
+        setDailyCount(Math.min(3, storedCnt));
+        setDailyBonusDone(storedBonus);
+      }
+    } catch {}
+    // check midnight WAT reset every 60s
+    const iv = setInterval(() => {
+      try {
+        const today = todayWAT();
+        const storedDate = localStorage.getItem("physi_daily_date");
+        if (storedDate !== today) {
+          localStorage.setItem("physi_daily_date", today);
+          localStorage.setItem("physi_daily_verified", "0");
+          localStorage.removeItem("physi_daily_bonus");
+          setDailyCount(0); setDailyBonusDone(false);
+        }
+      } catch {}
+    }, 60000);
+    return () => clearInterval(iv);
   }, []);
   // quest complete -> confetti + persist
   const questProgress = (qTap?1:0)+(qSwipe?1:0)+(qRep?1:0);
@@ -850,6 +883,40 @@ export default function RoadmapPage() {
     return { key: "advisory", label: "advisory ●", color: "#f59e0b", outline: "#f59e0b", pct } as const;
   }
 
+  function incrementDailyQuest() {
+    try {
+      const today = todayWAT();
+      let storedDate = localStorage.getItem("physi_daily_date");
+      if (storedDate !== today) {
+        localStorage.setItem("physi_daily_date", today);
+        localStorage.setItem("physi_daily_verified", "0");
+        localStorage.removeItem("physi_daily_bonus");
+        setDailyCount(0); setDailyBonusDone(false);
+        storedDate = today;
+      }
+      const cur = parseInt(localStorage.getItem("physi_daily_verified") || "0", 10) || 0;
+      const next = Math.min(3, cur + 1);
+      localStorage.setItem("physi_daily_verified", String(next));
+      localStorage.setItem("physi_daily_date", today);
+      setDailyCount(next);
+      if (next === 3) {
+        const already = localStorage.getItem("physi_daily_bonus") === "1";
+        if (!already) {
+          localStorage.setItem("physi_daily_bonus", "1");
+          setDailyBonusDone(true);
+          setShowConfetti(true);
+          setTimeout(()=> setShowConfetti(false), 3200);
+          vibrate(50); playPop();
+          setMyRep((prev)=> prev + 5);
+          try{ const raw=localStorage.getItem("physi_profile"); if(raw){ const p=JSON.parse(raw); const nb=Number(p.mining_balance||0)+5; p.mining_balance=nb; localStorage.setItem("physi_profile", JSON.stringify(p)); } }catch{}
+          setCandy("+5 bonus!");
+          setTimeout(()=> setCandy(null), 1400);
+          setToast("Daily quest complete — +5 bonus! 🎉");
+        }
+      }
+    } catch {}
+  }
+
   async function vote(id: string, v: "YES" | "NO" | "CANCEL") {
     let verifierId: string | null = null;
     try {
@@ -860,6 +927,17 @@ export default function RoadmapPage() {
       setToast("create a profile first — we need your handle to count the vote");
       return;
     }
+    // optimistic: instantly show +0.3 Rep and update local state before POST confirms
+    const prevEvents = events;
+    const prevRep = myRep;
+    vibrate(v === "CANCEL" ? 20 : 35);
+    playPop();
+    setCandy("+0.3 Rep");
+    setMyRep((prev)=> prev + 0.3);
+    try{ const raw=localStorage.getItem("physi_profile"); if(raw){ const p=JSON.parse(raw); const nb=Number(p.mining_balance||0)+0.3; p.mining_balance=nb; localStorage.setItem("physi_profile", JSON.stringify(p)); } }catch{}
+    setTimeout(() => setCandy(null), 1100);
+    // optimistic event authority bump
+    setEvents((prev)=> prev.map(e=> e.id===id ? { ...e, authority_points: Number(e.authority_points||0)+ (v==="YES"?1:0) } as any : e));
     setVoteBusy(id + v);
     try {
       const r = await fetch("/api/verify", {
@@ -869,14 +947,7 @@ export default function RoadmapPage() {
       });
       const j = await r.json();
       if (!r.ok || j.ok === false) throw new Error(j.error || "vote failed");
-      // juice: haptics + audio pop on +0.3 Rep
-      vibrate(v === "CANCEL" ? 20 : 35);
-      playPop();
-      setCandy("+0.3 Rep");
-      // bump local rep for instant level feedback
-      setMyRep((prev)=> prev + 0.3);
-      try{ const raw=localStorage.getItem("physi_profile"); if(raw){ const p=JSON.parse(raw); const nb=Number(p.mining_balance||0)+0.3; p.mining_balance=nb; localStorage.setItem("physi_profile", JSON.stringify(p)); } }catch{}
-      setTimeout(() => setCandy(null), 1100);
+      incrementDailyQuest();
       setToast(v === "YES" ? "you said you were there — thanks!" : v === "NO" ? "marked as not there" : "skipped — all good");
       setInviteNudge(true);
       setInviteCopied(false);
@@ -884,6 +955,10 @@ export default function RoadmapPage() {
       fetchFeed();
       fetchRepBoard();
     } catch (e: unknown) {
+      // revert optimistic on failure
+      setEvents(prevEvents);
+      setMyRep(prevRep);
+      try{ const raw=localStorage.getItem("physi_profile"); if(raw){ const p=JSON.parse(raw); const nb=Math.max(0, Number(p.mining_balance||0)-0.3); p.mining_balance=nb; localStorage.setItem("physi_profile", JSON.stringify(p)); } }catch{}
       logError("VERIFY_SUBMIT_FAILED", e, { page: "roadmap" });
       setToast(getErrorMessage("VERIFY_SUBMIT_FAILED"));
     } finally {
@@ -992,7 +1067,7 @@ export default function RoadmapPage() {
 
   return (
     <div className="relative -mx-4 -mt-5 w-[100vw] max-w-[100vw] sm:-mx-6 lg:-mx-8">
-      <style>{`@keyframes canonicalPop{0%{transform:scale(0.72)}50%{transform:scale(1.22)}100%{transform:scale(1)}} @keyframes tickPulse{0%,100%{opacity:1}50%{opacity:.55}} @keyframes roadShimmer{0%{stroke-dashoffset:0}100%{stroke-dashoffset:28}} @keyframes scaleIn{0%{transform:scale(0.35);opacity:0}60%{transform:scale(1.14);opacity:1}100%{transform:scale(1);opacity:1}} @keyframes nowPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.06);opacity:.94}} @keyframes ghostDrift{0%{transform:translateY(0) translateX(0)}25%{transform:translateY(-10px) translateX(7px)}50%{transform:translateY(-16px) translateX(-5px)}75%{transform:translateY(-8px) translateX(4px)}100%{transform:translateY(0) translateX(0)}} @keyframes ghostPulse{0%,100%{opacity:.92}50%{opacity:.56}} @keyframes candyPop{0%{transform:translate(-50%,-10px) scale(0.5);opacity:0}18%{transform:translate(-50%,-18px) scale(1.18);opacity:1}72%{transform:translate(-50%,-42px) scale(1);opacity:1}100%{transform:translate(-50%,-64px) scale(0.9);opacity:0}} @keyframes pulseSlideIn{0%{transform:translate(-50%,-18px);opacity:0}12%{transform:translate(-50%,0);opacity:1}88%{transform:translate(-50%,0);opacity:1}100%{transform:translate(-50%,-18px);opacity:0}} @keyframes confettiFall{0%{transform:translateY(-10vh) rotate(0deg);opacity:1}100%{transform:translateY(110vh) rotate(720deg);opacity:0}} @keyframes questFill{0%{width:0}100%{width:var(--fill)}} .road-3d-wrap{perspective:800px;perspective-origin:50% 28%} .road-3d-inner{transform-style:preserve-3d;transform:perspective(800px) rotateX(4deg);transform-origin:center top;will-change:transform;clip-path:ellipse(96% 88% at 50% 46%);border-radius:28px} .road-3d-inner::before{content:"";position:absolute;inset:0;pointer-events:none;border-radius:28px;box-shadow:inset 0 10px 22px rgba(0,0,0,0.16),inset 0 -8px 16px rgba(0,0,0,0.12)} .node-3d{transform:translateZ(6px);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.55),inset 0 -2px 4px rgba(0,0,0,0.14),0 8px 20px rgba(0,0,0,0.42),0 1px 6px rgba(0,0,0,0.32);transition:transform 220ms cubic-bezier(.2,.8,.3,1),box-shadow 220ms ease} .node-3d:hover{transform:translateZ(12px) scale(1.02);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.65),inset 0 -3px 6px rgba(0,0,0,0.16),0 12px 28px rgba(0,0,0,0.5),0 4px 12px rgba(0,0,0,0.36)}`}</style>
+      <style>{`@keyframes canonicalPop{0%{transform:scale(0.72)}50%{transform:scale(1.22)}100%{transform:scale(1)}} @keyframes tickPulse{0%,100%{opacity:1}50%{opacity:.55}} @keyframes roadShimmer{0%{stroke-dashoffset:0}100%{stroke-dashoffset:28}} @keyframes scaleIn{0%{transform:scale(0.35);opacity:0}60%{transform:scale(1.14);opacity:1}100%{transform:scale(1);opacity:1}} @keyframes nowPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.06);opacity:.94}} @keyframes ghostDrift{0%{transform:translateY(0) translateX(0)}25%{transform:translateY(-10px) translateX(7px)}50%{transform:translateY(-16px) translateX(-5px)}75%{transform:translateY(-8px) translateX(4px)}100%{transform:translateY(0) translateX(0)}} @keyframes ghostPulse{0%,100%{opacity:.92}50%{opacity:.56}} @keyframes candyPop{0%{transform:translate(-50%,-10px) scale(0.5);opacity:0}18%{transform:translate(-50%,-18px) scale(1.18);opacity:1}72%{transform:translate(-50%,-42px) scale(1);opacity:1}100%{transform:translate(-50%,-64px) scale(0.9);opacity:0}} @keyframes pulseSlideIn{0%{transform:translate(-50%,-18px);opacity:0}12%{transform:translate(-50%,0);opacity:1}88%{transform:translate(-50%,0);opacity:1}100%{transform:translate(-50%,-18px);opacity:0}} @keyframes confettiFall{0%{transform:translateY(-10vh) rotate(0deg);opacity:1}100%{transform:translateY(110vh) rotate(720deg);opacity:0}} @keyframes skeletonPulse{0%,100%{opacity:0.55}50%{opacity:1}} @keyframes questFill{0%{width:0}100%{width:var(--fill)}} .road-3d-wrap{perspective:800px;perspective-origin:50% 28%} .road-3d-inner{transform-style:preserve-3d;transform:perspective(800px) rotateX(4deg);transform-origin:center top;will-change:transform;clip-path:ellipse(96% 88% at 50% 46%);border-radius:28px} .road-3d-inner::before{content:"";position:absolute;inset:0;pointer-events:none;border-radius:28px;box-shadow:inset 0 10px 22px rgba(0,0,0,0.16),inset 0 -8px 16px rgba(0,0,0,0.12)} .node-3d{transform:translateZ(6px);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.55),inset 0 -2px 4px rgba(0,0,0,0.14),0 8px 20px rgba(0,0,0,0.42),0 1px 6px rgba(0,0,0,0.32);transition:transform 220ms cubic-bezier(.2,.8,.3,1),box-shadow 220ms ease} .node-3d:hover{transform:translateZ(12px) scale(1.02);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.65),inset 0 -3px 6px rgba(0,0,0,0.16),0 12px 28px rgba(0,0,0,0.5),0 4px 12px rgba(0,0,0,0.36)}`}</style>
       <div className="relative min-h-[calc(100vh-64px)] w-full overflow-hidden xl:pr-[276px]" style={{ background: "linear-gradient(180deg, #0d3b2a 0%, #143d2e 42%, #1a5c3a 100%)" }}>
         {/* ambient - parallax */}
         <div className="pointer-events-none absolute inset-0" style={{ transform: `translateY(${parallaxY}px)`, willChange:"transform" }}>
@@ -1059,12 +1134,11 @@ export default function RoadmapPage() {
         <p className="absolute left-1/2 top-[92px] z-10 -translate-x-1/2 whitespace-nowrap rounded-full border border-white/10 bg-black/70 px-3 py-1 font-mono text-[10px] tracking-wide text-slate-400 backdrop-blur sm:hidden">
           {loading ? "LOADING ROAD…" : `${pastCount} BEHIND · NOW · ${upcomingCount} AHEAD`}
         </p>
-        {/* Quest bar - 3 dots with progress fill */}
+        {/* Quest bar - 3 dots with progress fill + daily quest ring */}
         <div className="pointer-events-none absolute left-1/2 top-[116px] z-20 flex w-full max-w-[560px] -translate-x-1/2 justify-center px-3 sm:top-[108px] sm:px-6">
           <div className="pointer-events-auto flex w-full items-center gap-2 rounded-full border border-white/10 bg-black/75 px-3 py-2 backdrop-blur-xl shadow-[0_8px_24px_rgba(0,0,0,0.5)] sm:px-4">
             <span className="hidden font-mono text-[10px] font-bold tracking-[0.12em] text-amber-300 sm:inline">QUEST</span>
             <div className="relative flex flex-1 items-center justify-between gap-1">
-              {/* progress line */}
               <div className="absolute left-[14px] right-[14px] top-1/2 h-[4px] -translate-y-1/2 rounded-full bg-white/10" />
               <div className="absolute left-[14px] top-1/2 h-[4px] -translate-y-1/2 rounded-full bg-gradient-to-r from-violet-500 to-emerald-400 transition-all duration-700" style={{ width: `calc(${(questProgress/3)*100}% - 28px)`, maxWidth: 'calc(100% - 28px)' }} />
               {[
@@ -1079,13 +1153,36 @@ export default function RoadmapPage() {
               ))}
             </div>
             <span className={`rounded-full px-2.5 py-1 font-mono text-[10px] font-black ${questDone ? "bg-emerald-500 text-white" : "bg-white/10 text-slate-300"}`}>{questDone ? "Done ✓" : `${questProgress}/3`}</span>
-            <span className="ml-1 inline-flex items-center gap-1 rounded-full border border-orange-400/20 bg-black/75 px-2.5 py-1 font-mono text-[11px] font-black text-orange-300 backdrop-blur" title="daily verify streak">
-              <span>🔥</span>{streak} day{streak===1?"":"s"}
-            </span>
+            {/* daily quest: Verify 3 today → +5 bonus with progress ring */}
+            <div className="hidden sm:flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-500/10 px-2.5 py-1.5">
+              <div className="relative h-7 w-7 shrink-0">
+                <svg className="h-7 w-7 -rotate-90" viewBox="0 0 28 28">
+                  <circle cx="14" cy="14" r="11" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="3" />
+                  <circle cx="14" cy="14" r="11" fill="none" stroke={dailyBonusDone ? "#10b981" : "#f59e0b"} strokeWidth="3" strokeLinecap="round" strokeDasharray={`${(dailyCount/3)*69.1} 69.1`} style={{ transition: "stroke-dasharray 600ms ease" }} />
+                </svg>
+                <span className="absolute inset-0 flex items-center justify-center font-mono text-[10px] font-black text-white">{dailyCount}/3</span>
+              </div>
+              <div className="leading-none">
+                <p className="font-mono text-[10px] font-bold leading-none text-amber-200">Verify 3 today</p>
+                <p className="font-mono text-[9px] font-medium leading-none text-amber-300/80">→ +5 bonus {dailyBonusDone ? "✓ claimed" : ""}</p>
+              </div>
+            </div>
+            {/* mobile daily ring compact */}
+            <div className="flex sm:hidden relative h-8 w-8 shrink-0 items-center justify-center">
+              <svg className="h-8 w-8 -rotate-90" viewBox="0 0 28 28">
+                <circle cx="14" cy="14" r="11" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="3" />
+                <circle cx="14" cy="14" r="11" fill="none" stroke={dailyBonusDone ? "#10b981" : "#f59e0b"} strokeWidth="3" strokeLinecap="round" strokeDasharray={`${(dailyCount/3)*69.1} 69.1`} />
+              </svg>
+              <span className="absolute inset-0 flex items-center justify-center font-mono text-[9px] font-black text-white">{dailyCount}/3</span>
+            </div>
           </div>
         </div>
-        {/* Filter chips row - under quest bar */}
-        <div className="pointer-events-none absolute left-1/2 top-[148px] z-20 flex w-full max-w-[560px] -translate-x-1/2 justify-center px-3 sm:top-[140px] sm:px-6">
+        {/* mobile daily quest label below quest bar */}
+        <div className="pointer-events-none absolute left-1/2 top-[162px] z-20 flex w-full max-w-[560px] -translate-x-1/2 justify-center px-3 sm:hidden">
+          <span className="rounded-full border border-amber-400/20 bg-black/75 px-3 py-1 font-mono text-[10px] font-bold text-amber-200 backdrop-blur">Verify 3 today → +5 bonus · {dailyCount}/3 {dailyBonusDone ? "✓ done" : ""}</span>
+        </div>
+        {/* Filter chips row - under quest bar (pushed for daily label on mobile) */}
+        <div className="pointer-events-none absolute left-1/2 top-[188px] z-20 flex w-full max-w-[560px] -translate-x-1/2 justify-center px-3 sm:top-[148px] sm:px-6">
           <div className="pointer-events-auto flex items-center gap-1.5 overflow-x-auto rounded-full border border-white/10 bg-black/70 px-2 py-1.5 backdrop-blur-xl scrollbar-none">
             {([
               { k: "all", label: "All" },
@@ -1338,9 +1435,13 @@ export default function RoadmapPage() {
             <text x={260} y={nowY + 26} textAnchor="middle" fontSize={7.5} fontWeight={700} fill="rgba(255,255,255,0.92)" style={{ fontFamily: "ui-monospace, monospace", textShadow: "0 1px 6px rgba(0,0,0,0.7)" }}>{wat.timePart} · {wat.datePart}</text>
 
             {loading
-              ? Array.from({ length: 3 }).map((_, i) => (
-                  <g key={i} opacity={0.28}>
-                    <circle cx={i % 2 === 0 ? 150 : 370} cy={TOP_BUFFER + i * STEP_Y} r={30} fill="rgba(255,255,255,0.08)" />
+              ? Array.from({ length: 5 }).map((_, i) => (
+                  <g key={i} opacity={1}>
+                    <circle cx={i % 2 === 0 ? 142 + (i % 4 === 0 ? 18 : 0) : 378 - (i % 4 === 1 ? 12 : 0)} cy={TOP_BUFFER + i * STEP_Y} r={30} fill="#d1d5db" style={{ animation: "skeletonPulse 1.4s ease-in-out infinite", animationDelay: `${i * 0.15}s` }} />
+                    <circle cx={i % 2 === 0 ? 142 + (i % 4 === 0 ? 18 : 0) : 378 - (i % 4 === 1 ? 12 : 0)} cy={TOP_BUFFER + i * STEP_Y} r={18} fill="#e5e7eb" style={{ animation: "skeletonPulse 1.4s ease-in-out infinite", animationDelay: `${i * 0.15 + 0.1}s` }} />
+                    {/* pill skeletons */}
+                    <rect x={i % 2 === 0 ? 142 + 44 : 378 - 160} y={TOP_BUFFER + i * STEP_Y - 38} width={140} height={28} rx={14} fill="#d1d5db" style={{ animation: "skeletonPulse 1.4s ease-in-out infinite", animationDelay: `${i * 0.15}s` }} />
+                    <rect x={i % 2 === 0 ? 142 + 44 : 378 - 160} y={TOP_BUFFER + i * STEP_Y + 24} width={120} height={18} rx={9} fill="#e5e7eb" style={{ animation: "skeletonPulse 1.4s ease-in-out infinite", animationDelay: `${i * 0.15}s` }} />
                   </g>
                 ))
               : displayItems.map((item, i) => {

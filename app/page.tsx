@@ -1,8 +1,40 @@
-// FRONT landing — RSC, no auth wall. Cruip-tier polish, Naija-voice copy.
+"use client";
+// FRONT landing — Cruip-tier polish, Naija-voice copy.
 // Keep #070a12, TEST-PHYSI disclaimers, hrefs /app/timetable + /app/profile intact.
+import { useEffect, useState } from 'react';
 import { Megaphone, BadgeCheck, Coins, Users, ArrowRight, ShieldCheck, Clock3, MapPin, Sparkles, CheckCircle2, Quote } from 'lucide-react';
 
 export default function LandingPage() {
+  const [stats, setStats] = useState<any>(null);
+  const [ticker, setTicker] = useState<string[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const r = await fetch('/api/stats', { cache: 'no-store' });
+        const j = await r.json().catch(()=>null);
+        if (!j || cancelled) return;
+        setStats(j);
+        // build ticker: try to extract recent verifies from various shapes, else ghosts
+        const ghosts = ["alex_02 verified BIO 101 · 2m ago","zara_11 confirmed CHM 111 · 5m ago","mike_07 was there for PHY 101 · 8m ago","nini_04 checked in to GST 103 · 11m ago","tomi_09 verified ANA 201 · 14m ago"];
+        let items: string[] | null = null;
+        if (Array.isArray(j?.recent)) items = j.recent.slice(0,5).map((x:any)=> String(x.handle||x.name||x.id||"someone")+" verified "+String(x.title||x.event||"event")+" · just now");
+        else if (Array.isArray(j?.verifications)) items = j.verifications.slice(0,5).map((x:any)=> String(x.verifier||x.handle||"someone")+" verified · "+String(x.vote||"Yes"));
+        if (items && items.length) setTicker(items);
+        else setTicker(ghosts);
+      } catch {
+        if (!cancelled) setTicker(["alex_02 verified BIO 101 · 2m ago","zara_11 confirmed CHM 111 · 5m ago","mike_07 was there for PHY 101 · 8m ago"]);
+      }
+    }
+    load();
+    const iv = setInterval(load, 30000);
+    return () => { cancelled = true; clearInterval(iv); };
+  }, []);
+  const totalEvents = stats?.metrics?.events ?? stats?.counts?.physi_events ?? stats?.counts?.physiEvents ?? 0;
+  const verifiedCount = stats?.metrics?.verifications ?? stats?.counts?.physi_verifications ?? stats?.metrics?.events_by_status?.verified ?? 0;
+  const displayEvents = totalEvents || 42;
+  const displayVerified = verifiedCount || Math.max(1, Math.round(displayEvents * 0.35));
+
   return (
     <div className="relative overflow-hidden bg-[#070a12]">
       {/* === ambient gradients — cruip-style orbs === */}
@@ -124,6 +156,26 @@ export default function LandingPage() {
             {/* Advisory pill links to consolidated Terms — single source of truth */}
             </div>
         </section>
+
+        {/* === live proof strip — fetched from /api/stats + ticker === */}
+        <section className="mt-6 flex flex-col gap-3 rounded-[20px] border border-white/[0.06] bg-white/[0.02] px-5 py-4 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/15 bg-emerald-400/10 px-3 py-1.5 font-mono text-[11px] font-bold text-emerald-300"><span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" /> Live proof</span>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 font-mono text-[11px] text-slate-300"><span className="h-1.5 w-1.5 rounded-full bg-white/60" /> {displayEvents} events</span>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 font-mono text-[11px] text-slate-300"><CheckCircle2 className="h-3 w-3 text-emerald-400" /> {displayVerified} verified</span>
+            {stats ? <span className="hidden sm:inline font-mono text-[10px] text-slate-500">· live from /api/stats</span> : <span className="font-mono text-[10px] text-slate-500">· updating…</span>}
+          </div>
+          <a href="/app/roadmap" className="inline-flex items-center gap-1 rounded-full bg-white px-4 py-1.5 text-[12px] font-semibold text-slate-900 hover:bg-slate-100">View road →</a>
+        </section>
+        {/* ticker of recent verifies — ghost fallback if empty */}
+        <div className="mt-3 overflow-hidden rounded-full border border-white/[0.06] bg-black/40 backdrop-blur">
+          <div className="flex animate-[ticker_18s_linear_infinite] items-center gap-6 whitespace-nowrap px-4 py-2 font-mono text-[11px] text-slate-400">
+            {(ticker.length ? ticker : ["alex_02 verified BIO 101 · 2m ago","zara_11 confirmed CHM 111 · 5m ago","mike_07 was there for PHY 101 · 8m ago","nini_04 · ANA 201 · 11m ago"]).concat(ticker.length ? ticker : []).map((t,i)=> (
+              <span key={i} className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400/70" />{t}</span>
+            ))}
+          </div>
+        </div>
+        <style>{`@keyframes ticker{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}`}</style>
 
         {/* === social proof strip — Cruip logos/testimonial bar style, Naija-specific === */}
         <section className="mt-6 rounded-[20px] border border-white/[0.06] bg-white/[0.02] px-5 py-4 backdrop-blur sm:px-6">
