@@ -95,6 +95,43 @@ function formatWAT(ts: number) {
   }
 }
 
+// --- Levels helper ---
+type LevelInfo = { lvl: number; name: string; min: number; max: number|null; progress: number; nextAt: number|null };
+const LEVEL_NAMES: Record<number,string> = {1:"Explorer",2:"Scout",3:"Guide",4:"Sage",5:"Legend"};
+function getLevelInfo(rep: number): LevelInfo {
+  const r = Number(rep) || 0;
+  if (r >= 60) return { lvl:5, name: LEVEL_NAMES[5], min:60, max:null, progress:1, nextAt:null };
+  if (r >= 30) return { lvl:4, name: LEVEL_NAMES[4], min:30, max:60, progress:(r-30)/(60-30), nextAt:60 };
+  if (r >= 15) return { lvl:3, name: LEVEL_NAMES[3], min:15, max:30, progress:(r-15)/(30-15), nextAt:30 };
+  if (r >= 5) return { lvl:2, name: LEVEL_NAMES[2], min:5, max:15, progress:(r-5)/(15-5), nextAt:15 };
+  return { lvl:1, name: LEVEL_NAMES[1], min:0, max:5, progress:r/5, nextAt:5 };
+}
+function todayWAT(): string {
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone:"Africa/Lagos", year:"numeric", month:"2-digit", day:"2-digit" }).format(new Date());
+  } catch { return new Date().toISOString().slice(0,10); }
+}
+function isTodayWAT(dateStr: string): boolean {
+  const d = String(dateStr).slice(0,10);
+  return d === todayWAT();
+}
+function vibrate(ms: number){ try{ if(typeof navigator!=="undefined" && navigator.vibrate) navigator.vibrate(ms); }catch{} }
+function playPop(){
+  try{
+    const ctx = new (window as any).AudioContext() || new (window as any).webkitAudioContext();
+    if(!ctx) return;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = "sine";
+    o.frequency.setValueAtTime(880, ctx.currentTime);
+    o.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.12);
+    g.gain.setValueAtTime(0.28, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.14);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(); o.stop(ctx.currentTime + 0.15);
+  }catch{}
+}
+
 const GHOST_REP: { handle: string; rep: number; color: string; bg: string }[] = [
   { handle: "alex_02", rep: 12.4, color: "#10b981", bg: "#065f46" },
   { handle: "zara_11", rep: 10.2, color: "#f59e0b", bg: "#78350f" },
@@ -154,6 +191,11 @@ export default function RoadmapPage() {
   const [streak, setStreak] = useState<number>(0);
   const [inviteNudge, setInviteNudge] = useState(false);
   const [inviteCopied, setInviteCopied] = useState(false);
+  // filter + levels + juice
+  const [filter, setFilter] = useState<"all"|"my_level"|"today"|"verified"|"advisory">("all");
+  const [myLevel, setMyLevel] = useState<string|null>(null);
+  const [myRep, setMyRep] = useState<number>(0);
+  const [parallaxY, setParallaxY] = useState(0);
 
   const fetchFeed = useCallback(async () => {
     const ctrl = new AbortController();
@@ -237,6 +279,25 @@ export default function RoadmapPage() {
     return () => { clearTimeout(fallback); clearInterval(iv); };
   }, [fetchFeed, fetchStats, fetchRepBoard]);
 
+  // parallax on scroll + keep myRep synced with repBoard you entry
+  const levelInfo = getLevelInfo(myRep);
+  useEffect(()=>{
+    const el = scrollRef.current;
+    if(!el) return;
+    function onScroll(){ setParallaxY(el!.scrollTop * 0.08); }
+    el.addEventListener("scroll", onScroll, { passive:true });
+    return ()=> el.removeEventListener("scroll", onScroll);
+  }, [scrollRef]);
+  // keep myRep in sync with repBoard if youHandle matches a board entry with higher rep
+  useEffect(()=>{
+    if(!youHandle) return;
+    const me = repBoard.find(u=> String(u.handle).toLowerCase()===youHandle);
+    if(me){
+      const r = Number(me.rep)||0;
+      setMyRep(prev=> r>prev? r : prev);
+    }
+  }, [repBoard, youHandle]);
+
   // you highlight via physi_profile + streak via /api/mining or localStorage physi_streak
   useEffect(() => {
     try {
@@ -246,6 +307,9 @@ export default function RoadmapPage() {
         const h = p?.nickname || p?.handle || p?.name || null;
         if (h) setYouHandle(String(h).toLowerCase());
         else if (p?.id) setYouHandle(String(p.id).slice(0,8).toLowerCase());
+        if (p?.level) setMyLevel(String(p.level));
+        const repVal = Number(p?.mining_balance ?? p?.authority_final ?? p?.authority_base ?? 0);
+        if (!isNaN(repVal)) setMyRep(repVal);
       }
     } catch {}
     // streak: try localStorage first
@@ -438,14 +502,38 @@ export default function RoadmapPage() {
     return all;
   }, [personal, events]);
 
-  // find NOW index (first item after now)
+  // filtered road items by chip
+  const filteredRoadItems: RoadItem[] = useMemo(()=>{
+    if(filter==="all") return roadItems;
+    return roadItems.filter(it=>{
+      if(it.kind==="personal") return filter!=="verified"; // personal never verified
+      const ev = it.ev;
+      if(filter==="verified") return isVerified(ev);
+      if(filter==="advisory") return !isVerified(ev) && ev.status==="pending";
+      if(filter==="today") return isTodayWAT(ev.event_date);
+      if(filter==="my_level"){
+        if(!myLevel) return false;
+        const scopeMatch = String(ev.scope_value||"").toLowerCase()===String(myLevel).toLowerCase();
+        const typeMatch = String(ev.scope_type||"").toLowerCase().includes("level");
+        // match exact level value or if type is level
+        if(typeMatch && scopeMatch) return true;
+        // also show events where scope_value equals myLevel regardless of type
+        if(scopeMatch) return true;
+        return false;
+      }
+      return true;
+    });
+  }, [roadItems, filter, myLevel]);
+
+  // find NOW index (first item after now) — based on filtered view
   const nowIdx = useMemo(() => {
-    if (roadItems.length === 0) return 0;
+    const src = filteredRoadItems.length ? filteredRoadItems : roadItems;
+    if (src.length === 0) return 0;
     const n = now;
-    let idx = roadItems.findIndex((it) => it.ms > n);
-    if (idx === -1) idx = roadItems.length; // all past -> NOW at end
+    let idx = src.findIndex((it) => it.ms > n);
+    if (idx === -1) idx = src.length;
     return idx;
-  }, [roadItems, now]);
+  }, [filteredRoadItems, roadItems, now]);
 
   const wat = useMemo(() => formatWAT(now), [now]);
 
@@ -458,16 +546,16 @@ export default function RoadmapPage() {
   const VIEWPORT_FADE_TOP = 96; // mask fade top
   const VIEWPORT_FADE_BOT = 128; // mask fade bottom
 
-  // tiled display items: duplicate to fill infinite illusion when few events
+  // tiled display items: duplicate to fill infinite illusion when few events (filtered)
   const displayItems = useMemo(() => {
-    if (roadItems.length === 0) return [] as typeof roadItems;
-    if (roadItems.length >= MIN_TILE) return roadItems;
-    const repeats = Math.ceil(MIN_TILE / roadItems.length);
+    const src = filteredRoadItems;
+    if (src.length === 0) return [] as typeof roadItems;
+    if (src.length >= MIN_TILE) return src;
+    const repeats = Math.ceil(MIN_TILE / src.length);
     const out: typeof roadItems = [];
     for (let r = 0; r < repeats; r++) {
-      for (let i = 0; i < roadItems.length; i++) {
-        const it = roadItems[i];
-        // unique id per tile to keep React keys stable; keep original ms for sorting within tile
+      for (let i = 0; i < src.length; i++) {
+        const it = src[i];
         const tileId = it.id + "__tile" + r;
         if (it.kind === "personal") {
           out.push({ ...it, id: tileId } as any);
@@ -477,7 +565,7 @@ export default function RoadmapPage() {
       }
     }
     return out;
-  }, [roadItems]);
+  }, [filteredRoadItems]);
 
   // effective length for node placement (infinite fill)
   const effectiveLen = displayItems.length || 8;
@@ -503,12 +591,12 @@ export default function RoadmapPage() {
   // NOW Y mapped to tiled road: if tiled (few events) center NOW in middle tile for endless illusion
   const nowY = useMemo(() => {
     if (displayItems.length === 0) return TOP_BUFFER + 3 * STEP_Y;
-    if (roadItems.length > 0 && roadItems.length < MIN_TILE) {
-      // center NOW in middle of infinite loop when tiled
+    const baseLen = filteredRoadItems.length || roadItems.length;
+    if (baseLen > 0 && baseLen < MIN_TILE) {
       return TOP_BUFFER + Math.floor(displayItems.length / 2) * STEP_Y;
     }
     return TOP_BUFFER + nowIdx * STEP_Y;
-  }, [nowIdx, displayItems.length, roadItems.length]);
+  }, [nowIdx, displayItems.length, filteredRoadItems.length, roadItems.length]);
 
   const svgH = useMemo(() => {
     const lastY = nodes[nodes.length - 1]?.y || TOP_BUFFER + 7 * STEP_Y;
@@ -616,7 +704,13 @@ export default function RoadmapPage() {
       });
       const j = await r.json();
       if (!r.ok || j.ok === false) throw new Error(j.error || "vote failed");
+      // juice: haptics + audio pop on +0.3 Rep
+      vibrate(v === "CANCEL" ? 20 : 35);
+      playPop();
       setCandy("+0.3 Rep");
+      // bump local rep for instant level feedback
+      setMyRep((prev)=> prev + 0.3);
+      try{ const raw=localStorage.getItem("physi_profile"); if(raw){ const p=JSON.parse(raw); const nb=Number(p.mining_balance||0)+0.3; p.mining_balance=nb; localStorage.setItem("physi_profile", JSON.stringify(p)); } }catch{}
       setTimeout(() => setCandy(null), 1100);
       setToast(v === "YES" ? "you said you were there — thanks!" : v === "NO" ? "marked as not there" : "skipped — all good");
       setInviteNudge(true);
@@ -659,9 +753,9 @@ export default function RoadmapPage() {
     if (Math.abs(x) > 30 || y < -30) setQSwipe(true);
     const shouldVote = selectedEvent && !selectedPersonal && !voteBusy;
     if (shouldVote) {
-      if (x > 80) vote(selectedEvent.id, "YES");
-      else if (x < -80) vote(selectedEvent.id, "NO");
-      else if (y < -80) vote(selectedEvent.id, "CANCEL");
+      if (x > 80) { vibrate(35); vote(selectedEvent.id, "YES"); }
+      else if (x < -80) { vibrate(35); vote(selectedEvent.id, "NO"); }
+      else if (y < -80) { vibrate(20); vote(selectedEvent.id, "CANCEL"); }
     }
     setDrag({ x: 0, y: 0, active: false });
   }
@@ -729,14 +823,14 @@ export default function RoadmapPage() {
   }
 
   const pastCount = nowIdx;
-  const upcomingCount = roadItems.length - nowIdx;
+  const upcomingCount = (filteredRoadItems.length ? filteredRoadItems.length : roadItems.length) - nowIdx;
 
   return (
     <div className="relative -mx-4 -mt-5 w-[100vw] max-w-[100vw] sm:-mx-6 lg:-mx-8">
       <style>{`@keyframes canonicalPop{0%{transform:scale(0.72)}50%{transform:scale(1.22)}100%{transform:scale(1)}} @keyframes tickPulse{0%,100%{opacity:1}50%{opacity:.55}} @keyframes roadShimmer{0%{stroke-dashoffset:0}100%{stroke-dashoffset:28}} @keyframes scaleIn{0%{transform:scale(0.35);opacity:0}60%{transform:scale(1.14);opacity:1}100%{transform:scale(1);opacity:1}} @keyframes nowPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.06);opacity:.94}} @keyframes ghostDrift{0%{transform:translateY(0) translateX(0)}25%{transform:translateY(-10px) translateX(7px)}50%{transform:translateY(-16px) translateX(-5px)}75%{transform:translateY(-8px) translateX(4px)}100%{transform:translateY(0) translateX(0)}} @keyframes ghostPulse{0%,100%{opacity:.92}50%{opacity:.56}} @keyframes candyPop{0%{transform:translate(-50%,-10px) scale(0.5);opacity:0}18%{transform:translate(-50%,-18px) scale(1.18);opacity:1}72%{transform:translate(-50%,-42px) scale(1);opacity:1}100%{transform:translate(-50%,-64px) scale(0.9);opacity:0}} @keyframes pulseSlideIn{0%{transform:translate(-50%,-18px);opacity:0}12%{transform:translate(-50%,0);opacity:1}88%{transform:translate(-50%,0);opacity:1}100%{transform:translate(-50%,-18px);opacity:0}} @keyframes confettiFall{0%{transform:translateY(-10vh) rotate(0deg);opacity:1}100%{transform:translateY(110vh) rotate(720deg);opacity:0}} @keyframes questFill{0%{width:0}100%{width:var(--fill)}} .road-3d-wrap{perspective:800px;perspective-origin:50% 28%} .road-3d-inner{transform-style:preserve-3d;transform:perspective(800px) rotateX(4deg);transform-origin:center top;will-change:transform;clip-path:ellipse(96% 88% at 50% 46%);border-radius:28px} .road-3d-inner::before{content:"";position:absolute;inset:0;pointer-events:none;border-radius:28px;box-shadow:inset 0 10px 22px rgba(0,0,0,0.16),inset 0 -8px 16px rgba(0,0,0,0.12)} .node-3d{transform:translateZ(6px);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.55),inset 0 -2px 4px rgba(0,0,0,0.14),0 8px 20px rgba(0,0,0,0.42),0 1px 6px rgba(0,0,0,0.32);transition:transform 220ms cubic-bezier(.2,.8,.3,1),box-shadow 220ms ease} .node-3d:hover{transform:translateZ(12px) scale(1.02);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.65),inset 0 -3px 6px rgba(0,0,0,0.16),0 12px 28px rgba(0,0,0,0.5),0 4px 12px rgba(0,0,0,0.36)}`}</style>
       <div className="relative min-h-[calc(100vh-64px)] w-full overflow-hidden xl:pr-[276px]" style={{ background: "linear-gradient(180deg, #0d3b2a 0%, #143d2e 42%, #1a5c3a 100%)" }}>
-        {/* ambient */}
-        <div className="pointer-events-none absolute inset-0">
+        {/* ambient - parallax */}
+        <div className="pointer-events-none absolute inset-0" style={{ transform: `translateY(${parallaxY}px)`, willChange:"transform" }}>
           <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(13,59,42,0.85) 0%, rgba(26,92,58,0.55) 55%, rgba(45,106,79,0.72) 100%)" }} />
           <div className="absolute -top-[8vh] left-1/2 h-[58vh] w-[120vw] -translate-x-1/2 rounded-[100%] opacity-[0.22]" style={{ background: "radial-gradient(ellipse at center, rgba(82,183,136,0.28) 0%, rgba(64,145,108,0.20) 42%, rgba(45,106,79,0.16) 72%, transparent 75%)" }} />
           <div className="absolute top-[18vh] left-[-6%] h-[46vh] w-[46vh] rounded-full opacity-[0.16] blur-[40px]" style={{ background: "radial-gradient(circle, rgba(82,183,136,0.95), transparent 70%)" }} />
@@ -748,12 +842,18 @@ export default function RoadmapPage() {
         <div className="pointer-events-none absolute left-0 right-0 top-0 z-20 flex justify-center px-3 pt-3 sm:px-6">
           <div className="pointer-events-auto flex w-full max-w-[900px] items-center justify-between gap-2">
             <div className="flex items-center gap-2 rounded-full border border-white/[0.09] bg-black/70 px-3 py-2 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.6)] sm:px-4">
-              <span className="hidden h-7 w-7 items-center justify-center rounded-full bg-white text-[11px] font-black text-black sm:flex">◉</span>
+              <span className={`hidden h-7 w-7 items-center justify-center rounded-full text-[11px] font-black sm:flex ${levelInfo.lvl===5 ? "bg-amber-400 text-black ring-2 ring-amber-300" : "bg-white text-black"}`}>◉</span>
               <div>
                 <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400 sm:text-[11px]">endless time road · WAT</p>
                 <p className="hidden text-[12px] font-semibold leading-none text-white sm:block">
                   {loading ? "Loading live road…" : roadItems.length ? `${pastCount} past · NOW · ${upcomingCount} ahead · tap a node` : "tap a node · create your gist"}
                 </p>
+                <div className="hidden sm:flex items-center gap-2 mt-1">
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-mono text-[10px] font-black ${levelInfo.lvl===5 ? "bg-gradient-to-r from-amber-400 to-yellow-300 text-black ring-1 ring-amber-400" : "bg-white/10 text-white"}`}>Lvl {levelInfo.lvl} · {levelInfo.name}</span>
+                  <span className="font-mono text-[10px] text-slate-400">{myRep.toFixed(1)} Rep</span>
+                  <div className="h-1.5 w-16 overflow-hidden rounded-full bg-white/10"><div className={`h-full ${levelInfo.lvl===5 ? "bg-gradient-to-r from-amber-400 to-yellow-300" : "bg-emerald-400"}`} style={{ width: `${levelInfo.progress*100}%` }} /></div>
+                  <span className="font-mono text-[9px] text-slate-500">{levelInfo.nextAt ? `${(levelInfo.nextAt - myRep).toFixed(1)} to L${levelInfo.lvl+1}` : "MAX"}</span>
+                </div>
               </div>
             </div>
             <div className="flex items-center gap-1.5 sm:gap-2">
@@ -819,8 +919,31 @@ export default function RoadmapPage() {
             </span>
           </div>
         </div>
+        {/* Filter chips row - under quest bar */}
+        <div className="pointer-events-none absolute left-1/2 top-[148px] z-20 flex w-full max-w-[560px] -translate-x-1/2 justify-center px-3 sm:top-[140px] sm:px-6">
+          <div className="pointer-events-auto flex items-center gap-1.5 overflow-x-auto rounded-full border border-white/10 bg-black/70 px-2 py-1.5 backdrop-blur-xl scrollbar-none">
+            {([
+              { k: "all", label: "All" },
+              { k: "my_level", label: myLevel ? myLevel : "My Level" },
+              { k: "today", label: "Today" },
+              { k: "verified", label: "Verified" },
+              { k: "advisory", label: "Advisory" },
+            ] as const).map(ch=> {
+              const active = filter===ch.k;
+              return (
+                <button
+                  key={ch.k}
+                  onClick={()=> setFilter(ch.k as any)}
+                  className={`shrink-0 rounded-full px-3 py-1.5 font-mono text-[11px] font-bold transition ${active ? "bg-white text-black shadow" : "bg-white/10 text-slate-300 hover:bg-white/15 hover:text-white"}`}
+                >
+                  {ch.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
         {/* Live pulse toasts - top center sliding in/out pure UI ghosts */}
-        <div className="pointer-events-none absolute left-1/2 top-[154px] z-30 -translate-x-1/2 sm:top-[148px]">
+        <div className="pointer-events-none absolute left-1/2 top-[184px] z-30 -translate-x-1/2 sm:top-[176px]">
           {pulseMsg && (
             <div className={`rounded-full border border-emerald-400/20 bg-black/80 px-4 py-2 font-mono text-[11px] font-semibold text-white backdrop-blur-xl shadow-[0_8px_24px_rgba(0,0,0,0.5)] transition-all duration-500 ${pulseShow ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-3"}`} style={{ animation: pulseShow ? "pulseSlideIn 3s ease" : undefined }}>
               <span className="mr-1.5 inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400" />{pulseMsg}
@@ -858,7 +981,7 @@ export default function RoadmapPage() {
         <div className="pointer-events-auto absolute left-1/2 top-[148px] z-20 flex w-full max-w-[560px] -translate-x-1/2 justify-center px-3 xl:hidden" style={{ marginTop: inviteNudge ? "64px" : "0" }}>
           <div className="w-full rounded-2xl border border-white/10 bg-black/70 backdrop-blur-xl overflow-hidden">
             <button onClick={() => setRepSheetOpen((v)=>!v)} className="flex w-full items-center justify-between px-4 py-2.5">
-              <span className="flex items-center gap-2 font-mono text-[11px] font-bold tracking-wide text-white"><span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" /> Top 5 Rep <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] text-slate-300">{repBoard.length}</span><span className="ml-2 inline-flex items-center gap-1 rounded-full bg-orange-500/15 px-2 py-0.5 text-[10px] text-orange-300">🔥 {streak}</span></span>
+              <span className="flex items-center gap-2 font-mono text-[11px] font-bold tracking-wide text-white"><span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" /> Top 5 Rep <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] text-slate-300">{repBoard.length}</span><span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black ${levelInfo.lvl===5 ? "bg-gradient-to-r from-amber-400 to-yellow-300 text-black ring-1 ring-amber-500" : "bg-white/10 text-white"}`}>Lvl {levelInfo.lvl} {levelInfo.name}</span><span className="ml-1 inline-flex items-center gap-1 rounded-full bg-orange-500/15 px-2 py-0.5 text-[10px] text-orange-300">🔥 {streak}</span></span>
               <span className="text-xs text-slate-400">{repSheetOpen ? "⌄" : "⌃"} {repSheetOpen ? "hide" : "show"}</span>
             </button>
             {repSheetOpen && (
@@ -874,6 +997,7 @@ export default function RoadmapPage() {
                     </div>
                   );
                 })}
+                <div className="flex items-center gap-2 px-1"><div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10"><div className={`h-full ${levelInfo.lvl===5 ? "bg-gradient-to-r from-amber-400 to-yellow-300" : "bg-emerald-400"}`} style={{ width: `${levelInfo.progress*100}%` }} /></div><span className="font-mono text-[10px] text-slate-500">{myRep.toFixed(1)} Rep · {levelInfo.nextAt ? `${(levelInfo.nextAt - myRep).toFixed(1)} to L${levelInfo.lvl+1}` : "MAX L5 Legend"}</span>{levelInfo.lvl===5 && <span className="h-2 w-2 rounded-full bg-amber-400 ring-2 ring-amber-300" />}</div>
                 <p className="font-mono text-[10px] text-slate-500 px-1">Live poll 30s · from /api/stats or ghosts · candy avatars</p>
               </div>
             )}
@@ -900,8 +1024,9 @@ export default function RoadmapPage() {
           <div className="rounded-[20px] border border-white/10 bg-black/75 backdrop-blur-xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.6)]">
             <div className="flex items-center justify-between">
               <h3 className="font-mono text-[11px] font-black tracking-[0.12em] text-white">REP BOARD</h3>
-              <span className="rounded-full bg-white/10 px-2 py-0.5 font-mono text-[10px] text-slate-300">Top 5 · live 30s</span>
+              <span className={`rounded-full px-2 py-0.5 font-mono text-[10px] font-black ${levelInfo.lvl===5 ? "bg-gradient-to-r from-amber-400 to-yellow-300 text-black ring-1 ring-amber-500" : "bg-white/10 text-slate-300"}`}>Lvl {levelInfo.lvl} · {levelInfo.name} · {myRep.toFixed(1)} Rep</span>
             </div>
+            <div className="mt-2 flex items-center gap-2"><div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10"><div className={`h-full ${levelInfo.lvl===5 ? "bg-gradient-to-r from-amber-400 to-yellow-300" : "bg-emerald-400"}`} style={{ width: `${levelInfo.progress*100}%` }} /></div><span className="font-mono text-[9px] text-slate-500">{levelInfo.nextAt ? `${(levelInfo.nextAt - myRep).toFixed(1)} to L${levelInfo.lvl+1}` : "MAX"}</span>{levelInfo.lvl===5 && <span className="h-2.5 w-2.5 rounded-full bg-amber-400 ring-2 ring-amber-300 animate-pulse" />}</div>
             <p className="mt-1 font-mono text-[10px] text-slate-500">Top 5 Rep from /api/stats or ghosts · candy avatars</p>
             <div className="mt-3 grid gap-2">
               {repBoard.slice(0,5).map((u,i)=> {
