@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, useCallback, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { MapPin, Clock3, Users, CheckCircle2, AlertCircle, Sparkles, TrendingUp, MessageCircle, Timer } from "lucide-react";
 import { logError, getErrorMessage } from "@/lib/adapters/error";
 
@@ -105,6 +106,10 @@ function CandyAvatar({ name, size=22 }: { name: string; size?: number }) {
 }
 
 export default function TimetablePage() {
+  const router = useRouter();
+  useEffect(() => {
+    try { router.replace("/app/roadmap?view=list&filter=all"); } catch {}
+  }, [router]);
   const [events, setEvents] = useState<EventRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -251,6 +256,11 @@ export default function TimetablePage() {
 
   return (
     <div className="space-y-4">
+      {/* redirect alias banner */}
+      <div className="rounded-2xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 flex items-center justify-between gap-3">
+        <p className="text-[13px] font-bold text-amber-200">Moved to Road List — this feed now lives at <span className="font-mono text-amber-100">/app/roadmap?view=list&amp;filter=all</span></p>
+        <a href="/app/roadmap?view=list&filter=all" className="shrink-0 rounded-full bg-white px-4 py-1.5 text-[13px] font-black text-black hover:bg-slate-100">Open Road List →</a>
+      </div>
       {/* header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>

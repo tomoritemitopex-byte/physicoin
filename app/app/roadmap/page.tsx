@@ -108,6 +108,68 @@ function getLevelInfo(rep: number): LevelInfo {
   if (r >= 5) return { lvl:2, name: LEVEL_NAMES[2], min:5, max:15, progress:(r-5)/(15-5), nextAt:15 };
   return { lvl:1, name: LEVEL_NAMES[1], min:0, max:5, progress:r/5, nextAt:5 };
 }
+// --- Rep sparkline: 60x16 mini SVG from localStorage history or synthetic fallback
+function RepSparkline({ rep }: { rep: number }) {
+  const [pts, setPts] = useState<number[] | null>(null);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("physi_rep_history");
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr) && arr.length >= 2) {
+          const nums = arr.map((n: any) => Number(n)).filter((n: number) => isFinite(n)).slice(-7);
+          if (nums.length >= 2) { setPts(nums); return; }
+        }
+      }
+    } catch {}
+    // fallback synthetic trend based on rep: gentle rise to current rep
+    const r = Number(rep) || 0;
+    const base = Math.max(0.6, r * 0.52);
+    const synth = Array.from({ length: 7 }, (_, i) => {
+      const t = i / 6;
+      const wiggle = Math.sin(i * 1.7) * 0.35 + Math.cos(i * 0.9) * 0.22;
+      const v = base + (r - base) * (0.35 + 0.65 * t) + wiggle;
+      return Math.max(0.15, Number(v.toFixed(2)));
+    });
+    setPts(synth);
+  }, [rep]);
+  // persist rep history (push on change, keep 30)
+  useEffect(() => {
+    try {
+      const r = Number(rep);
+      if (!isFinite(r)) return;
+      const raw = localStorage.getItem("physi_rep_history");
+      let arr: number[] = [];
+      if (raw) { try { const p = JSON.parse(raw); if (Array.isArray(p)) arr = p.map((n:any)=>Number(n)).filter((n:number)=>isFinite(n)); } catch {} }
+      if (arr.length === 0 || arr[arr.length - 1] !== r) {
+        arr.push(r);
+        if (arr.length > 30) arr = arr.slice(-30);
+        localStorage.setItem("physi_rep_history", JSON.stringify(arr));
+      }
+    } catch {}
+  }, [rep]);
+  if (!pts || pts.length < 2) return null;
+  const w = 60, h = 16, pad = 1.5;
+  const min = Math.min(...pts);
+  const max = Math.max(...pts);
+  const range = max - min || 1;
+  const stepX = (w - pad * 2) / (pts.length - 1);
+  const points = pts.map((v, i) => {
+    const x = pad + i * stepX;
+    const y = h - pad - ((v - min) / range) * (h - pad * 2);
+    return `${i === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
+  }).join(" ");
+  const filled = points + ` L ${(pad + (pts.length - 1) * stepX).toFixed(1)} ${(h - pad).toFixed(1)} L ${pad.toFixed(1)} ${(h - pad).toFixed(1)} Z`;
+  const lastUp = pts[pts.length - 1] >= pts[0];
+  const col = lastUp ? "#10b981" : "#f59e0b";
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="shrink-0" aria-hidden>
+      <path d={filled} fill={col} opacity={0.14} />
+      <path d={points} fill="none" stroke={col} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function todayWAT(): string {
   try {
     return new Intl.DateTimeFormat("en-CA", { timeZone:"Africa/Lagos", year:"numeric", month:"2-digit", day:"2-digit" }).format(new Date());
@@ -210,9 +272,11 @@ function RoadmapInner() {
   const [pickerBusy, setPickerBusy] = useState(false);
   const [pickerErr, setPickerErr] = useState<string|null>(null);
   const pendingActionRef = useRef<{type:"vote", id:string, vote:"YES"|"NO"|"CANCEL", isFlag?:boolean} | {type:"fab"} | null>(null);
-  // filter + levels + juice
+  // filter + levels + juice + search
   const [filter, setFilter] = useState<"all"|"my_level"|"today"|"verified"|"advisory"|"mine">("all");
   const [viewMode, setViewMode] = useState<"map"|"list">("map");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchPulseId, setSearchPulseId] = useState<string | null>(null);
   const [myLevel, setMyLevel] = useState<string|null>(null);
   const [myRep, setMyRep] = useState<number>(0);
   const [parallaxY, setParallaxY] = useState(0);
@@ -966,33 +1030,75 @@ function RoadmapInner() {
     return all;
   }, [personal, events]);
 
-  // filtered road items by chip
+  // filtered road items by chip + search (live title/venue/event_date contains)
+  const searchQ = searchQuery.trim().toLowerCase();
   const filteredRoadItems: RoadItem[] = useMemo(()=>{
-    // demo nodes bypass filter (always visible when empty) — but keep filtering for real items
     const hasDemo = roadItems.some(r=> r.kind==="demo");
-    if(hasDemo && events.length===0) return roadItems;
-    if(filter==="all") return roadItems;
-    return roadItems.filter(it=>{
-      if(it.kind==="demo") return true;
-      if(it.kind==="personal") return filter!=="verified"; // personal never verified
-      const ev = it.ev;
-      if(filter==="mine") return myUserId ? String(ev.created_by||"")===String(myUserId) : false;
-      if(filter==="verified") return isVerified(ev);
-      if(filter==="advisory") return !isVerified(ev) && ev.status==="pending";
-      if(filter==="today") return isTodayWAT(ev.event_date);
-      if(filter==="my_level"){
-        if(!myLevel) return false;
-        const scopeMatch = String(ev.scope_value||"").toLowerCase()===String(myLevel).toLowerCase();
-        const typeMatch = String(ev.scope_type||"").toLowerCase().includes("level");
-        // match exact level value or if type is level
-        if(typeMatch && scopeMatch) return true;
-        // also show events where scope_value equals myLevel regardless of type
-        if(scopeMatch) return true;
-        return false;
+    const demoBypass = hasDemo && events.length===0;
+    let base: RoadItem[];
+    if (demoBypass) base = roadItems;
+    else if (filter==="all") base = roadItems;
+    else {
+      base = roadItems.filter(it=>{
+        if(it.kind==="demo") return true;
+        if(it.kind==="personal") return filter!=="verified";
+        const ev = it.ev;
+        if(filter==="mine") return myUserId ? String(ev.created_by||"")===String(myUserId) : false;
+        if(filter==="verified") return isVerified(ev);
+        if(filter==="advisory") return !isVerified(ev) && ev.status==="pending";
+        if(filter==="today") return isTodayWAT(ev.event_date);
+        if(filter==="my_level"){
+          if(!myLevel) return false;
+          const scopeMatch = String(ev.scope_value||"").toLowerCase()===String(myLevel).toLowerCase();
+          const typeMatch = String(ev.scope_type||"").toLowerCase().includes("level");
+          if(typeMatch && scopeMatch) return true;
+          if(scopeMatch) return true;
+          return false;
+        }
+        return true;
+      });
+    }
+    if (!searchQ) return base;
+    return base.filter(it=>{
+      if (it.kind==="demo") {
+        const d = it as DemoItem;
+        return `${d.title} ${d.venue} ${d.event_date}`.toLowerCase().includes(searchQ);
       }
-      return true;
+      if (it.kind==="personal") {
+        const p = it.p;
+        return `${p.title} ${p.venue} ${p.event_date}`.toLowerCase().includes(searchQ);
+      }
+      const ev = (it as any).ev as EventRow;
+      return `${ev.title} ${ev.venue} ${ev.event_date}`.toLowerCase().includes(searchQ);
     });
-  }, [roadItems, filter, myLevel, myUserId, events.length]);
+  }, [roadItems, filter, myLevel, myUserId, events.length, searchQ]);
+
+  const searchMatchCount = searchQ ? filteredRoadItems.filter(it=> it.kind!=="demo" || true).length : 0;
+  const handleJump = useCallback(()=>{
+    if (!searchQ || filteredRoadItems.length===0) { setToast("no match for search"); return; }
+    const first = filteredRoadItems[0];
+    const baseId = String(first.id).split("__tile")[0];
+    setSelectedId(baseId);
+    setSheetOpen(true);
+    setDeepPulseId(baseId);
+    setSearchPulseId(baseId);
+    setTimeout(()=> setSearchPulseId(null), 2200);
+    setTimeout(()=>{
+      try{
+        const el = document.getElementById(`node-${baseId}`);
+        if (el && scrollRef.current) el.scrollIntoView({ behavior:"smooth", block:"center" });
+        else {
+          const idx = filteredRoadItems.findIndex(x=> String(x.id).split("__tile")[0]===baseId);
+          if (idx>=0 && scrollRef.current) {
+            const y = TOP_BUFFER + idx * STEP_Y;
+            const vh = scrollRef.current.clientHeight;
+            scrollRef.current.scrollTo({ top: Math.max(0, y - vh/2 + 44), behavior:"smooth" });
+          }
+        }
+      }catch{}
+    }, 80);
+    setTimeout(()=> setDeepPulseId(null), 3500);
+  }, [searchQ, filteredRoadItems]);
 
   // find NOW index (first item after now) — based on filtered view
   const nowIdx = useMemo(() => {
@@ -1434,6 +1540,7 @@ function RoadmapInner() {
                   <button onClick={()=> setShareOpen(true)} className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-mono text-[10px] font-black hover:scale-105 transition ${levelInfo.lvl===5 ? "bg-gradient-to-r from-amber-400 to-yellow-300 text-black ring-1 ring-amber-400" : "bg-white/10 text-white"}`}>Lvl {levelInfo.lvl} · {levelInfo.name}</button>
                   <span className="font-mono text-[10px] text-slate-400">{myRep.toFixed(1)} Rep</span>
                   <div className="h-1.5 w-16 overflow-hidden rounded-full bg-white/10"><div className={`h-full ${levelInfo.lvl===5 ? "bg-gradient-to-r from-amber-400 to-yellow-300" : "bg-emerald-400"}`} style={{ width: `${levelInfo.progress*100}%` }} /></div>
+                  <RepSparkline rep={myRep} />
                   <span className="font-mono text-[9px] text-slate-500">{levelInfo.nextAt ? `${(levelInfo.nextAt - myRep).toFixed(1)} to L${levelInfo.lvl+1}` : "MAX"}</span>
                 </div>
               </div>
@@ -1585,8 +1692,35 @@ function RoadmapInner() {
             })}
           </div>
         </div>
+        {/* Search bar — under filters, live title/venue/date contains + Jump */}
+        <div className="pointer-events-none absolute left-1/2 top-[228px] z-20 flex w-full max-w-[560px] -translate-x-1/2 justify-center px-3 sm:top-[184px] sm:px-6">
+          <div className="pointer-events-auto flex w-full items-center gap-2 rounded-full border border-white/10 bg-black/75 px-2.5 py-1.5 backdrop-blur-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)]">
+            <span className="ml-1 text-[13px] opacity-70">🔍</span>
+            <input
+              value={searchQuery}
+              onChange={e=> setSearchQuery(e.target.value)}
+              onKeyDown={e=> { if(e.key==="Enter") handleJump(); }}
+              placeholder="search title · venue · date (e.g. LT2, 2026-01)"
+              className="flex-1 bg-transparent text-[13px] text-white placeholder:text-slate-500 outline-none"
+              aria-label="Search road"
+            />
+            {searchQuery && (
+              <span className="hidden sm:inline font-mono text-[10px] text-slate-400">{searchMatchCount} match{searchMatchCount===1?"":"es"}</span>
+            )}
+            <button
+              onClick={handleJump}
+              disabled={!searchQ || filteredRoadItems.length===0}
+              className={`shrink-0 rounded-full px-3.5 py-1.5 text-[11px] font-black transition ${!searchQ || filteredRoadItems.length===0 ? "bg-white/10 text-slate-500 cursor-not-allowed" : "bg-white text-black hover:bg-slate-100 animate-pulse shadow"}`}
+            >
+              Jump ↓
+            </button>
+            {searchQuery && (
+              <button onClick={()=> setSearchQuery("")} className="shrink-0 rounded-full bg-white/10 px-2 py-1 text-[11px] font-bold text-slate-300 hover:bg-white/15">✕</button>
+            )}
+          </div>
+        </div>
         {/* Live pulse toasts - top center sliding in/out pure UI ghosts */}
-        <div className="pointer-events-none absolute left-1/2 top-[184px] z-30 -translate-x-1/2 sm:top-[176px]">
+        <div className="pointer-events-none absolute left-1/2 top-[268px] z-30 -translate-x-1/2 sm:top-[222px]">
           {pulseMsg && (
             <div className={`rounded-full border border-emerald-400/20 bg-black/80 px-4 py-2 font-mono text-[11px] font-semibold text-white backdrop-blur-xl shadow-[0_8px_24px_rgba(0,0,0,0.5)] transition-all duration-500 ${pulseShow ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-3"}`} style={{ animation: pulseShow ? "pulseSlideIn 3s ease" : undefined }}>
               <span className="mr-1.5 inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400" />{pulseMsg}
@@ -1640,8 +1774,8 @@ function RoadmapInner() {
                     </div>
                   );
                 })}
-                <div className="flex items-center gap-2 px-1"><div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10"><div className={`h-full ${levelInfo.lvl===5 ? "bg-gradient-to-r from-amber-400 to-yellow-300" : "bg-emerald-400"}`} style={{ width: `${levelInfo.progress*100}%` }} /></div><span className="font-mono text-[10px] text-slate-500">{myRep.toFixed(1)} Rep · {levelInfo.nextAt ? `${(levelInfo.nextAt - myRep).toFixed(1)} to L${levelInfo.lvl+1}` : "MAX L5 Legend"}</span>{levelInfo.lvl===5 && <span className="h-2 w-2 rounded-full bg-amber-400 ring-2 ring-amber-300" />}</div>
-                <p className="font-mono text-[10px] text-slate-500 px-1">Live poll 30s · from /api/stats or ghosts · candy avatars</p>
+                <div className="flex items-center gap-2 px-1"><div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10"><div className={`h-full ${levelInfo.lvl===5 ? "bg-gradient-to-r from-amber-400 to-yellow-300" : "bg-emerald-400"}`} style={{ width: `${levelInfo.progress*100}%` }} /></div><RepSparkline rep={myRep} /><span className="font-mono text-[10px] text-slate-500">{myRep.toFixed(1)} Rep · {levelInfo.nextAt ? `${(levelInfo.nextAt - myRep).toFixed(1)} to L${levelInfo.lvl+1}` : "MAX L5 Legend"}</span>{levelInfo.lvl===5 && <span className="h-2 w-2 rounded-full bg-amber-400 ring-2 ring-amber-300" />}</div>
+                <p className="font-mono text-[10px] text-slate-500 px-1 flex items-center gap-2">Live poll 30s · ghosts · 7-day <RepSparkline rep={myRep} /></p>
               </div>
             )}
           </div>
@@ -1669,8 +1803,8 @@ function RoadmapInner() {
               <h3 className="font-mono text-[11px] font-black tracking-[0.12em] text-white">REP BOARD</h3>
               <button onClick={()=> setShareOpen(true)} className={`rounded-full px-2 py-0.5 font-mono text-[10px] font-black hover:scale-105 transition ${levelInfo.lvl===5 ? "bg-gradient-to-r from-amber-400 to-yellow-300 text-black ring-1 ring-amber-500" : "bg-white/10 text-slate-300"}`}>Lvl {levelInfo.lvl} · {levelInfo.name} · {myRep.toFixed(1)} Rep</button>
             </div>
-            <div className="mt-2 flex items-center gap-2"><div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10"><div className={`h-full ${levelInfo.lvl===5 ? "bg-gradient-to-r from-amber-400 to-yellow-300" : "bg-emerald-400"}`} style={{ width: `${levelInfo.progress*100}%` }} /></div><span className="font-mono text-[9px] text-slate-500">{levelInfo.nextAt ? `${(levelInfo.nextAt - myRep).toFixed(1)} to L${levelInfo.lvl+1}` : "MAX"}</span>{levelInfo.lvl===5 && <span className="h-2.5 w-2.5 rounded-full bg-amber-400 ring-2 ring-amber-300 animate-pulse" />}</div>
-            <p className="mt-1 font-mono text-[10px] text-slate-500">Top 5 Rep from /api/stats or ghosts · candy avatars</p>
+            <div className="mt-2 flex items-center gap-2"><div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10"><div className={`h-full ${levelInfo.lvl===5 ? "bg-gradient-to-r from-amber-400 to-yellow-300" : "bg-emerald-400"}`} style={{ width: `${levelInfo.progress*100}%` }} /></div><RepSparkline rep={myRep} /><span className="font-mono text-[9px] text-slate-500">{levelInfo.nextAt ? `${(levelInfo.nextAt - myRep).toFixed(1)} to L${levelInfo.lvl+1}` : "MAX"}</span>{levelInfo.lvl===5 && <span className="h-2.5 w-2.5 rounded-full bg-amber-400 ring-2 ring-amber-300 animate-pulse" />}</div>
+            <p className="mt-1 font-mono text-[10px] text-slate-500 flex items-center gap-2">Top 5 · 7-day <RepSparkline rep={myRep} /> · candy avatars</p>
             <div className="mt-3 grid gap-2">
               {repBoard.slice(0,5).map((u,i)=> {
                 const isYou = youHandle && String(u.handle).toLowerCase() === youHandle;
@@ -1900,7 +2034,7 @@ function RoadmapInner() {
                       }}
                     >
                       {isActive && <circle cx={p.x} cy={p.y} r={nodeR + 20} fill="white" opacity={0.09} />}
-                      {deepPulseId && (deepPulseId===baseId || deepPulseId===item.id) && (
+                      {((deepPulseId && (deepPulseId===baseId || deepPulseId===item.id)) || (searchPulseId && (searchPulseId===baseId || searchPulseId===item.id))) && (
                         <>
                           <circle cx={p.x} cy={p.y} r={nodeR+10} fill="none" stroke="#8b5cf6" strokeWidth={3} opacity={0.9} style={{ animation:"pulseRing 1.1s ease-out infinite" }} />
                           <circle cx={p.x} cy={p.y} r={nodeR+18} fill="none" stroke="#a78bfa" strokeWidth={2} opacity={0.6} style={{ animation:"pulseRing 1.1s ease-out infinite 0.18s" }} />
