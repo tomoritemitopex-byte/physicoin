@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { logError, getErrorMessage } from "@/lib/adapters/error";
 
 type EventRow = {
@@ -14,6 +15,7 @@ type EventRow = {
   authority_points: number | string;
   required_points: number | string;
   created_at: string;
+  created_by?: string | null;
 };
 
 type PersonalBubble = {
@@ -140,11 +142,16 @@ const GHOST_REP: { handle: string; rep: number; color: string; bg: string }[] = 
   { handle: "tomi_09", rep: 7.5, color: "#ec4899", bg: "#831843" },
 ];
 
-export default function RoadmapPage() {
+function RoadmapInner() {
+  const searchParams = useSearchParams();
   const [events, setEvents] = useState<EventRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [deepPulseId, setDeepPulseId] = useState<string | null>(null);
+  const [shareCopied, setShareCopied] = useState(false);
+  const [myUserId, setMyUserId] = useState<string | null>(null);
+  const [mineHasNew, setMineHasNew] = useState(false);
   const [personal, setPersonal] = useState<PersonalBubble[]>([]);
   const [voteBusy, setVoteBusy] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -195,7 +202,7 @@ export default function RoadmapPage() {
   const [inviteNudge, setInviteNudge] = useState(false);
   const [inviteCopied, setInviteCopied] = useState(false);
   // filter + levels + juice
-  const [filter, setFilter] = useState<"all"|"my_level"|"today"|"verified"|"advisory">("all");
+  const [filter, setFilter] = useState<"all"|"my_level"|"today"|"verified"|"advisory"|"mine">("all");
   const [myLevel, setMyLevel] = useState<string|null>(null);
   const [myRep, setMyRep] = useState<number>(0);
   const [parallaxY, setParallaxY] = useState(0);
@@ -444,6 +451,7 @@ export default function RoadmapPage() {
       const raw = localStorage.getItem("physi_profile");
       if (raw) {
         const p = JSON.parse(raw);
+        if (p?.id) setMyUserId(String(p.id));
         const h = p?.nickname || p?.handle || p?.name || null;
         if (h) setYouHandle(String(h).toLowerCase());
         else if (p?.id) setYouHandle(String(p.id).slice(0,8).toLowerCase());
@@ -538,6 +546,116 @@ export default function RoadmapPage() {
     }, 60000);
     return () => clearInterval(iv);
   }, []);
+  // deep link ?event=<id> : read searchParams, find node, scroll + pulse
+  useEffect(() => {
+    try {
+      const ev = searchParams.get("event");
+      if (ev) {
+        // allow filter=advisory etc also
+        const f = searchParams.get("filter");
+        if (f && ["all","my_level","today","verified","advisory","mine"].includes(f)) setFilter(f as any);
+        // set deep pulse id immediately; actual scroll happens when events loaded
+        setDeepPulseId(ev);
+        // if we already have events, select now
+        if (ev) {
+          setSelectedId(ev);
+          setSheetOpen(true);
+        }
+      } else {
+        const f = searchParams.get("filter");
+        if (f && ["all","my_level","today","verified","advisory","mine"].includes(f)) setFilter(f as any);
+      }
+    } catch {}
+  }, [searchParams]);
+  // when events load and deepPulseId is set, scroll to node and keep pulse for 3.5s
+  useEffect(() => {
+    if (!deepPulseId || events.length === 0) return;
+    const targetId = deepPulseId.split("__tile")[0];
+    const exists = events.some(e => e.id === targetId) || personal.some(p => p.localId === targetId);
+    if (!exists) return;
+    setSelectedId(targetId);
+    setSheetOpen(true);
+    // scroll to node's Y via nodes index (use filtered or display index)
+    const doScroll = () => {
+      try {
+        // try DOM scroll to element if present
+        const el = document.getElementById(`node-${targetId}`);
+        if (el && scrollRef.current) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+        } else {
+          // fallback: compute Y from roadItems
+          const idx = [...events].sort((a,b)=> eventInstant(a.event_date,a.event_time)-eventInstant(b.event_date,b.event_time)).findIndex(e=> e.id===targetId);
+          if (idx >=0 && scrollRef.current) {
+            const y = 320 + idx * 128;
+            const vh = scrollRef.current.clientHeight;
+            scrollRef.current.scrollTo({ top: Math.max(0, y - vh/2 + 44), behavior: "smooth" });
+          }
+        }
+      } catch {}
+    };
+    const t = setTimeout(doScroll, 220);
+    const clear = setTimeout(()=> setDeepPulseId(null), 3800);
+    return () => { clearTimeout(t); clearTimeout(clear); };
+  }, [deepPulseId, events, personal]);
+  // Mine polling: check for new verifications on user's events
+  useEffect(() => {
+    if (!myUserId) return;
+    let cancelled=false;
+    async function pollMine(){
+      try{
+        const r= await fetch("/api/timetable?limit=200",{ cache:"no-store"});
+        const j= await r.json().catch(()=> ({} as any));
+        const evs: EventRow[] = j.events ?? [];
+        const mine = evs.filter(e=> String(e.created_by||"")===String(myUserId));
+        if (cancelled) return;
+        if (mine.length===0) { setMineHasNew(false); return; }
+        const totalAp = mine.reduce((s,e)=> s+ Number(e.authority_points||0), 0);
+        const totalVerified = mine.filter(isVerified).length;
+        const key = `physi_mine_seen_${myUserId}`;
+        const last = Number(localStorage.getItem(key) || "0");
+        const seenCountKey = `physi_mine_seen_count_${myUserId}`;
+        const lastCount = Number(localStorage.getItem(seenCountKey) || "0");
+        // new activity if authority grew or new verified or new count
+        if (totalAp > last || totalVerified > 0 && totalAp !== last || mine.length > lastCount) {
+          // if user is currently on Mine filter, consider seen
+          if (filter==="mine") {
+            localStorage.setItem(key, String(totalAp));
+            localStorage.setItem(seenCountKey, String(mine.length));
+            setMineHasNew(false);
+          } else {
+            // only show dot if strictly bigger than last seen and not first load where last===0
+            if (last>0 && totalAp>last) setMineHasNew(true);
+            else if (mine.length>lastCount && lastCount>0) setMineHasNew(true);
+            else {
+              // first time seeing mine events - initialize without dot
+              localStorage.setItem(key, String(totalAp));
+              localStorage.setItem(seenCountKey, String(mine.length));
+            }
+          }
+        }
+        // also store current for external nav dot (layout reads same keys)
+        try { localStorage.setItem("physi_mine_has_new", mineHasNew ? "1" : "0"); } catch{}
+      }catch{}
+    }
+    pollMine();
+    const iv=setInterval(pollMine,30000);
+    return ()=>{ cancelled=true; clearInterval(iv); };
+  }, [myUserId, filter]);
+  // clear mine dot when user switches to Mine chip
+  useEffect(()=>{
+    if(filter==="mine" && myUserId){
+      setMineHasNew(false);
+      try{
+        const r= events.filter(e=> String(e.created_by||"")===String(myUserId));
+        const totalAp = r.reduce((s,e)=> s+ Number(e.authority_points||0),0);
+        localStorage.setItem(`physi_mine_seen_${myUserId}`, String(totalAp));
+        localStorage.setItem(`physi_mine_seen_count_${myUserId}`, String(r.length));
+        localStorage.setItem("physi_mine_has_new","0");
+        // dispatch to layout
+        window.dispatchEvent(new CustomEvent("physi-mine-seen"));
+      }catch{}
+    }
+  }, [filter, myUserId, events]);
   // quest complete -> confetti + persist
   const questProgress = (qTap?1:0)+(qSwipe?1:0)+(qRep?1:0);
   useEffect(() => {
@@ -701,6 +819,7 @@ export default function RoadmapPage() {
       if(it.kind==="demo") return true;
       if(it.kind==="personal") return filter!=="verified"; // personal never verified
       const ev = it.ev;
+      if(filter==="mine") return myUserId ? String(ev.created_by||"")===String(myUserId) : false;
       if(filter==="verified") return isVerified(ev);
       if(filter==="advisory") return !isVerified(ev) && ev.status==="pending";
       if(filter==="today") return isTodayWAT(ev.event_date);
@@ -716,7 +835,7 @@ export default function RoadmapPage() {
       }
       return true;
     });
-  }, [roadItems, filter, myLevel, events.length]);
+  }, [roadItems, filter, myLevel, myUserId, events.length]);
 
   // find NOW index (first item after now) — based on filtered view
   const nowIdx = useMemo(() => {
@@ -1067,7 +1186,7 @@ export default function RoadmapPage() {
 
   return (
     <div className="relative -mx-4 -mt-5 w-[100vw] max-w-[100vw] sm:-mx-6 lg:-mx-8">
-      <style>{`@keyframes canonicalPop{0%{transform:scale(0.72)}50%{transform:scale(1.22)}100%{transform:scale(1)}} @keyframes tickPulse{0%,100%{opacity:1}50%{opacity:.55}} @keyframes roadShimmer{0%{stroke-dashoffset:0}100%{stroke-dashoffset:28}} @keyframes scaleIn{0%{transform:scale(0.35);opacity:0}60%{transform:scale(1.14);opacity:1}100%{transform:scale(1);opacity:1}} @keyframes nowPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.06);opacity:.94}} @keyframes ghostDrift{0%{transform:translateY(0) translateX(0)}25%{transform:translateY(-10px) translateX(7px)}50%{transform:translateY(-16px) translateX(-5px)}75%{transform:translateY(-8px) translateX(4px)}100%{transform:translateY(0) translateX(0)}} @keyframes ghostPulse{0%,100%{opacity:.92}50%{opacity:.56}} @keyframes candyPop{0%{transform:translate(-50%,-10px) scale(0.5);opacity:0}18%{transform:translate(-50%,-18px) scale(1.18);opacity:1}72%{transform:translate(-50%,-42px) scale(1);opacity:1}100%{transform:translate(-50%,-64px) scale(0.9);opacity:0}} @keyframes pulseSlideIn{0%{transform:translate(-50%,-18px);opacity:0}12%{transform:translate(-50%,0);opacity:1}88%{transform:translate(-50%,0);opacity:1}100%{transform:translate(-50%,-18px);opacity:0}} @keyframes confettiFall{0%{transform:translateY(-10vh) rotate(0deg);opacity:1}100%{transform:translateY(110vh) rotate(720deg);opacity:0}} @keyframes skeletonPulse{0%,100%{opacity:0.55}50%{opacity:1}} @keyframes questFill{0%{width:0}100%{width:var(--fill)}} .road-3d-wrap{perspective:800px;perspective-origin:50% 28%} .road-3d-inner{transform-style:preserve-3d;transform:perspective(800px) rotateX(4deg);transform-origin:center top;will-change:transform;clip-path:ellipse(96% 88% at 50% 46%);border-radius:28px} .road-3d-inner::before{content:"";position:absolute;inset:0;pointer-events:none;border-radius:28px;box-shadow:inset 0 10px 22px rgba(0,0,0,0.16),inset 0 -8px 16px rgba(0,0,0,0.12)} .node-3d{transform:translateZ(6px);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.55),inset 0 -2px 4px rgba(0,0,0,0.14),0 8px 20px rgba(0,0,0,0.42),0 1px 6px rgba(0,0,0,0.32);transition:transform 220ms cubic-bezier(.2,.8,.3,1),box-shadow 220ms ease} .node-3d:hover{transform:translateZ(12px) scale(1.02);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.65),inset 0 -3px 6px rgba(0,0,0,0.16),0 12px 28px rgba(0,0,0,0.5),0 4px 12px rgba(0,0,0,0.36)}`}</style>
+      <style>{`@keyframes canonicalPop{0%{transform:scale(0.72)}50%{transform:scale(1.22)}100%{transform:scale(1)}} @keyframes tickPulse{0%,100%{opacity:1}50%{opacity:.55}} @keyframes roadShimmer{0%{stroke-dashoffset:0}100%{stroke-dashoffset:28}} @keyframes scaleIn{0%{transform:scale(0.35);opacity:0}60%{transform:scale(1.14);opacity:1}100%{transform:scale(1);opacity:1}} @keyframes nowPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.06);opacity:.94}} @keyframes ghostDrift{0%{transform:translateY(0) translateX(0)}25%{transform:translateY(-10px) translateX(7px)}50%{transform:translateY(-16px) translateX(-5px)}75%{transform:translateY(-8px) translateX(4px)}100%{transform:translateY(0) translateX(0)}} @keyframes ghostPulse{0%,100%{opacity:.92}50%{opacity:.56}} @keyframes candyPop{0%{transform:translate(-50%,-10px) scale(0.5);opacity:0}18%{transform:translate(-50%,-18px) scale(1.18);opacity:1}72%{transform:translate(-50%,-42px) scale(1);opacity:1}100%{transform:translate(-50%,-64px) scale(0.9);opacity:0}} @keyframes pulseSlideIn{0%{transform:translate(-50%,-18px);opacity:0}12%{transform:translate(-50%,0);opacity:1}88%{transform:translate(-50%,0);opacity:1}100%{transform:translate(-50%,-18px);opacity:0}} @keyframes confettiFall{0%{transform:translateY(-10vh) rotate(0deg);opacity:1}100%{transform:translateY(110vh) rotate(720deg);opacity:0}} @keyframes skeletonPulse{0%,100%{opacity:0.55}50%{opacity:1}} @keyframes questFill{0%{width:0}100%{width:var(--fill)}} @keyframes pulseRing{0%{transform:scale(0.8);opacity:0.9}70%{transform:scale(1.55);opacity:0}100%{transform:scale(1.7);opacity:0}} .road-3d-wrap{perspective:800px;perspective-origin:50% 28%} .road-3d-inner{transform-style:preserve-3d;transform:perspective(800px) rotateX(4deg);transform-origin:center top;will-change:transform;clip-path:ellipse(96% 88% at 50% 46%);border-radius:28px} .road-3d-inner::before{content:"";position:absolute;inset:0;pointer-events:none;border-radius:28px;box-shadow:inset 0 10px 22px rgba(0,0,0,0.16),inset 0 -8px 16px rgba(0,0,0,0.12)} .node-3d{transform:translateZ(6px);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.55),inset 0 -2px 4px rgba(0,0,0,0.14),0 8px 20px rgba(0,0,0,0.42),0 1px 6px rgba(0,0,0,0.32);transition:transform 220ms cubic-bezier(.2,.8,.3,1),box-shadow 220ms ease} .node-3d:hover{transform:translateZ(12px) scale(1.02);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.65),inset 0 -3px 6px rgba(0,0,0,0.16),0 12px 28px rgba(0,0,0,0.5),0 4px 12px rgba(0,0,0,0.36)}`}</style>
       <div className="relative min-h-[calc(100vh-64px)] w-full overflow-hidden xl:pr-[276px]" style={{ background: "linear-gradient(180deg, #0d3b2a 0%, #143d2e 42%, #1a5c3a 100%)" }}>
         {/* ambient - parallax */}
         <div className="pointer-events-none absolute inset-0" style={{ transform: `translateY(${parallaxY}px)`, willChange:"transform" }}>
@@ -1186,19 +1305,22 @@ export default function RoadmapPage() {
           <div className="pointer-events-auto flex items-center gap-1.5 overflow-x-auto rounded-full border border-white/10 bg-black/70 px-2 py-1.5 backdrop-blur-xl scrollbar-none">
             {([
               { k: "all", label: "All" },
+              { k: "mine", label: "Mine" },
               { k: "my_level", label: myLevel ? myLevel : "My Level" },
               { k: "today", label: "Today" },
               { k: "verified", label: "Verified" },
               { k: "advisory", label: "Advisory" },
             ] as const).map(ch=> {
               const active = filter===ch.k;
+              const isMine = ch.k==="mine";
               return (
                 <button
                   key={ch.k}
                   onClick={()=> setFilter(ch.k as any)}
-                  className={`shrink-0 rounded-full px-3 py-1.5 font-mono text-[11px] font-bold transition ${active ? "bg-white text-black shadow" : "bg-white/10 text-slate-300 hover:bg-white/15 hover:text-white"}`}
+                  className={`relative shrink-0 rounded-full px-3 py-1.5 font-mono text-[11px] font-bold transition ${active ? "bg-white text-black shadow" : "bg-white/10 text-slate-300 hover:bg-white/15 hover:text-white"}`}
                 >
                   {ch.label}
+                  {isMine && mineHasNew && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-black animate-pulse" />}
                 </button>
               );
             })}
@@ -1491,6 +1613,7 @@ export default function RoadmapPage() {
                   const opacity = isPast ? 0.48 : 1;
                   return (
                     <g
+                      id={`node-${baseId}`}
                       key={item.id}
                       onClick={() => {
                         setQTap(true);
@@ -1503,6 +1626,7 @@ export default function RoadmapPage() {
                         }
                         // use base id so sheet shows canonical event even when clicking tiled duplicates
                         setSelectedId(baseId);
+                        setDeepPulseId(null);
                         setSheetOpen(true);
                       }}
                       style={{
@@ -1511,6 +1635,12 @@ export default function RoadmapPage() {
                       }}
                     >
                       {isActive && <circle cx={p.x} cy={p.y} r={nodeR + 20} fill="white" opacity={0.09} />}
+                      {deepPulseId && (deepPulseId===baseId || deepPulseId===item.id) && (
+                        <>
+                          <circle cx={p.x} cy={p.y} r={nodeR+10} fill="none" stroke="#8b5cf6" strokeWidth={3} opacity={0.9} style={{ animation:"pulseRing 1.1s ease-out infinite" }} />
+                          <circle cx={p.x} cy={p.y} r={nodeR+18} fill="none" stroke="#a78bfa" strokeWidth={2} opacity={0.6} style={{ animation:"pulseRing 1.1s ease-out infinite 0.18s" }} />
+                        </>
+                      )}
                       <circle cx={p.x} cy={p.y + 6} r={nodeR} fill="black" opacity={0.34} />
                       <g
                         className="node-3d"
@@ -1615,6 +1745,16 @@ export default function RoadmapPage() {
                 <button type="button" onClick={()=>setFabOpen(false)} className="rounded-full bg-white/10 px-3 py-1 text-sm text-white">✕</button>
               </div>
               <p className="mt-1 text-[12px] text-slate-400">title / venue / date / time → POST /api/timetable</p>
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {[
+                  { label:"Class moved", title:"Class moved \u2014 LT changed", venue:"LT2 \u2192 LT5", time:"08:00" },
+                  { label:"Exam shift", title:"Exam shift \u2014 ", venue:"Exam Hall", time:"09:00" },
+                  { label:"Venue change", title:"Venue change \u2014 ", venue:"LT1 \u2192 LT3", time:"10:00" },
+                  { label:"Cancelled", title:"Cancelled \u2014 ", venue:"Cancelled", time:"08:00" },
+                ].map(tt=> (
+                  <button key={tt.label} type="button" onClick={()=>{ setFabTitle(tt.title); setFabVenue(tt.venue); setFabTime(tt.time); setFabDate(new Date().toISOString().slice(0,10)); }} className="rounded-full border border-violet-400/20 bg-violet-500/10 px-2.5 py-1 text-[11px] font-bold text-violet-200 hover:bg-violet-500 hover:text-white transition">{tt.label}</button>
+                ))}
+              </div>
               <div className="mt-4 grid gap-3">
                 <input value={fabTitle} onChange={e=>setFabTitle(e.target.value)} placeholder="Title e.g. BIO 101 Lecture" className="w-full rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm text-white placeholder:text-slate-500 outline-none focus:border-violet-500" required />
                 <input value={fabVenue} onChange={e=>setFabVenue(e.target.value)} placeholder="Venue e.g. LT1" className="w-full rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm text-white placeholder:text-slate-500 outline-none focus:border-violet-500" required />
@@ -1783,7 +1923,15 @@ export default function RoadmapPage() {
                         <p className="mt-1 font-mono text-[10px] text-slate-500">swipe card → Yes, ← No, ↑ Skip · buttons are fallback</p>
                       </div>
                       {candy && <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 -translate-x-1/2 rounded-full bg-gradient-to-r from-amber-400 to-emerald-400 px-4 py-1.5 text-[13px] font-black text-black shadow-xl" style={{ animation: "candyPop 1100ms cubic-bezier(.2,.8,.3,1) forwards" }}>{candy}</div>}
-                      <div className="mt-4 flex flex-wrap gap-2">
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button onClick={async ()=>{
+                          const link = `${window.location.origin}/app/roadmap?event=${ev.id}`;
+                          try{
+                            const navAny = navigator as any;
+                            if(navAny.share){ await navAny.share({ title: ev.title, text: `${ev.title} \u2022 ${ev.venue} \u2022 ${ev.event_date} ${ev.event_time}`, url: link }); setShareCopied(true); setTimeout(()=>setShareCopied(false),2000); setToast("shared \u2713"); return; }
+                          }catch{}
+                          try{ await navigator.clipboard.writeText(link); setShareCopied(true); setToast("link copied \u2014 share this gist"); setTimeout(()=>setShareCopied(false),2000); }catch{ setToast(link); }
+                        }} className="rounded-full border border-violet-400/30 bg-violet-500 px-4 py-2 text-[13px] font-bold text-white hover:bg-violet-600 transition">{shareCopied ? "Copied \u2713" : "Share this gist \u2197"}</button>
                         <button onClick={() => fetchFeed()} className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-[13px] font-medium text-slate-200">↻ refresh road</button>
                         <button onClick={() => scrollToNow(true)} className="rounded-full border border-violet-400/20 bg-violet-500/15 px-4 py-2 text-[13px] font-medium text-violet-200">◎ center NOW</button>
                         <a href="/app/timetable" className="rounded-full bg-white px-4 py-2 text-[13px] font-semibold text-black">Open timetable →</a>
@@ -1832,3 +1980,12 @@ export default function RoadmapPage() {
     </div>
   );
 }
+
+export default function RoadmapPage(){
+  return (
+    <Suspense fallback={<div className="min-h-[60vh] flex items-center justify-center text-slate-400 text-sm">Loading road...</div>}>
+      <RoadmapInner />
+    </Suspense>
+  );
+}
+

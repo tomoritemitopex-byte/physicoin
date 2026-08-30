@@ -69,6 +69,44 @@ function Breadcrumb({ pathname }: { pathname: string | null }) {
 }
 
 function BottomGameNav({ pathname }: { pathname: string | null }) {
+  const [mineDot, setMineDot] = useState(false);
+  useEffect(() => {
+    let iv: any;
+    let cancelled=false;
+    async function check(){
+      try{
+        const raw = localStorage.getItem("physi_profile");
+        if(!raw) return;
+        const uid = JSON.parse(raw)?.id;
+        if(!uid) return;
+        // first check flag set by roadmap polling
+        const flag = localStorage.getItem("physi_mine_has_new");
+        if(flag==="1"){ setMineDot(true); return; }
+        if(flag==="0"){ setMineDot(false); }
+        const r = await fetch("/api/timetable?limit=200",{ cache:"no-store"});
+        const j = await r.json().catch(()=>({} as any));
+        const evs = (j.events ?? []) as any[];
+        const mine = evs.filter((e:any)=> String(e.created_by||"")===String(uid));
+        if(cancelled) return;
+        if(mine.length===0){ setMineDot(false); return; }
+        const totalAp = mine.reduce((s:any,e:any)=> s+ Number(e.authority_points||0),0);
+        const key = `physi_mine_seen_${uid}`;
+        const last = Number(localStorage.getItem(key) || "0");
+        const seenCountKey = `physi_mine_seen_count_${uid}`;
+        const lastCount = Number(localStorage.getItem(seenCountKey) || "0");
+        if(last>0 && totalAp>last) setMineDot(true);
+        else if(lastCount>0 && mine.length>lastCount) setMineDot(true);
+        else setMineDot(mineDot=> mineDot);
+      }catch{}
+    }
+    check();
+    iv=setInterval(check,30000);
+    const onSeen=()=> setMineDot(false);
+    const onStorage=(e: StorageEvent)=>{ if(e.key && e.key.startsWith("physi_mine")) check(); };
+    window.addEventListener("physi-mine-seen", onSeen as any);
+    window.addEventListener("storage", onStorage);
+    return ()=>{ cancelled=true; clearInterval(iv); window.removeEventListener("physi-mine-seen", onSeen as any); window.removeEventListener("storage", onStorage); };
+  }, [pathname]);
   return (
     <nav className="fixed bottom-0 inset-x-0 z-40 border-t border-white/[0.08] bg-[#070a12]/92 backdrop-blur-[20px] supports-[backdrop-filter]:bg-[#070a12]/85 shadow-[0_-8px_32px_rgba(0,0,0,0.5),0_-1px_0_rgba(255,255,255,0.05)_inset]">
       <div className="mx-auto flex max-w-[560px] items-center gap-2 px-3 py-2.5 sm:px-4 sm:py-3">
@@ -76,11 +114,12 @@ function BottomGameNav({ pathname }: { pathname: string | null }) {
           const active = pathname === t.href || pathname?.startsWith(t.href + "/");
           const label = GAME_LABELS[t.href] ?? t.label;
           const icon = GAME_ICONS[t.href] ?? "●";
+          const isRoad = t.href==="/app/roadmap";
           return (
             <a
               key={t.href}
               href={t.href}
-              className={`flex flex-1 items-center justify-center gap-2 rounded-2xl px-5 py-3.5 text-[15px] font-bold tracking-tight transition-all ${
+              className={`relative flex flex-1 items-center justify-center gap-2 rounded-2xl px-5 py-3.5 text-[15px] font-bold tracking-tight transition-all ${
                 active
                   ? "bg-white text-[#070a12] shadow-[0_4px_20px_rgba(255,255,255,0.18),0_1px_0_rgba(255,255,255,0.6)_inset] scale-[1.02]"
                   : "border border-white/10 bg-white/[0.06] text-slate-200 hover:bg-white/[0.10] hover:text-white"
@@ -88,6 +127,7 @@ function BottomGameNav({ pathname }: { pathname: string | null }) {
             >
               <span className={`flex h-7 w-7 items-center justify-center rounded-full text-[13px] ${active ? "bg-[#070a12] text-white" : "bg-white text-[#070a12]"}`}>{icon}</span>
               {label}
+              {isRoad && mineDot && <span className="absolute -right-1 -top-1 h-3 w-3 rounded-full bg-red-500 ring-2 ring-[#070a12] animate-pulse" aria-label="new Mine activity" />}
             </a>
           );
         })}
