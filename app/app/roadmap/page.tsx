@@ -105,6 +105,18 @@ function formatWAT(ts: number) {
   }
 }
 
+function timeToMin(t: string): number { const p = String(t ?? "00:00").slice(0,5).split(":"); const h = parseInt(p[0]||"0",10)||0; const m = parseInt(p[1]||"0",10)||0; return h*60+m; }
+function isConflictPair(a: EventRow, b: EventRow): boolean {
+  if (String(a.event_date).slice(0,10) !== String(b.event_date).slice(0,10)) return false;
+  const diff = Math.abs(timeToMin(a.event_time) - timeToMin(b.event_time));
+  if (diff > 30) return false;
+  const va = String(a.venue||"").trim().toLowerCase();
+  const vb = String(b.venue||"").trim().toLowerCase();
+  if (!va || !vb) return false;
+  if (va === vb) return false;
+  return true;
+}
+
 // --- Levels helper ---
 type LevelInfo = { lvl: number; name: string; min: number; max: number|null; progress: number; nextAt: number|null };
 const LEVEL_NAMES: Record<number,string> = {1:"Explorer",2:"Scout",3:"Guide",4:"Sage",5:"Legend"};
@@ -889,7 +901,8 @@ function RoadmapInner() {
 
   // combined road items chronologically sorted
   type DemoItem = { kind: "demo"; localId: string; id: string; ms: number; title: string; venue: string; event_date: string; event_time: string; hint: string };
-  type RoadItem = { kind: "personal"; p: PersonalBubble; id: string; ms: number } | { kind: "event"; ev: EventRow; id: string; ms: number } | DemoItem;
+  type ForkItem = { kind: "fork"; id: string; ms: number; events: EventRow[]; ids: string[] };
+  type RoadItem = { kind: "personal"; p: PersonalBubble; id: string; ms: number } | { kind: "event"; ev: EventRow; id: string; ms: number } | DemoItem | ForkItem;
   const roadItems: RoadItem[] = useMemo(() => {
     const pers: RoadItem[] = personal.map((p) => ({ kind: "personal", p, id: p.localId, ms: eventInstant(p.event_date, p.event_time) } as RoadItem));
     const evs: RoadItem[] = events.map((ev) => ({ kind: "event", ev, id: ev.id, ms: eventInstant(ev.event_date, ev.event_time) } as RoadItem));
@@ -926,9 +939,10 @@ function RoadmapInner() {
     else if (filter==="all") base = roadItems;
     else {
       base = roadItems.filter(it=>{
+        if((it as any).kind==="fork") return true;
         if(it.kind==="demo") return true;
         if(it.kind==="personal") return filter!=="verified";
-        const ev = it.ev;
+        const ev = (it as any).ev as EventRow;
         if(filter==="mine") return myUserId ? String(ev.created_by||"")===String(myUserId) : false;
         if(filter==="verified") return isVerified(ev);
         if(filter==="advisory") return !isVerified(ev) && ev.status==="pending";
@@ -960,6 +974,62 @@ function RoadmapInner() {
   }, [roadItems, filter, myLevel, myUserId, events.length, searchQ]);
 
   const searchMatchCount = searchQ ? filteredRoadItems.filter(it=> it.kind!=="demo" || true).length : 0;
+
+  // --- Fork Road: detect conflicts (same date, within 30min, different venue case-insensitive) ---
+  const FORK_THRESHOLD = 8;
+  const FORK_OFFSET = 28;
+  const conflictGroups: EventRow[][] = useMemo(()=>{
+    const evs = events; // base events, not filtered, to detect global conflicts
+    const n = evs.length;
+    if (n < 2) return [];
+    const adj: number[][] = Array.from({length:n},()=>[]);
+    for(let i=0;i<n;i++) for(let j=i+1;j<n;j++) if(isConflictPair(evs[i], evs[j])){ adj[i].push(j); adj[j].push(i); }
+    const vis = new Array(n).fill(false);
+    const groups: EventRow[][] = [];
+    for(let i=0;i<n;i++) if(!vis[i] && adj[i].length>0){
+      const stack=[i]; vis[i]=true; const comp:number[]=[];
+      while(stack.length){ const u=stack.pop()!; comp.push(u); for(const v of adj[u]) if(!vis[v]){vis[v]=true; stack.push(v);} }
+      if(comp.length>=2) groups.push(comp.map(idx=>evs[idx]));
+    }
+    return groups;
+  }, [events]);
+
+  // Map event id -> group index
+  const conflictMap = useMemo(()=>{
+    const m = new Map<string, number>();
+    conflictGroups.forEach((g, gi)=> g.forEach(ev=> m.set(String(ev.id), gi)));
+    return m;
+  }, [conflictGroups]);
+
+  // Fork-grouped view of filteredRoadItems: collapse conflict events into single fork node
+  const forkGroupedRoadItems: RoadItem[] = useMemo(()=>{
+    if (conflictGroups.length===0) return filteredRoadItems;
+    // Build groups relevant to filtered view: only groups where at least 2 members pass current filter
+    // Determine which filtered event ids are present
+    const filteredIds = new Set(filteredRoadItems.filter(it=> (it as any).kind==="event").map(it=> String((it as any).ev.id)));
+    // For each conflict group, collect members that are in filtered view
+    const relevant = conflictGroups.map(g=> g.filter(ev=> filteredIds.has(String(ev.id)))).filter(g=> g.length>=2);
+    if (relevant.length===0) return filteredRoadItems;
+    const groupById = new Map<string, number>();
+    relevant.forEach((g, gi)=> g.forEach(ev=> groupById.set(String(ev.id), gi)));
+    const seen = new Set<number>();
+    const out: RoadItem[] = [];
+    for(const it of filteredRoadItems){
+      if((it as any).kind !== "event"){ out.push(it as any); continue; }
+      const evId = String((it as any).ev.id);
+      const gi = groupById.get(evId);
+      if(gi===undefined){ out.push(it as any); continue; }
+      if(seen.has(gi)) continue;
+      seen.add(gi);
+      const grp = relevant[gi];
+      const ms = Math.min(...grp.map(e=> eventInstant(e.event_date, e.event_time)));
+      const fid = grp.map(e=> String(e.id)).join("__fork__") + "__fork";
+      out.push({ kind: "fork", id: fid, ms, events: grp, ids: grp.map(e=> String(e.id)) } as ForkItem);
+    }
+    // Ensure chronological order after collapse
+    out.sort((a,b)=> a.ms - b.ms);
+    return out;
+  }, [filteredRoadItems, conflictGroups]);
   const handleJump = useCallback(()=>{
     if (!searchQ || filteredRoadItems.length===0) { setToast("no match for search"); return; }
     const first = filteredRoadItems[0];
@@ -1009,26 +1079,22 @@ function RoadmapInner() {
   const VIEWPORT_FADE_TOP = 96; // mask fade top
   const VIEWPORT_FADE_BOT = 128; // mask fade bottom
 
-  // tiled display items: duplicate to fill infinite illusion when few events (filtered)
+  // tiled display items: duplicate to fill infinite illusion when few events (filtered+forked)
   const displayItems = useMemo(() => {
-    const src = filteredRoadItems;
+    const src: RoadItem[] = (forkGroupedRoadItems as RoadItem[]);
     if (src.length === 0) return [] as typeof roadItems;
-    if (src.length >= MIN_TILE) return src;
+    if (src.length >= MIN_TILE) return src as any;
     const repeats = Math.ceil(MIN_TILE / src.length);
     const out: typeof roadItems = [];
     for (let r = 0; r < repeats; r++) {
       for (let i = 0; i < src.length; i++) {
-        const it = src[i];
+        const it: any = src[i];
         const tileId = it.id + "__tile" + r;
-        if (it.kind === "personal") {
-          out.push({ ...it, id: tileId } as any);
-        } else {
-          out.push({ ...it, id: tileId } as any);
-        }
+        out.push({ ...it, id: tileId } as any);
       }
     }
-    return out;
-  }, [filteredRoadItems]);
+    return out as any;
+  }, [forkGroupedRoadItems]);
 
   // effective length for node placement (infinite fill)
   const effectiveLen = displayItems.length || 8;
@@ -1041,8 +1107,9 @@ function RoadmapInner() {
         y: TOP_BUFFER + i * STEP_Y,
       }));
     }
-    return displayItems.map((_, i) => {
+    return displayItems.map((it: any, i: number) => {
       const y = TOP_BUFFER + i * STEP_Y;
+      if (it.kind === "fork") return { x: 260, y };
       let x: number;
       if (displayItems.length === 1) x = 260;
       else if (i % 2 === 0) x = 142 + (i % 4 === 0 ? 18 : 0);
@@ -1134,13 +1201,22 @@ function RoadmapInner() {
   }
 
   function stateFor(item: RoadItem) {
+    if ((item as any).kind === "fork") {
+      // fork state derived from first event winner etc.
+      const ev0 = (item as ForkItem).events[0];
+      const ap = Number(ev0.authority_points ?? 0);
+      const rp = Number(ev0.required_points ?? 0);
+      const pct = rp > 0 ? Math.min(100, Math.round((ap / rp) * 100)) : isVerified(ev0) ? 100 : 0;
+      if (isVerified(ev0)) return { key: "canonical", label: "FORK ✓", color: "#10b981", outline: "#8b5cf6", pct } as const;
+      return { key: "advisory", label: "FORK ●", color: "#8b5cf6", outline: "#8b5cf6", pct } as const;
+    }
     if (item.kind === "personal") {
       return { key: "personal", label: "light off", color: "#a1a1aa", outline: "#52525b", dimmed: true } as const;
     }
     if (item.kind === "demo") {
       return { key: "demo", label: item.hint, color: "#8b5cf6", outline: "#8b5cf6", dashed: true } as const;
     }
-    const ev = item.ev;
+    const ev = (item as any).ev as EventRow;
     const ap = Number(ev.authority_points ?? 0);
     const rp = Number(ev.required_points ?? 0);
     const pct = rp > 0 ? Math.min(100, Math.round((ap / rp) * 100)) : isVerified(ev) ? 100 : 0;
@@ -1463,7 +1539,7 @@ function RoadmapInner() {
 
   return (
     <div className={`${fredoka.className} ${fredoka.variable} relative -mx-4 -mt-5 w-[100vw] max-w-[100vw] sm:-mx-6 lg:-mx-8`}>
-      <style>{`@keyframes canonicalPop{0%{transform:scale(0.72)}50%{transform:scale(1.22)}100%{transform:scale(1)}} @keyframes tickPulse{0%,100%{opacity:1}50%{opacity:.55}} @keyframes roadShimmer{0%{stroke-dashoffset:0}100%{stroke-dashoffset:28}} @keyframes scaleIn{0%{transform:scale(0.35);opacity:0}60%{transform:scale(1.14);opacity:1}100%{transform:scale(1);opacity:1}} @keyframes nowPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.06);opacity:.94}} @keyframes ghostDrift{0%{transform:translateY(0) translateX(0)}25%{transform:translateY(-10px) translateX(7px)}50%{transform:translateY(-16px) translateX(-5px)}75%{transform:translateY(-8px) translateX(4px)}100%{transform:translateY(0) translateX(0)}} @keyframes ghostPulse{0%,100%{opacity:.92}50%{opacity:.56}} @keyframes candyPop{0%{transform:translate(-50%,-10px) scale(0.5);opacity:0}18%{transform:translate(-50%,-18px) scale(1.18);opacity:1}72%{transform:translate(-50%,-42px) scale(1);opacity:1}100%{transform:translate(-50%,-64px) scale(0.9);opacity:0}} @keyframes pulseSlideIn{0%{transform:translate(-50%,-18px);opacity:0}12%{transform:translate(-50%,0);opacity:1}88%{transform:translate(-50%,0);opacity:1}100%{transform:translate(-50%,-18px);opacity:0}} @keyframes confettiFall{0%{transform:translateY(-10vh) rotate(0deg);opacity:1}100%{transform:translateY(110vh) rotate(720deg);opacity:0}} @keyframes skeletonPulse{0%,100%{opacity:0.55}50%{opacity:1}} @keyframes questFill{0%{width:0}100%{width:var(--fill)}} @keyframes fabPulse{0%{transform:scale(1);box-shadow:0 8px 24px rgba(139,92,246,0.5),0 4px 12px rgba(0,0,0,0.3)}50%{transform:scale(1.08);box-shadow:0 12px 36px rgba(139,92,246,0.75),0 6px 18px rgba(0,0,0,0.4)}100%{transform:scale(1);box-shadow:0 8px 24px rgba(139,92,246,0.5),0 4px 12px rgba(0,0,0,0.3)}} @keyframes pulseRing{0%{transform:scale(0.8);opacity:0.9}70%{transform:scale(1.55);opacity:0}100%{transform:scale(1.7);opacity:0}} .road-3d-wrap{perspective:800px;perspective-origin:50% 28%} .road-3d-inner{transform-style:preserve-3d;transform:perspective(800px) rotateX(4deg);transform-origin:center top;will-change:transform;clip-path:ellipse(96% 88% at 50% 46%);border-radius:28px} .road-3d-inner::before{content:"";position:absolute;inset:0;pointer-events:none;border-radius:28px;box-shadow:inset 0 10px 22px rgba(0,0,0,0.16),inset 0 -8px 16px rgba(0,0,0,0.12)} .node-3d{transform:translateZ(6px);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.55),inset 0 -2px 4px rgba(0,0,0,0.14),0 8px 20px rgba(0,0,0,0.42),0 1px 6px rgba(0,0,0,0.32);transition:transform 220ms cubic-bezier(.2,.8,.3,1),box-shadow 220ms ease} .node-3d:hover{transform:translateZ(12px) scale(1.02);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.65),inset 0 -3px 6px rgba(0,0,0,0.16),0 12px 28px rgba(0,0,0,0.5),0 4px 12px rgba(0,0,0,0.36)}`}</style>
+      <style>{`@keyframes canonicalPop{0%{transform:scale(0.72)}50%{transform:scale(1.22)}100%{transform:scale(1)}} @keyframes tickPulse{0%,100%{opacity:1}50%{opacity:.55}} @keyframes roadShimmer{0%{stroke-dashoffset:0}100%{stroke-dashoffset:28}} @keyframes scaleIn{0%{transform:scale(0.35);opacity:0}60%{transform:scale(1.14);opacity:1}100%{transform:scale(1);opacity:1}} @keyframes nowPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.06);opacity:.94}} @keyframes ghostDrift{0%{transform:translateY(0) translateX(0)}25%{transform:translateY(-10px) translateX(7px)}50%{transform:translateY(-16px) translateX(-5px)}75%{transform:translateY(-8px) translateX(4px)}100%{transform:translateY(0) translateX(0)}} @keyframes ghostPulse{0%,100%{opacity:.92}50%{opacity:.56}} @keyframes candyPop{0%{transform:translate(-50%,-10px) scale(0.5);opacity:0}18%{transform:translate(-50%,-18px) scale(1.18);opacity:1}72%{transform:translate(-50%,-42px) scale(1);opacity:1}100%{transform:translate(-50%,-64px) scale(0.9);opacity:0}} @keyframes pulseSlideIn{0%{transform:translate(-50%,-18px);opacity:0}12%{transform:translate(-50%,0);opacity:1}88%{transform:translate(-50%,0);opacity:1}100%{transform:translate(-50%,-18px);opacity:0}} @keyframes confettiFall{0%{transform:translateY(-10vh) rotate(0deg);opacity:1}100%{transform:translateY(110vh) rotate(720deg);opacity:0}} @keyframes skeletonPulse{0%,100%{opacity:0.55}50%{opacity:1}} @keyframes questFill{0%{width:0}100%{width:var(--fill)}} @keyframes forkMerge{0%{transform:translateX(0)}100%{transform:translateX(0)}} @keyframes forkWinnerPulse{0%,100%{filter:drop-shadow(0 0 0 rgba(16,185,129,0))}50%{filter:drop-shadow(0 0 8px rgba(16,185,129,0.9))}} @keyframes fabPulse{0%{transform:scale(1);box-shadow:0 8px 24px rgba(139,92,246,0.5),0 4px 12px rgba(0,0,0,0.3)}50%{transform:scale(1.08);box-shadow:0 12px 36px rgba(139,92,246,0.75),0 6px 18px rgba(0,0,0,0.4)}100%{transform:scale(1);box-shadow:0 8px 24px rgba(139,92,246,0.5),0 4px 12px rgba(0,0,0,0.3)}} @keyframes pulseRing{0%{transform:scale(0.8);opacity:0.9}70%{transform:scale(1.55);opacity:0}100%{transform:scale(1.7);opacity:0}} .road-3d-wrap{perspective:800px;perspective-origin:50% 28%} .road-3d-inner{transform-style:preserve-3d;transform:perspective(800px) rotateX(4deg);transform-origin:center top;will-change:transform;clip-path:ellipse(96% 88% at 50% 46%);border-radius:28px} .road-3d-inner::before{content:"";position:absolute;inset:0;pointer-events:none;border-radius:28px;box-shadow:inset 0 10px 22px rgba(0,0,0,0.16),inset 0 -8px 16px rgba(0,0,0,0.12)} .node-3d{transform:translateZ(6px);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.55),inset 0 -2px 4px rgba(0,0,0,0.14),0 8px 20px rgba(0,0,0,0.42),0 1px 6px rgba(0,0,0,0.32);transition:transform 220ms cubic-bezier(.2,.8,.3,1),box-shadow 220ms ease} .node-3d:hover{transform:translateZ(12px) scale(1.02);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.65),inset 0 -3px 6px rgba(0,0,0,0.16),0 12px 28px rgba(0,0,0,0.5),0 4px 12px rgba(0,0,0,0.36)}`}</style>
       <div className="relative min-h-[calc(100vh-64px)] w-full overflow-hidden xl:pr-[276px]" style={{ background: "linear-gradient(180deg, #0d3b2a 0%, #143d2e 42%, #1a5c3a 100%)" }}>
         {/* ambient - parallax */}
         <div className="pointer-events-none absolute inset-0" style={{ transform: `translateY(${parallaxY}px)`, willChange:"transform" }}>
@@ -1852,6 +1928,47 @@ function RoadmapInner() {
             <path d={roadD} fill="none" stroke="rgba(255,255,255,0.70)" strokeWidth={4.6} strokeLinecap="round" strokeDasharray="0 42" strokeDashoffset={24} opacity={0.92} style={{ transform: "translate(15px, 0px)" } as any} />
             <path d={roadD} fill="none" stroke="white" strokeWidth={3.2} strokeLinecap="round" strokeDasharray="14 14" opacity={0.92} style={{ animation: "roadShimmer 1.2s linear infinite" }} />
             <path d={roadD} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth={1} opacity={0.5} />
+            {/* Fork branches: purple road splits into two offset paths per conflict node */}
+            {displayItems.map((it:any, idx:number)=>{
+              if(it.kind!=="fork") return null;
+              const p = nodes[idx];
+              if(!p) return null;
+              const x=p.x, y=p.y;
+              const isVis = y >= scrollPos - 400 && y <= scrollPos + viewH + 400;
+              if(!isVis) return null;
+              const prev = idx>0 ? nodes[idx-1] : null;
+              const next = idx < nodes.length-1 ? nodes[idx+1] : null;
+              // compute branch curves from y-56 to y and y to y+56
+              const topY = prev ? (y + (prev.y))/2 : y - 56;
+              const botY = next ? (y + next.y)/2 : y + 56;
+              const leftX = x - FORK_OFFSET;
+              const rightX = x + FORK_OFFSET;
+              // determine winner for coloring merge segment
+              const apVals = (it.events as EventRow[]).map(e=> Number(e.authority_points||0));
+              const winnerIdx = apVals.findIndex(v=> v >= FORK_THRESHOLD);
+              const hasWinner = winnerIdx !== -1;
+              const winX = winnerIdx===0 ? leftX : winnerIdx===1 ? rightX : x;
+              return (
+                <g key={"fork-road-"+it.id} opacity={0.98}>
+                  {/* left branch top half */}
+                  <path d={`M ${x} ${topY} C ${x-8} ${topY+18}, ${leftX+6} ${y-18}, ${leftX} ${y}`} fill="none" stroke="#4c1d95" strokeWidth={44} strokeLinecap="round" strokeLinejoin="round" opacity={0.88} />
+                  <path d={`M ${x} ${topY} C ${x-8} ${topY+18}, ${leftX+6} ${y-18}, ${leftX} ${y}`} fill="none" stroke="url(#purpleRoad)" strokeWidth={44} strokeLinecap="round" strokeLinejoin="round" />
+                  {/* right branch top half */}
+                  <path d={`M ${x} ${topY} C ${x+8} ${topY+18}, ${rightX-6} ${y-18}, ${rightX} ${y}`} fill="none" stroke="#4c1d95" strokeWidth={44} strokeLinecap="round" strokeLinejoin="round" opacity={0.88} />
+                  <path d={`M ${x} ${topY} C ${x+8} ${topY+18}, ${rightX-6} ${y-18}, ${rightX} ${y}`} fill="none" stroke="url(#purpleRoad)" strokeWidth={44} strokeLinecap="round" strokeLinejoin="round" />
+                  {/* bottom merge halves */}
+                  <path d={`M ${leftX} ${y} C ${leftX+4} ${y+14}, ${x-6} ${botY-14}, ${x} ${botY}`} fill="none" stroke={hasWinner && winnerIdx===0 ? "#10b981" : "#4c1d95"} strokeWidth={hasWinner && winnerIdx===0 ? 44 : 38} strokeLinecap="round" opacity={hasWinner && winnerIdx===0 ? 0.95 : 0.55} style={hasWinner && winnerIdx===0 ? { animation: "forkWinnerPulse 1.4s ease-in-out infinite" } as any : undefined} />
+                  <path d={`M ${leftX} ${y} C ${leftX+4} ${y+14}, ${x-6} ${botY-14}, ${x} ${botY}`} fill="none" stroke={hasWinner && winnerIdx===0 ? "#10b981" : "url(#purpleRoad)"} strokeWidth={hasWinner && winnerIdx===0 ? 44 : 44} strokeLinecap="round" opacity={hasWinner ? (winnerIdx===0 ? 0.98 : 0.35) : 0.92} />
+                  <path d={`M ${rightX} ${y} C ${rightX-4} ${y+14}, ${x+6} ${botY-14}, ${x} ${botY}`} fill="none" stroke={hasWinner && winnerIdx===1 ? "#10b981" : "#4c1d95"} strokeWidth={hasWinner && winnerIdx===1 ? 44 : 38} strokeLinecap="round" opacity={hasWinner && winnerIdx===1 ? 0.95 : 0.55} style={hasWinner && winnerIdx===1 ? { animation: "forkWinnerPulse 1.4s ease-in-out infinite" } as any : undefined} />
+                  <path d={`M ${rightX} ${y} C ${rightX-4} ${y+14}, ${x+6} ${botY-14}, ${x} ${botY}`} fill="none" stroke={hasWinner && winnerIdx===1 ? "#10b981" : "url(#purpleRoad)"} strokeWidth={hasWinner && winnerIdx===1 ? 44 : 44} strokeLinecap="round" opacity={hasWinner ? (winnerIdx===1 ? 0.98 : 0.35) : 0.92} />
+                  {/* white center dashes on branches */}
+                  <path d={`M ${x} ${topY} C ${x-8} ${topY+18}, ${leftX+6} ${y-18}, ${leftX} ${y}`} fill="none" stroke="white" strokeWidth={3.2} strokeLinecap="round" strokeDasharray="14 14" opacity={hasWinner ? (winnerIdx===0?0.95:0.35):0.88} />
+                  <path d={`M ${x} ${topY} C ${x+8} ${topY+18}, ${rightX-6} ${y-18}, ${rightX} ${y}`} fill="none" stroke="white" strokeWidth={3.2} strokeLinecap="round" strokeDasharray="14 14" opacity={hasWinner ? (winnerIdx===1?0.95:0.35):0.88} />
+                  <path d={`M ${leftX} ${y} C ${leftX+4} ${y+14}, ${x-6} ${botY-14}, ${x} ${botY}`} fill="none" stroke="white" strokeWidth={3.2} strokeLinecap="round" strokeDasharray="14 14" opacity={hasWinner ? (winnerIdx===0?0.95:0.35):0.88} />
+                  <path d={`M ${rightX} ${y} C ${rightX-4} ${y+14}, ${x+6} ${botY-14}, ${x} ${botY}`} fill="none" stroke="white" strokeWidth={3.2} strokeLinecap="round" strokeDasharray="14 14" opacity={hasWinner ? (winnerIdx===1?0.95:0.35):0.88} />
+                </g>
+              );
+            })}
 
             {/* NOW marker — big pulse */}
             <g style={{ animation: "nowPulse 1.4s ease-in-out infinite" }}>
@@ -1872,7 +1989,88 @@ function RoadmapInner() {
                     <rect x={i % 2 === 0 ? 142 + 44 : 378 - 160} y={TOP_BUFFER + i * STEP_Y + 24} width={120} height={18} rx={9} fill="#e5e7eb" style={{ animation: "skeletonPulse 1.4s ease-in-out infinite", animationDelay: `${i * 0.15}s` }} />
                   </g>
                 ))
-              : displayItems.map((item, i) => {
+              : displayItems.map((item: any, i: number) => {
+                  // --- FORK node rendering ---
+                  if(item.kind === "fork"){
+                    const p = nodes[i];
+                    const isVisibleFork = (()=>{ const y=p.y; return y >= scrollPos - 400 && y <= scrollPos + viewH + 400; })();
+                    if(!isVisibleFork){
+                      const base0 = String(item.ids?.[0]||"fork").split("__tile")[0];
+                      return <g key={item.id} id={`node-${base0}`} style={{display:"none"}} />;
+                    }
+                    const events: EventRow[] = item.events as EventRow[];
+                    // only handle first 2 branches (spec says 2 offset paths). If more, show first 2 and +N
+                    const branches = events.slice(0,2);
+                    const extra = events.length>2 ? events.slice(2) : [];
+                    const leftX = p.x - FORK_OFFSET;
+                    const rightX = p.x + FORK_OFFSET;
+                    const winnerIdx = branches.findIndex(e=> Number(e.authority_points||0) >= FORK_THRESHOLD);
+                    const hasWinner = winnerIdx!==-1;
+                    const isPastFork = item.ms <= now;
+                    // fork node container id uses first event id for deep link
+                    const forkBaseId = String(branches[0]?.id || item.ids[0]).split("__tile")[0];
+                    const forkSelected = selectedId===forkBaseId || (item.ids as string[]).includes(String(selectedId));
+                    return (
+                      <g key={item.id} id={`node-${forkBaseId}`} style={{ cursor: "pointer" }} onClick={() => { setQTap(true); setSelectedId(forkBaseId); setDeepPulseId(null); setSheetOpen(true); }}>
+                        {/* FORK pill */}
+                        <g>
+                          <rect x={p.x - 22} y={p.y - 52} width={44} height={16} rx={8} fill="#1a1033" stroke="#a78bfa" strokeWidth={1.2} />
+                          <text x={p.x} y={p.y - 41} textAnchor="middle" fontSize={8} fontWeight={900} fill="#a78bfa" style={{ fontFamily: "ui-monospace,monospace", letterSpacing:"0.08em" }}>FORK</text>
+                        </g>
+                        {/* merge animation emerald halo on winner side */}
+                        {hasWinner && (
+                          <circle cx={winnerIdx===0 ? leftX : rightX} cy={p.y} r={36} fill="none" stroke="#10b981" strokeWidth={2.5} opacity={0.45} style={{ animation: "pulseRing 1.6s ease-out infinite" }} />
+                        )}
+                        {branches.map((ev, bIdx)=>{
+                          const bx = bIdx===0 ? leftX : rightX;
+                          const ap = Number(ev.authority_points||0);
+                          const isWinner = ap >= FORK_THRESHOLD;
+                          const isLoser = hasWinner && !isWinner;
+                          const opacity = isLoser ? 0.35 : 1;
+                          const title = ev.title.length>14 ? ev.title.slice(0,14)+"…" : ev.title;
+                          const pillW = Math.max(120, Math.min(150, title.length*7 + 28));
+                          const pillX = bx - pillW/2;
+                          const yes = Math.min(ap, FORK_THRESHOLD);
+                          const pct = Math.min(100, Math.round((ap/FORK_THRESHOLD)*100));
+                          const venue = String(ev.venue||"").slice(0,12);
+                          const leftSideBranch = bIdx===0;
+                          return (
+                            <g key={ev.id} opacity={opacity} style={isWinner ? { animation: "forkWinnerPulse 1.4s ease-in-out infinite" } as any : undefined} onClick={(e)=>{ e.stopPropagation(); setQTap(true); setSelectedId(String(ev.id).split("__tile")[0]); setSheetOpen(true); }}>
+                              {/* node circle */}
+                              <circle cx={bx} cy={p.y+6} r={28} fill="black" opacity={0.34} />
+                              <g style={{ transformOrigin: `${bx}px ${p.y}px`, transform: isWinner ? "translateZ(14px) scale(1.06)" : "translateZ(10px)" } as any}>
+                                <circle cx={bx} cy={p.y} r={28} fill={isWinner ? "#ecfdf5" : "white"} stroke={isWinner ? "#10b981" : "#8b5cf6"} strokeWidth={isWinner ? 3.5 : 3} />
+                                <circle cx={bx} cy={p.y} r={16} fill={isWinner ? "#d1fae5" : "#f5f3ff"} />
+                                <text x={bx} y={p.y+5} textAnchor="middle" fontSize={14} fontWeight={800} fill={isWinner ? "#065f46" : "#6d28d9"} style={{ fontFamily: fredoka.style.fontFamily }}>{isWinner ? "✓" : "◉"}</text>
+                              </g>
+                              {/* event card pill */}
+                              <g opacity={isLoser ? 0.7 : 1}>
+                                <rect x={pillX} y={p.y - 36} width={pillW} height={22} rx={11} fill={isWinner ? "#10b981" : selectedId===String(ev.id).split("__tile")[0] ? "white" : "rgba(0,0,0,0.72)"} stroke={isWinner ? "#10b981" : "rgba(255,255,255,0.18)"} />
+                                <text x={pillX + pillW/2} y={p.y - 21} textAnchor="middle" fontSize={11} fontWeight={900} fill={isWinner ? "white" : selectedId===String(ev.id).split("__tile")[0] ? "#000" : "white"} style={{ fontFamily: fredoka.style.fontFamily }}>{title}</text>
+                              </g>
+                              <g opacity={0.96}>
+                                <rect x={pillX} y={p.y+22} width={pillW} height={14} rx={7} fill="rgba(0,0,0,0.74)" />
+                                <text x={pillX + pillW/2} y={p.y+32} textAnchor="middle" fontSize={7} fontWeight={600} fill="#cbd5e1" style={{ fontFamily: "ui-monospace,monospace" }}>{venue} · {fmtDate(ev.event_date)} {fmtTime(ev.event_time)}</text>
+                              </g>
+                              {/* quorum bar Yes/threshold */}
+                              <g>
+                                <rect x={bx - 42} y={p.y + 42} width={84} height={6} rx={3} fill="rgba(0,0,0,0.55)" stroke="rgba(255,255,255,0.12)" />
+                                <rect x={bx - 42} y={p.y + 42} width={Math.max(0, Math.min(84, Math.round(84*Math.min(100,pct)/100)))} height={6} rx={3} fill={isWinner ? "#10b981" : "#8b5cf6"} opacity={0.95} />
+                                <text x={bx - 42} y={p.y + 38} textAnchor="start" fontSize={6} fontWeight={800} fill={isWinner ? "#6ee7b7" : "rgba(255,255,255,0.92)"} style={{fontFamily:"ui-monospace,monospace"}}>{ap}/{FORK_THRESHOLD} {pct}%{isWinner?" · WIN":""}</text>
+                              </g>
+                              {isPastFork && <text x={bx} y={p.y+62} textAnchor="middle" fontSize={6} fontWeight={700} fill="rgba(255,255,255,0.45)" style={{fontFamily:"ui-monospace,monospace"}}>FORK · PAST</text>}
+                            </g>
+                          );
+                        })}
+                        {extra.length>0 && (
+                          <g>
+                            <rect x={p.x - 36} y={p.y+48} width={72} height={16} rx={8} fill="rgba(0,0,0,0.6)" />
+                            <text x={p.x} y={p.y+59} textAnchor="middle" fontSize={7} fontWeight={800} fill="#a78bfa">+{extra.length} more</text>
+                          </g>
+                        )}
+                      </g>
+                    );
+                  }
                   const p = nodes[i];
                   // virtualize: cull distant nodes outside viewport + 400px buffer
                   const isVisible = (()=>{ const y=p.y; return y >= scrollPos - 400 && y <= scrollPos + viewH + 400; })();
