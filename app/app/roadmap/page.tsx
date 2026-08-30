@@ -220,6 +220,20 @@ function RoadmapInner() {
   const [facepile, setFacepile] = useState<{ yes: { id:string; handle:string; color:string; bg:string }[]; yesCount:number; noCount:number } | null>(null);
   const [facepileLoading, setFacepileLoading] = useState(false);
   const [facepileTick, setFacepileTick] = useState(0);
+  // quorum + bell + virtualize
+  const quorumActive = statsUsers; // alias for /api/stats active users
+  const quorumThreshold = useMemo(()=> {
+    const a = Number(quorumActive);
+    if (!a || isNaN(a) || a <= 0) return 8;
+    const t = Math.ceil(a * 0.8);
+    return t > 0 ? t : 8;
+  }, [quorumActive]);
+  const [bellOpen, setBellOpen] = useState(false);
+  const [bellCount, setBellCount] = useState(0);
+  const [bellItems, setBellItems] = useState<{id:string; title:string; ts:number; sub:string}[]>([]);
+  const [scrollPos, setScrollPos] = useState(0);
+  const [viewH, setViewH] = useState(800);
+  const bellSeenRef = useRef<number>(0);
   // shareable Rep card
   const [shareOpen, setShareOpen] = useState(false);
   const [shareImg, setShareImg] = useState<string | null>(null);
@@ -867,6 +881,62 @@ function RoadmapInner() {
     return ()=>{ cancelled=true; };
   }, [selectedEvent?.id, facepileTick]);
 
+  // --- Bell inbox: poll mine verifications + recent verifies -> dropdown items
+  useEffect(()=>{
+    if(!myUserId) return;
+    let cancel=false;
+    async function pollBell(){
+      try{
+        const r=await fetch("/api/timetable?limit=200",{cache:"no-store"});
+        const j=await r.json().catch(()=>({} as any));
+        const evs: EventRow[] = j.events ?? [];
+        const mine = evs.filter(e=> String(e.created_by||"")===String(myUserId));
+        const newlyVerified = mine.filter(isVerified);
+        // build bell items from newly verified mine gists
+        const items:{id:string; title:string; ts:number; sub:string}[] = newlyVerified.slice(0,8).map(e=> ({
+          id: e.id, title: e.title, ts: Date.parse(e.created_at)||Date.now(), sub: "Your gist got verified ✓"
+        }));
+        // also add recent general verifications as fallback if mine empty (poll /api/verify recent via events)
+        if(items.length===0 && evs.length){
+          const recentVerified = evs.filter(isVerified).slice(0,5).map(e=> ({
+            id: e.id, title: e.title, ts: Date.parse(e.created_at)||Date.now(), sub: "Gist verified · road"
+          }));
+          if(!cancel) setBellItems(recentVerified);
+        } else {
+          if(!cancel) setBellItems(items);
+        }
+        // badge count: unseen vs bellSeenRef
+        const unseen = items.filter(it=> it.ts > bellSeenRef.current).length;
+        // also respect mineHasNew badge: at least 1 if mineHasNew and items exist
+        const count = unseen > 0 ? unseen : (mineHasNew && items.length>0 ? items.length : 0);
+        if(!cancel) setBellCount(count);
+      }catch{}
+    }
+    pollBell();
+    const iv=setInterval(pollBell, 30000);
+    // also listen for mine seen
+    function onSeen(){ bellSeenRef.current = Date.now(); setBellCount(0); }
+    if(typeof window!=="undefined") window.addEventListener("physi-mine-seen", onSeen as any);
+    return ()=>{ cancel=true; clearInterval(iv); if(typeof window!=="undefined") window.removeEventListener("physi-mine-seen", onSeen as any); };
+  }, [myUserId, mineHasNew]);
+
+  // --- Virtualize: track scrollTop + viewport height (400px buffer)
+  useEffect(()=>{
+    const el = scrollRef.current;
+    if(!el) return;
+    function onScroll(){
+      setScrollPos(el!.scrollTop);
+    }
+    function onResize(){
+      setViewH(typeof window!=="undefined" ? window.innerHeight : 800);
+      if(el) setScrollPos(el.scrollTop);
+    }
+    onResize();
+    el.addEventListener("scroll", onScroll, {passive:true});
+    window.addEventListener("resize", onResize);
+    return ()=>{ el.removeEventListener("scroll", onScroll); window.removeEventListener("resize", onResize); };
+  }, [scrollRef]);
+
   // combined road items chronologically sorted
   type DemoItem = { kind: "demo"; localId: string; id: string; ms: number; title: string; venue: string; event_date: string; event_time: string; hint: string };
   type RoadItem = { kind: "personal"; p: PersonalBubble; id: string; ms: number } | { kind: "event"; ev: EventRow; id: string; ms: number } | DemoItem;
@@ -1369,6 +1439,35 @@ function RoadmapInner() {
               </div>
             </div>
             <div className="flex items-center gap-1.5 sm:gap-2">
+              <div className="relative">
+                <button onClick={()=>{ setBellOpen(v=>!v); if(!bellOpen){ bellSeenRef.current=Date.now(); setBellCount(0); try{ localStorage.setItem(`physi_bell_seen_${myUserId||'anon'}`, String(Date.now())); }catch{} } }} aria-label="Notifications" className="relative flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white backdrop-blur hover:bg-white hover:text-black transition">
+                  <span className="text-[14px]">🔔</span>
+                  {(bellCount>0 || mineHasNew) && <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-black text-white ring-2 ring-black">{bellCount>0 ? bellCount : 1}</span>}
+                </button>
+                {bellOpen && (
+                  <div className="absolute right-0 top-9 z-40 w-[300px] overflow-hidden rounded-2xl border border-white/10 bg-[#0b0f1e] shadow-2xl">
+                    <div className="flex items-center justify-between border-b border-white/10 px-4 py-2.5">
+                      <p className="text-[13px] font-bold text-white">Inbox</p>
+                      <button onClick={()=>{ setBellOpen(false); bellSeenRef.current=Date.now(); setBellCount(0); }} className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-semibold text-white">Mark seen</button>
+                    </div>
+                    <div className="max-h-[320px] overflow-auto">
+                      {bellItems.length===0 ? (
+                        <p className="px-4 py-6 text-center text-[12px] text-slate-400">No new verifications yet</p>
+                      ) : bellItems.map(it=> (
+                        <button key={it.id} onClick={()=>{ setSelectedId(it.id); setSheetOpen(true); setBellOpen(false); setDeepPulseId(it.id); }} className="flex w-full gap-3 border-b border-white/[0.06] px-4 py-3 text-left hover:bg-white/[0.04] transition">
+                          <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-[12px] font-black text-white">✓</span>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-[12px] font-semibold text-white">{it.title}</p>
+                            <p className="text-[11px] text-emerald-300">{it.sub}</p>
+                            <p className="font-mono text-[10px] text-slate-500">{new Date(it.ts).toLocaleTimeString()}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                    <button onClick={()=> setBellOpen(false)} className="w-full bg-white/5 py-2 text-[11px] font-semibold text-slate-300 hover:bg-white/10">Close</button>
+                  </div>
+                )}
+              </div>
               <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold sm:px-3 sm:py-1.5 sm:text-xs ${verifiedCount > 0 ? "bg-emerald-500 text-white" : "bg-white/10 text-slate-300"}`}>
                 <span className="h-1.5 w-1.5 rounded-full bg-white/80" /> {verifiedCount} ✓
               </span>
@@ -1728,6 +1827,12 @@ function RoadmapInner() {
                 ))
               : displayItems.map((item, i) => {
                   const p = nodes[i];
+                  // virtualize: cull distant nodes outside viewport + 400px buffer
+                  const isVisible = (()=>{ const y=p.y; return y >= scrollPos - 400 && y <= scrollPos + viewH + 400; })();
+                  if(!isVisible){
+                    const baseIdV = String(item.id).split("__tile")[0];
+                    return <g key={item.id} id={`node-${baseIdV}`} style={{display:"none"}} />;
+                  }
                   const st = stateFor(item);
                   // tile ids have __tile suffix — compare base id so selection stays coherent across loop
                   const baseId = String(item.id).split("__tile")[0];
@@ -1845,6 +1950,15 @@ function RoadmapInner() {
                           </g>
                         )
                       )}
+                      {/* Quorum bar on each node */}
+                      {(!isPersonal && !(item as any).kind?.includes?.("demo") && (item as any).kind!=="demo") && (()=>{ const apQ = !isPersonal && !(item as any).kind?.includes?.("demo") && (item as any).kind!=="demo" ? Number((item as any).ev.authority_points ?? 0) : 0; const yesQ = Math.min(apQ, quorumThreshold); const pctQ = quorumThreshold>0 ? Math.min(100, Math.round((apQ/quorumThreshold)*100)) : 0; const almostQ = pctQ===88 || pctQ===87 || apQ===quorumThreshold-1; // 87.5% rounded
+                        const barW=84; const barX = p.x - barW/2; const barY = p.y + 46; const fillW = Math.max(0, Math.min(barW, Math.round(barW * pctQ/100)));
+                        return <g>
+                          <rect x={barX} y={barY} width={barW} height={6} rx={3} fill="rgba(0,0,0,0.55)" stroke="rgba(255,255,255,0.12)" />
+                          <rect x={barX} y={barY} width={fillW} height={6} rx={3} fill={pctQ>=100 ? "#10b981" : "#10b981"} opacity={0.95} />
+                          <text x={barX} y={barY-4} textAnchor="start" fontSize={6.5} fontWeight={800} fill={almostQ ? "#facc15" : "rgba(255,255,255,0.92)"} style={{fontFamily:"ui-monospace,monospace"}}>{apQ}/{quorumThreshold} {pctQ}%{almostQ ? " · 1 more!" : ""}</text>
+                        </g>;
+                      })()}
                     </g>
                   );
                 })}
@@ -2099,6 +2213,19 @@ function RoadmapInner() {
                           <p className="mt-1.5 font-mono text-[11px] text-slate-500">{verified ? "✓ canonical pop — enough Yes to trust" : isAlmost ? "amber → green scaling — almost verified, one more Yes to pop" : "needs more Yes taps to flip to green tick"}</p>
                         </div>
                       )}
+                      {/* Quorum bar — bottom sheet */}
+                      {(() => { const yesQ = Number(ap||0); const qPct = quorumThreshold>0 ? Math.min(100, Math.round((yesQ/quorumThreshold)*100)) : 0; const isAlmostQ = qPct===88 || qPct===87 || yesQ===quorumThreshold-1; return (
+                        <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
+                          <div className="flex items-center justify-between font-mono text-[11px]">
+                            <span className={isAlmostQ ? "font-black text-amber-300" : "text-slate-400"}>{isAlmostQ ? "1 more!" : "Quorum"} · {yesQ}/{quorumThreshold} · {qPct}%</span>
+                            <span className={`text-[10px] ${qPct>=100 ? "text-emerald-300" : "text-slate-500"}`}>{qPct>=100 ? "quorum reached" : `${quorumThreshold - yesQ} more to quorum`}</span>
+                          </div>
+                          <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-white/10">
+                            <div className="h-full bg-emerald-400 transition-all duration-500" style={{ width: `${qPct}%` }} />
+                          </div>
+                          {isAlmostQ && <p className="mt-1 font-mono text-[11px] font-black text-amber-300">Almost — 1 more! 87.5%</p>}
+                        </div>
+                      ); })()}
                       {!rp && verified && <p className="mt-4 rounded-xl bg-emerald-500/10 px-3 py-2.5 text-[12.5px] text-emerald-200">Verified — coursemates confirmed this happened.</p>}
                       {!rp && !verified && <p className="mt-4 rounded-xl bg-amber-500/10 px-3 py-2.5 text-[12.5px] text-amber-200">Advisory — fresh gist, waiting for confirmations.</p>}
                       {/* Facepile — YES voters candy avatars + counts */}
