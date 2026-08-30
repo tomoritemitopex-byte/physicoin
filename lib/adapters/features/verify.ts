@@ -1,5 +1,6 @@
 /**
  * lib/adapters/features/verify.ts — Verify Feature + Api Adapter
+ * Proof receipts: stores is_witness/squad_boost/award for profile scrollable list
  */
 import { NextResponse } from "next/server";
 import { getSql, isDbConfigured, dbNotConfigured, ensureAllTables } from "@/lib/db";
@@ -12,7 +13,7 @@ export const verifyFeature = {
   label: "Verify",
   nav: { href: "/app/verify", label: "Verify", short: "✓" },
   apiRoute: "/api/verify",
-  description: "Vote YES/NO/CANCEL with authority weight",
+  description: "Vote YES/NO/CANCEL with authority weight + proof receipts",
 };
 
 registerFeature(verifyFeature);
@@ -44,11 +45,14 @@ async function handleVerify(req: Request): Promise<Response> {
         // --- Lecturer emerald bypass: if lecturer + official pin, treat as 8/8 weight override ---
         const isLecturerEmerald = b?.lecturer === true && b?.emerald === true && String(b.vote).toUpperCase() === "YES";
         if (isLecturerEmerald) w = Math.max(w, 8);
+        // proof receipts fields
+        const isWitness = b?.is_witness === true || b?.isWitness === true || false;
+        const award = Number(b?.award ?? (isWitness ? 1.0 : 0.3));
         try {
           const r = await sql`
-        INSERT INTO physi_verifications (verifier_id, event_id, vote, authority_weight)
-        VALUES (${b.verifier_id}, ${b.event_id}, ${b.vote}, ${w})
-        ON CONFLICT (verifier_id, event_id) DO UPDATE SET vote = EXCLUDED.vote, authority_weight = EXCLUDED.authority_weight
+        INSERT INTO physi_verifications (verifier_id, event_id, vote, authority_weight, is_witness, squad_boost, award)
+        VALUES (${b.verifier_id}, ${b.event_id}, ${b.vote}, ${w}, ${isWitness}, ${isSquadBoost}, ${award})
+        ON CONFLICT (verifier_id, event_id) DO UPDATE SET vote = EXCLUDED.vote, authority_weight = EXCLUDED.authority_weight, is_witness = EXCLUDED.is_witness, squad_boost = EXCLUDED.squad_boost, award = EXCLUDED.award
         RETURNING *`;
           // quorum check + canonical promotion + notify (fire-and-forget, never blocks response)
           try {
@@ -75,7 +79,6 @@ async function handleVerify(req: Request): Promise<Response> {
                 // notify canonical (Telegram or log)
                 try {
                   const { notifyCanonical } = await import("@/lib/adapters/notify");
-                  // don't await blocking telegram on hot path — fire and log
                   notifyCanonical({ id: String(ev.id ?? b.event_id), title: String((ev as {title?:string}).title ?? ""), venue: String((ev as {venue?:string}).venue ?? ""), event_date: String((ev as {event_date?:string}).event_date ?? ""), event_time: String((ev as {event_time?:string}).event_time ?? ""), yes_weight: yesW, total_weight: total, yes_ratio: ratio }).catch(()=>{});
                 } catch {}
               }
@@ -87,7 +90,6 @@ async function handleVerify(req: Request): Promise<Response> {
           return NextResponse.json({ ok: false, code: "VERIFY_FAILED", message: getErrorMessage("VERIFY_FAILED") }, { status: 500 });
         }
       } catch (e) {
-        // user lookup failure
         logError("VERIFY_SUBMIT_FAILED", e, { route: "/api/verify", method: "POST" });
         return NextResponse.json({ ok: false, code: "VERIFY_SUBMIT_FAILED", message: getErrorMessage("VERIFY_SUBMIT_FAILED") }, { status: 500 });
       }
@@ -98,7 +100,22 @@ async function handleVerify(req: Request): Promise<Response> {
     } catch (e) {
       logError("VERIFY_FETCH_FAILED", e, { route: "/api/verify", phase: "ensure" });
     }
-    const eid = new URL(req.url).searchParams.get("event_id");
+    const url = new URL(req.url);
+    const eid = url.searchParams.get("event_id");
+    const vid = url.searchParams.get("verifier_id") || url.searchParams.get("user_id");
+    const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "20",10)||20,50);
+    // proof receipts: fetch by verifier_id with join to events
+    if (vid) {
+      try {
+        const rows = await sql`
+          SELECT v.*, e.title as event_title, e.venue as event_venue, e.event_date, e.event_time, e.severity as event_severity
+          FROM physi_verifications v
+          LEFT JOIN physi_events e ON e.id = v.event_id
+          WHERE v.verifier_id = ${vid}
+          ORDER BY v.created_at DESC LIMIT ${limit}`;
+        return NextResponse.json({ ok:true, proofs: rows, verifications: rows });
+      } catch(e){ logError("VERIFY_FETCH_FAILED", e, {route:"/api/verify", method:"GET"}); return NextResponse.json({ ok:false, code:"VERIFY_FETCH_FAILED", message:getErrorMessage("VERIFY_FETCH_FAILED")},{status:500}); }
+    }
     if (!eid) return NextResponse.json({ ok: false, code: "BAD_INPUT", message: getErrorMessage("BAD_INPUT") }, { status: 400 });
     try {
       const rows = await sql`SELECT * FROM physi_verifications WHERE event_id = ${eid} ORDER BY created_at DESC`;

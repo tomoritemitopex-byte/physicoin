@@ -138,9 +138,15 @@ export async function ensureEvents(): Promise<void> {
       authority_points NUMERIC(10,2) NOT NULL DEFAULT 0,
       required_points NUMERIC(10,2) NOT NULL DEFAULT 0,
       created_by UUID REFERENCES physi_users(id) ON DELETE SET NULL,
+      severity TEXT NOT NULL DEFAULT 'move' CHECK (severity IN ('move','shift','cancelled')),
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`;
+  // additive columns for existing DBs
+  try { await c`ALTER TABLE physi_events ADD COLUMN IF NOT EXISTS severity TEXT NOT NULL DEFAULT 'move' CHECK (severity IN ('move','shift','cancelled'))`; } catch {}
+  try { await c`ALTER TABLE physi_events ADD COLUMN IF NOT EXISTS prev_venue TEXT`; } catch {}
+  try { await c`ALTER TABLE physi_events ADD COLUMN IF NOT EXISTS prev_event_time TIME`; } catch {}
+  try { await c`ALTER TABLE physi_events ADD COLUMN IF NOT EXISTS prev_event_date DATE`; } catch {}
   await c`CREATE INDEX IF NOT EXISTS physi_events_dt_idx ON physi_events (event_date DESC, event_time DESC)`;
   await c`CREATE INDEX IF NOT EXISTS physi_events_status_idx2 ON physi_events (status)`;
   await c`CREATE UNIQUE INDEX IF NOT EXISTS physi_events_tvd_uidx ON physi_events (lower(title), lower(venue), event_date)`;
@@ -158,6 +164,10 @@ export async function ensureVerifications(): Promise<void> {
       authority_weight NUMERIC(3,2) NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`;
+  // additive columns for proof receipts (witness/squad/presence)
+  try { await c`ALTER TABLE physi_verifications ADD COLUMN IF NOT EXISTS is_witness BOOLEAN NOT NULL DEFAULT false`; } catch {}
+  try { await c`ALTER TABLE physi_verifications ADD COLUMN IF NOT EXISTS squad_boost BOOLEAN NOT NULL DEFAULT false`; } catch {}
+  try { await c`ALTER TABLE physi_verifications ADD COLUMN IF NOT EXISTS award NUMERIC(3,2) NOT NULL DEFAULT 0.3`; } catch {}
   await c`CREATE UNIQUE INDEX IF NOT EXISTS physi_verifs_pair_uidx ON physi_verifications (verifier_id, event_id)`;
   await c`CREATE INDEX IF NOT EXISTS physi_verifs_event_idx2 ON physi_verifications (event_id)`;
   await c`CREATE INDEX IF NOT EXISTS physi_verifs_verifier_idx2 ON physi_verifications (verifier_id)`;
@@ -195,6 +205,26 @@ export async function ensureCanonicalLog(): Promise<void> {
   await c`CREATE INDEX IF NOT EXISTS physi_canonical_event_idx2 ON physi_canonical_log (event_id)`;
 }
 
+export async function ensureEventHistory(): Promise<void> {
+  const c = getSql() ?? sql;
+  if (!c) return;
+  await ensureEvents();
+  await c`
+    CREATE TABLE IF NOT EXISTS physi_event_history (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      event_id UUID NOT NULL REFERENCES physi_events(id) ON DELETE CASCADE,
+      prev_venue TEXT,
+      prev_event_date DATE,
+      prev_event_time TIME,
+      new_venue TEXT NOT NULL,
+      new_event_date DATE NOT NULL,
+      new_event_time TIME NOT NULL,
+      changed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      changed_by UUID REFERENCES physi_users(id) ON DELETE SET NULL
+    )`;
+  await c`CREATE INDEX IF NOT EXISTS physi_event_hist_event_idx ON physi_event_history (event_id, changed_at DESC)`;
+}
+
 /**
  * Idempotent bootstrap — safe to call on every request.
  * Parallel leaves, ordered root; single retry for cold start (500ms wake).
@@ -205,7 +235,7 @@ export async function ensureAllTables(): Promise<void> {
   const run = async () => {
     await ensureUsers();
     await ensureEvents();
-    await Promise.all([ensureVerifications(), ensureMiningLogs(), ensureCanonicalLog()]);
+    await Promise.all([ensureVerifications(), ensureMiningLogs(), ensureCanonicalLog(), ensureEventHistory()]);
   };
   try {
     await run();
@@ -223,5 +253,6 @@ export const ensureVerificationsTable = ensureVerifications;
 export const ensureMiningLogsTable = ensureMiningLogs;
 export const ensureMiningTable = ensureMiningLogs;
 export const ensureCanonicalLogTable = ensureCanonicalLog;
+export const ensureEventHistoryTable = ensureEventHistory;
 export const ensureTables = ensureAllTables;
 export const dbUnavailableResponse = dbNotConfigured;

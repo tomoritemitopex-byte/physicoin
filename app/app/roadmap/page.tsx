@@ -15,6 +15,14 @@ const RepExplainer = dynamic(()=> import("@/components/road/RepExplainer"), { ss
 const RepBoard = dynamic(()=> import("@/components/road/RepBoard"), { ssr: false, loading: ()=> null }) as any;
 const ShareCard = dynamic(()=> import("@/components/road/ShareCard"), { ssr: false, loading: ()=> null });
 
+type Severity = "move" | "shift" | "cancelled";
+const SEVERITY_COLOR: Record<Severity,string> = { move:"#3b82f6", shift:"#eab308", cancelled:"#ef4444" };
+const SEVERITY_BG: Record<Severity,string> = { move:"bg-blue-500", shift:"bg-yellow-400", cancelled:"bg-red-500" };
+const SEVERITY_RING: Record<Severity,string> = { move:"ring-blue-400", shift:"ring-yellow-300", cancelled:"ring-red-400" };
+function sevOf(ev:any): Severity { const s=String(ev?.severity||"move").toLowerCase(); if(s==="shift") return "shift"; if(s==="cancelled") return "cancelled"; return "move"; }
+function sevWidth(sev:Severity){ return sev==="cancelled" ? 52 : sev==="shift" ? 44 : 38; }
+function sevNodeR(sev:Severity, base:number){ if(sev==="cancelled") return base+6; if(sev==="shift") return base+2; return base; }
+
 type EventRow = {
   id: string;
   title: string;
@@ -28,6 +36,10 @@ type EventRow = {
   required_points: number | string;
   created_at: string;
   created_by?: string | null;
+  severity?: Severity | string;
+  prev_venue?: string | null;
+  prev_event_time?: string | null;
+  prev_event_date?: string | null;
 };
 
 type PersonalBubble = {
@@ -286,6 +298,10 @@ function RoadmapInner() {
   const [fabVenue, setFabVenue] = useState("");
   const [fabDate, setFabDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [fabTime, setFabTime] = useState("10:00");
+  const [fabSeverity, setFabSeverity] = useState<Severity | "">("");
+  // timeline diff history
+  const [timelineHist, setTimelineHist] = useState<{ history:any[]; diff:any; event:any } | null>(null);
+  const [timelineLoading, setTimelineLoading] = useState(false);
   // rep board + streak + invite
   const [repBoard, setRepBoard] = useState<typeof GHOST_REP>(GHOST_REP);
   const [repSheetOpen, setRepSheetOpen] = useState(false);
@@ -997,6 +1013,25 @@ function RoadmapInner() {
     return ()=>{ cancelled=true; };
   }, [selectedEvent?.id, facepileTick]);
 
+  // Timeline diff: fetch history venue/time diff vs previous version (LT2->LT5) stored in event history
+  useEffect(()=>{
+    if(!selectedEvent){ setTimelineHist(null); return; }
+    const baseId = String(selectedEvent.id).split("__tile")[0];
+    // quick diff from inline prev fields
+    const inlineDiff = (selectedEvent as any).prev_venue ? { venue: `${String((selectedEvent as any).prev_venue)}→${String(selectedEvent.venue)}`, time: `${String((selectedEvent as any).prev_event_time||"").slice(0,5)}→${String(selectedEvent.event_time).slice(0,5)}` } : null;
+    // fetch server history for full timeline
+    setTimelineLoading(true);
+    (async()=>{
+      try{
+        const r = await fetch(`/api/timetable?history=${encodeURIComponent(baseId)}`, { cache:"no-store" });
+        const j = await r.json().catch(()=> ({} as any));
+        if(j?.ok) setTimelineHist({ history: j.history ?? [], diff: j.diff ?? inlineDiff, event: j.event ?? selectedEvent });
+        else setTimelineHist(inlineDiff ? { history:[], diff:inlineDiff, event:selectedEvent } : null);
+      }catch{ setTimelineHist(inlineDiff ? { history:[], diff:inlineDiff, event:selectedEvent } : null); }
+      finally{ setTimelineLoading(false); }
+    })();
+  }, [selectedEvent?.id, selectedEvent?.prev_venue, selectedEvent?.prev_event_time, selectedEvent?.venue, selectedEvent?.event_time]);
+
   // --- Bell inbox: poll mine verifications + recent verifies -> dropdown items
   useEffect(()=>{
     if(!myUserId) return;
@@ -1549,7 +1584,7 @@ function RoadmapInner() {
       const r = await fetch("/api/verify", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ verifier_id: verifierId, event_id: id, vote: v, squad: squadBoost, lecturer: !!getLecturer()?.verified, emerald: lecturerEmerald }),
+        body: JSON.stringify({ verifier_id: verifierId, event_id: id, vote: v, squad: squadBoost, lecturer: !!getLecturer()?.verified, emerald: lecturerEmerald, is_witness: presAward >= 1, award: presAward }),
       });
       const j = await r.json();
       if (!r.ok || j.ok === false) throw new Error(j.error || "vote failed");
@@ -1732,19 +1767,20 @@ function RoadmapInner() {
   async function handleFabCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!fabTitle.trim() || !fabVenue.trim() || !fabDate || !fabTime) { setToast("fill title, venue, date, time"); return; }
+    if (!fabSeverity) { setToast("pick severity: move (blue) · shift (yellow) · cancelled (red)"); return; }
     if (!ensureProfile()) { openPickerForFab(); return; }
     setFabBusy(true);
     try {
       let createdBy: string | null = null;
       try { const raw = localStorage.getItem("physi_profile"); if (raw) createdBy = JSON.parse(raw)?.id ?? null; } catch {}
       const ghostId = fabGhost ? (fabGhostId || genAnonId()) : null;
-      const body: any = { title: fabTitle.trim(), venue: fabVenue.trim(), event_date: fabDate, event_time: fabTime, scope_type: "whole_school", scope_value: null, status: "pending", authority_points: 0, required_points: 5 };
+      const body: any = { title: fabTitle.trim(), venue: fabVenue.trim(), event_date: fabDate, event_time: fabTime, scope_type: "whole_school", scope_value: null, status: "pending", authority_points: 0, required_points: 5, severity: fabSeverity };
       if (createdBy) body.created_by = createdBy;
       // ghost: still maps Rep to real user ID, but frontend shows ghost avatar
       if (ghostId) { body.is_ghost = true; body.ghost_handle = ghostId; }
       const r = await fetch("/api/timetable", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
       const j = await r.json();
-      if (!r.ok || j.ok === false) throw new Error(j.error || "create failed");
+      if (!r.ok || j.ok === false) throw new Error(j.error || j.message || "create failed — severity required");
       if (ghostId && j?.event?.id) {
         try { const m = JSON.parse(localStorage.getItem("physi_ghost_map") || "{}"); m[String(j.event.id)] = ghostId; localStorage.setItem("physi_ghost_map", JSON.stringify(m)); if (createdBy) { const mm = JSON.parse(localStorage.getItem("physi_ghost_owner") || "{}"); mm[ghostId] = createdBy; localStorage.setItem("physi_ghost_owner", JSON.stringify(mm)); } } catch {}
       }
@@ -1757,11 +1793,11 @@ function RoadmapInner() {
         setTimeout(()=> setCandy(null), 1600);
         setToast(`first gist! +5 bonus 🎉`);
       } else {
-        setToast(`created “${fabTitle.trim()}” ✓`);
+        setToast(`created “${fabTitle.trim()}” ✓ · ${fabSeverity}`);
       }
-      setFabOpen(false); setFabTitle(""); setFabVenue(""); setFabTime("10:00"); setFabDate(new Date().toISOString().slice(0,10));
+      setFabOpen(false); setFabTitle(""); setFabVenue(""); setFabTime("10:00"); setFabSeverity(""); setFabDate(new Date().toISOString().slice(0,10));
       fetchFeed();
-    } catch (err:any) { logError("TIMETABLE_CREATE_FAILED", err, { page: "roadmap" }); setToast(getErrorMessage("TIMETABLE_CREATE_FAILED")); }
+    } catch (err:any) { logError("TIMETABLE_CREATE_FAILED", err, { page: "roadmap" }); setToast(err?.message || getErrorMessage("TIMETABLE_CREATE_FAILED")); }
     finally { setFabBusy(false); }
   }
 
@@ -1901,7 +1937,7 @@ function RoadmapInner() {
 
   return (
     <div className={`${fredoka.className} ${fredoka.variable} relative -mx-4 -mt-5 w-[100vw] max-w-[100vw] sm:-mx-6 lg:-mx-8`}>
-      <style>{`@keyframes canonicalPop{0%{transform:scale(0.72)}50%{transform:scale(1.22)}100%{transform:scale(1)}} @keyframes tickPulse{0%,100%{opacity:1}50%{opacity:.55}} @keyframes roadShimmer{0%{stroke-dashoffset:0}100%{stroke-dashoffset:28}} @keyframes scaleIn{0%{transform:scale(0.35);opacity:0}60%{transform:scale(1.14);opacity:1}100%{transform:scale(1);opacity:1}} @keyframes nowPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.06);opacity:.94}} @keyframes ghostDrift{0%{transform:translateY(0) translateX(0)}25%{transform:translateY(-10px) translateX(7px)}50%{transform:translateY(-16px) translateX(-5px)}75%{transform:translateY(-8px) translateX(4px)}100%{transform:translateY(0) translateX(0)}} @keyframes ghostPulse{0%,100%{opacity:.92}50%{opacity:.56}} @keyframes candyPop{0%{transform:translate(-50%,-10px) scale(0.5);opacity:0}18%{transform:translate(-50%,-18px) scale(1.18);opacity:1}72%{transform:translate(-50%,-42px) scale(1);opacity:1}100%{transform:translate(-50%,-64px) scale(0.9);opacity:0}} @keyframes pulseSlideIn{0%{transform:translate(-50%,-18px);opacity:0}12%{transform:translate(-50%,0);opacity:1}88%{transform:translate(-50%,0);opacity:1}100%{transform:translate(-50%,-18px);opacity:0}} @keyframes confettiFall{0%{transform:translateY(-10vh) rotate(0deg);opacity:1}100%{transform:translateY(110vh) rotate(720deg);opacity:0}} @keyframes skeletonPulse{0%,100%{opacity:0.55}50%{opacity:1}} @keyframes questFill{0%{width:0}100%{width:var(--fill)}} @keyframes forkMerge{0%{transform:translateX(0)}100%{transform:translateX(0)}} @keyframes forkWinnerPulse{0%,100%{filter:drop-shadow(0 0 0 rgba(16,185,129,0))}50%{filter:drop-shadow(0 0 8px rgba(16,185,129,0.9))}} @keyframes fabPulse{0%{transform:scale(1);box-shadow:0 8px 24px rgba(139,92,246,0.5),0 4px 12px rgba(0,0,0,0.3)}50%{transform:scale(1.08);box-shadow:0 12px 36px rgba(139,92,246,0.75),0 6px 18px rgba(0,0,0,0.4)}100%{transform:scale(1);box-shadow:0 8px 24px rgba(139,92,246,0.5),0 4px 12px rgba(0,0,0,0.3)}} @keyframes pulseRing{0%{transform:scale(0.8);opacity:0.9}70%{transform:scale(1.55);opacity:0}100%{transform:scale(1.7);opacity:0}} @keyframes panicDoublePulse{0%{transform:scale(0.85);opacity:0.95}25%{transform:scale(1.35);opacity:0.7}50%{transform:scale(0.9);opacity:0.95}75%{transform:scale(1.45);opacity:0}100%{transform:scale(1.6);opacity:0}} @keyframes panicGlow{0%,100%{filter:drop-shadow(0 0 0 rgba(239,68,68,0))}50%{filter:drop-shadow(0 0 14px rgba(239,68,68,0.9))}} .road-3d-wrap{perspective:800px;perspective-origin:50% 28%} .road-3d-inner{transform-style:preserve-3d;transform:perspective(800px) rotateX(4deg);transform-origin:center top;will-change:transform;clip-path:ellipse(96% 88% at 50% 46%);border-radius:28px} .road-3d-inner::before{content:\"\";position:absolute;inset:0;pointer-events:none;border-radius:28px;box-shadow:inset 0 10px 22px rgba(0,0,0,0.16),inset 0 -8px 16px rgba(0,0,0,0.12)} .node-3d{transform:translateZ(6px);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.55),inset 0 -2px 4px rgba(0,0,0,0.14),0 8px 20px rgba(0,0,0,0.42),0 1px 6px rgba(0,0,0,0.32);transition:transform 220ms cubic-bezier(.2,.8,.3,1),box-shadow 220ms ease} .node-3d:hover{transform:translateZ(12px) scale(1.02);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.65),inset 0 -3px 6px rgba(0,0,0,0.16),0 12px 28px rgba(0,0,0,0.5),0 4px 12px rgba(0,0,0,0.36)}`}</style>
+      <style>{`@keyframes canonicalPop{0%{transform:scale(0.72)}50%{transform:scale(1.22)}100%{transform:scale(1)}} @keyframes sevPulse{0%,100%{transform:scale(1);filter:brightness(1)}50%{transform:scale(1.08);filter:brightness(1.25)}} @keyframes tickPulse{0%,100%{opacity:1}50%{opacity:.55}} @keyframes roadShimmer{0%{stroke-dashoffset:0}100%{stroke-dashoffset:28}} @keyframes scaleIn{0%{transform:scale(0.35);opacity:0}60%{transform:scale(1.14);opacity:1}100%{transform:scale(1);opacity:1}} @keyframes nowPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.06);opacity:.94}} @keyframes ghostDrift{0%{transform:translateY(0) translateX(0)}25%{transform:translateY(-10px) translateX(7px)}50%{transform:translateY(-16px) translateX(-5px)}75%{transform:translateY(-8px) translateX(4px)}100%{transform:translateY(0) translateX(0)}} @keyframes ghostPulse{0%,100%{opacity:.92}50%{opacity:.56}} @keyframes candyPop{0%{transform:translate(-50%,-10px) scale(0.5);opacity:0}18%{transform:translate(-50%,-18px) scale(1.18);opacity:1}72%{transform:translate(-50%,-42px) scale(1);opacity:1}100%{transform:translate(-50%,-64px) scale(0.9);opacity:0}} @keyframes pulseSlideIn{0%{transform:translate(-50%,-18px);opacity:0}12%{transform:translate(-50%,0);opacity:1}88%{transform:translate(-50%,0);opacity:1}100%{transform:translate(-50%,-18px);opacity:0}} @keyframes confettiFall{0%{transform:translateY(-10vh) rotate(0deg);opacity:1}100%{transform:translateY(110vh) rotate(720deg);opacity:0}} @keyframes skeletonPulse{0%,100%{opacity:0.55}50%{opacity:1}} @keyframes questFill{0%{width:0}100%{width:var(--fill)}} @keyframes forkMerge{0%{transform:translateX(0)}100%{transform:translateX(0)}} @keyframes forkWinnerPulse{0%,100%{filter:drop-shadow(0 0 0 rgba(16,185,129,0))}50%{filter:drop-shadow(0 0 8px rgba(16,185,129,0.9))}} @keyframes fabPulse{0%{transform:scale(1);box-shadow:0 8px 24px rgba(139,92,246,0.5),0 4px 12px rgba(0,0,0,0.3)}50%{transform:scale(1.08);box-shadow:0 12px 36px rgba(139,92,246,0.75),0 6px 18px rgba(0,0,0,0.4)}100%{transform:scale(1);box-shadow:0 8px 24px rgba(139,92,246,0.5),0 4px 12px rgba(0,0,0,0.3)}} @keyframes pulseRing{0%{transform:scale(0.8);opacity:0.9}70%{transform:scale(1.55);opacity:0}100%{transform:scale(1.7);opacity:0}} @keyframes panicDoublePulse{0%{transform:scale(0.85);opacity:0.95}25%{transform:scale(1.35);opacity:0.7}50%{transform:scale(0.9);opacity:0.95}75%{transform:scale(1.45);opacity:0}100%{transform:scale(1.6);opacity:0}} @keyframes panicGlow{0%,100%{filter:drop-shadow(0 0 0 rgba(239,68,68,0))}50%{filter:drop-shadow(0 0 14px rgba(239,68,68,0.9))}} .road-3d-wrap{perspective:800px;perspective-origin:50% 28%} .road-3d-inner{transform-style:preserve-3d;transform:perspective(800px) rotateX(4deg);transform-origin:center top;will-change:transform;clip-path:ellipse(96% 88% at 50% 46%);border-radius:28px} .road-3d-inner::before{content:\"\";position:absolute;inset:0;pointer-events:none;border-radius:28px;box-shadow:inset 0 10px 22px rgba(0,0,0,0.16),inset 0 -8px 16px rgba(0,0,0,0.12)} .node-3d{transform:translateZ(6px);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.55),inset 0 -2px 4px rgba(0,0,0,0.14),0 8px 20px rgba(0,0,0,0.42),0 1px 6px rgba(0,0,0,0.32);transition:transform 220ms cubic-bezier(.2,.8,.3,1),box-shadow 220ms ease} .node-3d:hover{transform:translateZ(12px) scale(1.02);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.65),inset 0 -3px 6px rgba(0,0,0,0.16),0 12px 28px rgba(0,0,0,0.5),0 4px 12px rgba(0,0,0,0.36)}`}</style>
       <div className="relative min-h-[calc(100vh-64px)] w-full overflow-hidden xl:pr-[276px]" style={{ background: "linear-gradient(180deg, #0d3b2a 0%, #143d2e 42%, #1a5c3a 100%)" }}>
         {/* ambient - parallax */}
         <div className="pointer-events-none absolute inset-0" style={{ transform: `translateY(${parallaxY}px)`, willChange:"transform" }}>
@@ -2524,6 +2560,17 @@ function RoadmapInner() {
                     nodeR = 30;
                     outline = "#8b5cf6";
                   }
+                  // severity overrides size/color/width — move blue, shift yellow, cancelled red pulse
+                  let sev: Severity = "move";
+                  let sevW = 38;
+                  if (!isPersonal && !isDemo && (item as any).ev) {
+                    sev = sevOf((item as any).ev);
+                    sevW = sevWidth(sev);
+                    nodeR = sevNodeR(sev, nodeR);
+                    // override outline by severity for non-canonical
+                    if ((st as any).key !== "canonical") outline = SEVERITY_COLOR[sev];
+                    if (sev==="cancelled") anim = anim ? anim + ", sevPulse 1.2s ease-in-out infinite" : "sevPulse 1.2s ease-in-out infinite";
+                  }
                   const title = isPersonal ? item.p.title : isDemo ? (item as DemoItem).title : (item as any).ev.title;
                   const venue = isPersonal ? item.p.venue : isDemo ? (item as DemoItem).venue : (item as any).ev.venue;
                   const date = isPersonal ? item.p.event_date : isDemo ? (item as DemoItem).event_date : (item as any).ev.event_date;
@@ -2587,7 +2634,7 @@ function RoadmapInner() {
                           filter: "drop-shadow(0 12px 18px rgba(0,0,0,0.45))",
                         } as any}
                       >
-                        <circle cx={p.x} cy={p.y} r={nodeR} fill={isPersonal ? "#e7e5e4" : "white"} stroke={outline} strokeWidth={isActive ? 3.8 : 3} strokeDasharray={isDemo ? "8 6" : undefined} filter="url(#nodeGlow)" opacity={isPersonal ? 0.72 : isDemo ? 0.96 : 1} style={{ transform: isActive ? "translateZ(18px)" : "translateZ(12px)" } as any} />
+                        <circle cx={p.x} cy={p.y} r={nodeR} fill={isPersonal ? "#e7e5e4" : "white"} stroke={outline} strokeWidth={isPersonal ? 3 : isDemo ? 3 : (sev==="cancelled" ? 4.2 : sev==="shift" ? 3.4 : 2.8) + (isActive ? 0.8 : 0)} strokeDasharray={isDemo ? "8 6" : undefined} filter="url(#nodeGlow)" opacity={isPersonal ? 0.72 : isDemo ? 0.96 : 1} style={{ transform: isActive ? "translateZ(18px)" : "translateZ(12px)" } as any} />
                         <circle cx={p.x} cy={p.y} r={nodeR - 10} fill={isDemo ? "#f5f3ff" : st.key === "canonical" ? "#ecfdf5" : st.key === "almost" ? "#f7fee7" : st.key === "advisory" ? "#fffbeb" : st.key === "waiting" ? "#eff6ff" : "#f4f4f5"} stroke={isDemo ? "#8b5cf6" : "rgba(0,0,0,0.06)"} strokeWidth={1} strokeDasharray={isDemo ? "4 3" : undefined} />
                         <text x={p.x} y={p.y + 6} textAnchor="middle" fontSize={isDemo ? 13 : isPersonal ? 10 : st.key === "canonical" ? 17 : 14} fontWeight={800} fill={isDemo ? "#6d28d9" : st.key === "canonical" ? "#065f46" : st.key === "almost" ? "#3f6212" : st.key === "advisory" ? "#92400e" : st.key === "waiting" ? "#1e40af" : "#52525b"} style={{ fontFamily: fredoka.style.fontFamily, letterSpacing: "-0.025em" }}>
                           {isDemo ? ( (item as DemoItem).localId==="demo_welcome" ? "✦" : (item as DemoItem).localId==="demo_swipe" ? "↔" : "+" ) : isPersonal ? "◐" : st.key === "canonical" ? "✓" : st.key === "advisory" ? "●" : st.key === "almost" ? "◉" : st.key === "waiting" ? "○" : "●"}
@@ -2661,9 +2708,12 @@ function RoadmapInner() {
                   <div className="flex items-center gap-2">
                     <span className={`flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-black ${verified? "bg-emerald-500 text-white" : isPersonal? "bg-zinc-600 text-white" : isDemo? "bg-[#8b5cf6] text-white border-2 border-dashed border-white/60" : "bg-amber-500 text-white"}`}>{verified?"✓": isPersonal?"◐": isDemo?"✦":"●"}</span>
                     <span className={`text-[13px] font-bold leading-tight ${active?"text-black":"text-white"}`}>{title}</span>
+                    {!isPersonal && !isDemo && ev?.severity && (
+                      <span className={`ml-1 rounded-full px-2 py-0.5 text-[10px] font-black border ${String(ev.severity)==="move" ? "bg-blue-500 text-white border-blue-400" : String(ev.severity)==="shift" ? "bg-yellow-400 text-black border-yellow-300" : "bg-red-500 text-white border-red-400"}`} style={String(ev.severity)==="cancelled" ? { animation:"sevPulse 1.1s ease-in-out infinite"} as any : undefined}>{String(ev.severity)}</span>
+                    )}
                     <span className={`ml-auto rounded-full px-2 py-0.5 font-mono text-[10px] font-bold ${verified?"bg-emerald-500 text-white":"bg-white/10 text-slate-300"}`}>{verified?"green":"advisory"}</span>
                   </div>
-                  <p className={`mt-1 font-mono text-[11px] ${active?"text-slate-600":"text-slate-400"}`}>{venue} · {fmtDate(date)} {fmtTime(time)} · {isPersonal?(item as any).p.scope_type: isDemo?"demo": ev.scope_type}{!isPersonal && !isDemo && ev.scope_value ? ` · ${ev.scope_value}`:""}</p>
+                  <p className={`mt-1 font-mono text-[11px] ${active?"text-slate-600":"text-slate-400"}`}>{venue} · {fmtDate(date)} {fmtTime(time)} · {isPersonal?(item as any).p.scope_type: isDemo?"demo": ev.scope_type}{!isPersonal && !isDemo && ev.scope_value ? ` · ${ev.scope_value}`:""} {!isPersonal && !isDemo && ev?.prev_venue ? ` · ${String(ev.prev_venue)}→${String(ev.venue)} diff` : ""}</p>
                   <p className={`mt-1 font-mono text-[10px] ${active?"text-slate-500":"text-slate-500"}`}>{fmtDate(date)} {fmtTime(time)} WAT · tap to open sheet →</p>
                 </button>
               );
@@ -2732,7 +2782,23 @@ function RoadmapInner() {
                 <h3 className="text-[16px] font-bold text-white">Create event</h3>
                 <button type="button" onClick={()=>setFabOpen(false)} className="rounded-full bg-white/10 px-3 py-1 text-sm text-white">✕</button>
               </div>
-              <p className="mt-1 text-[12px] text-slate-400">title / venue / date / time → POST /api/timetable · Rep maps to real ID</p>
+              <p className="mt-1 text-[12px] text-slate-400">title / venue / date / time + severity → POST /api/timetable · Rep maps to real ID</p>
+              <div className="mt-3">
+                <p className="font-mono text-[10px] font-bold tracking-wide text-slate-400">SEVERITY <span className="text-red-300">* required</span> — move blue · shift yellow · cancelled red · node size/color/width + pulse</p>
+                <div className="mt-1.5 flex gap-2">
+                  {(["move","shift","cancelled"] as const).map(s=> {
+                    const active = fabSeverity===s;
+                    const bg = s==="move" ? "bg-blue-500" : s==="shift" ? "bg-yellow-400" : "bg-red-500";
+                    const txt = s==="shift" ? "text-black" : "text-white";
+                    return (
+                      <button key={s} type="button" onClick={()=> setFabSeverity(s)} className={`flex-1 rounded-full px-3 py-2 text-[12px] font-black border transition ${active ? `${bg} ${txt} border-white ring-2 ring-white/60` : "bg-white/10 text-slate-300 border-white/10 hover:bg-white/15"}`}>
+                        <span className={`mr-1 inline-block h-2.5 w-2.5 rounded-full ${s==="move"?"bg-blue-400": s==="shift"?"bg-yellow-300":"bg-red-400"} ${active ? "ring-1 ring-white" : ""}`} /> {s}
+                      </button>
+                    );
+                  })}
+                </div>
+                {!fabSeverity && <p className="mt-1 font-mono text-[10px] text-amber-300">pick severity to enable Create — node will size/color by severity, cancelled pulses</p>}
+              </div>
               <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 flex items-center justify-between gap-3">
                 <div>
                   <p className="text-[12px] font-bold text-white flex items-center gap-1.5">👻 Post as ghost <span className="font-mono text-[10px] font-normal text-slate-400">· anon_XXXX · Rep → real ID</span></p>
@@ -2743,12 +2809,12 @@ function RoadmapInner() {
               {fabGhost && <div className="mt-2 flex items-center gap-2 rounded-full border border-violet-400/20 bg-violet-500/10 px-3 py-2"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#8b5cf6] text-[11px]">👻</span><span className="font-mono text-[11px] font-bold text-violet-200">{fabGhostId}</span><span className="font-mono text-[10px] text-violet-300/70">· ghost avatar · rep → you</span><button type="button" onClick={()=> setFabGhostId(genAnonId())} className="ml-auto rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-black">regen</button></div>}
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {[
-                  { label:"Class moved", title:"Class moved \u2014 LT changed", venue:"LT2 \u2192 LT5", time:"08:00" },
-                  { label:"Exam shift", title:"Exam shift \u2014 ", venue:"Exam Hall", time:"09:00" },
-                  { label:"Venue change", title:"Venue change \u2014 ", venue:"LT1 \u2192 LT3", time:"10:00" },
-                  { label:"Cancelled", title:"Cancelled \u2014 ", venue:"Cancelled", time:"08:00" },
+                  { label:"Class moved", title:"Class moved — LT changed", venue:"LT2 → LT5", time:"08:00", severity:"move" as Severity },
+                  { label:"Exam shift", title:"Exam shift — ", venue:"Exam Hall", time:"09:00", severity:"shift" as Severity },
+                  { label:"Venue change", title:"Venue change — ", venue:"LT1 → LT3", time:"10:00", severity:"move" as Severity },
+                  { label:"Cancelled", title:"Cancelled — ", venue:"Cancelled", time:"08:00", severity:"cancelled" as Severity },
                 ].map(tt=> (
-                  <button key={tt.label} type="button" onClick={()=>{ setFabTitle(tt.title); setFabVenue(tt.venue); setFabTime(tt.time); setFabDate(new Date().toISOString().slice(0,10)); }} className="rounded-full border border-violet-400/20 bg-violet-500/10 px-2.5 py-1 text-[11px] font-bold text-violet-200 hover:bg-violet-500 hover:text-white transition">{tt.label}</button>
+                  <button key={tt.label} type="button" onClick={()=>{ setFabTitle(tt.title); setFabVenue(tt.venue); setFabTime(tt.time); setFabSeverity(tt.severity); setFabDate(new Date().toISOString().slice(0,10)); }} className="rounded-full border border-violet-400/20 bg-violet-500/10 px-2.5 py-1 text-[11px] font-bold text-violet-200 hover:bg-violet-500 hover:text-white transition">{tt.label} · {tt.severity}</button>
                 ))}
               </div>
               <div className="mt-4 grid gap-3">
@@ -2760,7 +2826,7 @@ function RoadmapInner() {
                 </div>
               </div>
               <div className="mt-4 flex gap-2">
-                <button type="submit" disabled={fabBusy} className="flex-1 rounded-full bg-[#8b5cf6] py-2.5 text-sm font-black text-white hover:bg-[#7c3aed] disabled:opacity-60">{fabBusy ? "…" : "Create"}</button>
+                <button type="submit" disabled={fabBusy || !fabSeverity} className={`flex-1 rounded-full py-2.5 text-sm font-black text-white disabled:opacity-40 ${!fabSeverity ? "bg-white/20 cursor-not-allowed" : "bg-[#8b5cf6] hover:bg-[#7c3aed]"}`}>{fabBusy ? "…" : `Create · ${fabSeverity || "pick severity"}`}</button>
                 <button type="button" onClick={()=>setFabOpen(false)} className="rounded-full border border-white/15 bg-white/5 px-5 py-2.5 text-sm font-semibold text-white">Cancel</button>
               </div>
             </form>
@@ -2884,8 +2950,41 @@ function RoadmapInner() {
                         <div className="flex items-center gap-3">
                           <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[15px] font-black text-white shadow ${verified ? "bg-emerald-500" : isAlmost ? "bg-lime-500" : isAdvisory ? "bg-amber-500" : "bg-blue-600"}`}>{verified ? "✓" : isAlmost ? "◉" : isAdvisory ? "●" : "○"}</span>
                           <div>
-                            <h2 className="text-[17px] font-bold leading-tight text-white">{ev.title}</h2>
-                            <p className="font-mono text-[11px] tracking-wide text-slate-500">{ev.venue} · {fmtDate(ev.event_date)} {fmtTime(ev.event_time)} · {ev.scope_type}{ev.scope_value ? ` · ${ev.scope_value}` : ""}</p>
+                            <h2 className="text-[17px] font-bold leading-tight text-white flex items-center gap-2">{ev.title}
+                              {(() => { const sev=sevOf(ev); return <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black border ${sev==="move" ? "bg-blue-500 text-white border-blue-400" : sev==="shift" ? "bg-yellow-400 text-black border-yellow-300" : "bg-red-500 text-white border-red-400"}`} style={sev==="cancelled" ? { animation:"sevPulse 1.1s ease-in-out infinite"} as any : undefined}>{sev}</span>; })()}
+                            </h2>
+                            <p className="font-mono text-[11px] tracking-wide text-slate-500">{ev.venue} · {fmtDate(ev.event_date)} {fmtTime(ev.event_time)} · {ev.scope_type}{ev.scope_value ? ` · ${ev.scope_value}` : ""} · <span style={{color:SEVERITY_COLOR[sevOf(ev)]}}>{sevOf(ev)}</span></p>
+                            {/* Timeline diff vs previous version (LT2->LT5) */}
+                            {(timelineHist?.diff || (ev as any).prev_venue) && (
+                              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                                <span className="inline-flex items-center gap-1 rounded-full border border-violet-400/20 bg-violet-500/10 px-2.5 py-1 font-mono text-[10px] font-bold text-violet-200">
+                                  {timelineLoading ? "loading diff…" : timelineHist?.diff ? `venue ${timelineHist.diff.venue}` : (ev as any).prev_venue ? `${String((ev as any).prev_venue)}→${String(ev.venue)}` : ""}
+                                  {timelineHist?.diff?.time && timelineHist.diff.time.includes("→") && timelineHist.diff.time!=="→" ? ` · time ${timelineHist.diff.time}` : ""}
+                                </span>
+                                {timelineHist?.history && timelineHist.history.length>0 && <span className="rounded-full bg-white/10 px-2 py-1 font-mono text-[10px] text-slate-400">{timelineHist.history.length} edits in history</span>}
+                              </div>
+                            )}
+                            {/* timeline diff history table */}
+                            {timelineHist && (timelineHist.history?.length>0 || timelineHist.diff) && (
+                              <div className="mt-2 overflow-hidden rounded-xl border border-white/10 bg-black/40">
+                                <div className="flex items-center justify-between bg-white/[0.04] px-3 py-2">
+                                  <span className="font-mono text-[10px] font-bold tracking-wide text-slate-300">Timeline diff history</span>
+                                  <span className="font-mono text-[10px] text-slate-500">{timelineHist.history?.length ?? 0} versions</span>
+                                </div>
+                                <div className="max-h-[96px] overflow-auto divide-y divide-white/5">
+                                  {timelineHist.history?.length ? timelineHist.history.slice(0,8).map((h:any,ix:number)=> (
+                                    <div key={h.id||ix} className="flex items-center gap-2 px-3 py-1.5 font-mono text-[10px] text-slate-400">
+                                      <span className="text-violet-300">{String(h.prev_venue||"—")}→{String(h.new_venue)}</span>
+                                      <span className="text-slate-500">·</span>
+                                      <span>{String(h.prev_event_time||"—").slice(0,5)}→{String(h.new_event_time).slice(0,5)}</span>
+                                      <span className="ml-auto text-[9px] text-slate-600">{String(h.changed_at||"").slice(0,16).replace("T"," ")}</span>
+                                    </div>
+                                  )) : (
+                                    <div className="px-3 py-2 font-mono text-[10px] text-slate-500">Current venue/time diff vs previous version stored in event history — no prior edits yet (create with PATCH to add LT2→LT5 entry).</div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </div>
                         <span className={`shrink-0 rounded-full px-3 py-1.5 font-mono text-[11px] font-bold ${verified ? "bg-emerald-500 text-white" : isAlmost ? "bg-lime-400 text-black" : isAdvisory ? "border border-amber-400/20 bg-amber-400/10 text-amber-200" : "border border-blue-400/20 bg-blue-500/10 text-blue-200"}`}>{verified ? "✓ canonical" : isAlmost ? "◉ almost" : isAdvisory ? "● advisory" : "○ waiting"}</span>

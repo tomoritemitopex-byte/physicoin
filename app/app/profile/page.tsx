@@ -172,6 +172,8 @@ export default function ProfilePage(){
   const [shareOpen,setShareOpen]=useState(false);
   const [shareImg,setShareImg]=useState<string|null>(null);
   const [repExplainerOpen,setRepExplainerOpen]=useState(false);
+  const [proofs,setProofs]=useState<any[]>([]);
+  const [proofsLoading,setProofsLoading]=useState(false);
   const shareCanvasRef = useRef<HTMLCanvasElement>(null);
   useEffect(()=>{ setCandy(randomCandy()); },[]);
   function shuffleSuggestions(){
@@ -227,6 +229,22 @@ export default function ProfilePage(){
     fetchGists();
     const iv=setInterval(fetchGists,30000);
     return ()=>{ cancelled=true; clearInterval(iv); };
+  }, [profile?.id]);
+  // Proof receipts — recent proofs scrollable list Witness gold, squad etc
+  useEffect(()=>{
+    if(!profile?.id) return;
+    let cancel=false;
+    async function fetchProofs(){
+      setProofsLoading(true);
+      try{
+        const r=await fetch(`/api/verify?verifier_id=${encodeURIComponent(profile!.id)}&limit=20`,{cache:"no-store"});
+        const j=await r.json().catch(()=>({} as any));
+        if(!cancel) setProofs(j.proofs ?? j.verifications ?? []);
+      }catch{} finally{ if(!cancel) setProofsLoading(false); }
+    }
+    fetchProofs();
+    const iv=setInterval(fetchProofs,30000);
+    return ()=>{ cancel=true; clearInterval(iv); };
   }, [profile?.id]);
   // share card generation
   useEffect(()=>{
@@ -463,6 +481,41 @@ export default function ProfilePage(){
             </div>
             <div className="rounded-2xl border border-amber-400/15 bg-amber-400/[0.06] px-4 py-3">
               <p className="font-mono text-[11px] leading-4 text-amber-200/70">Share your hub card → coursemates join via your link → +1 Rep per invite.</p>
+            </div>
+            {/* Proof receipts — recent proofs scrollable list Witness gold, squad etc */}
+            <div className="rounded-[20px] border border-white/[0.06] bg-white/[0.03] p-5">
+              <div className="flex items-center justify-between">
+                <h3 className="text-[14px] font-semibold text-white">Recent proofs</h3>
+                <span className="rounded-full bg-white/10 px-2.5 py-1 font-mono text-[11px] text-slate-300">{proofs.length} · receipts</span>
+              </div>
+              <p className="mt-1 font-mono text-[11px] text-slate-500">Witness gold + squad boost + award — scrollable</p>
+              {proofsLoading ? (
+                <div className="mt-3 space-y-2"><div className="h-12 animate-pulse rounded-xl bg-white/5" /><div className="h-12 animate-pulse rounded-xl bg-white/5" /></div>
+              ) : proofs.length===0 ? (
+                <div className="mt-3 rounded-xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-6 text-center">
+                  <p className="text-[13px] font-medium text-slate-300">No proofs yet</p>
+                  <p className="mt-1 font-mono text-[11px] text-slate-500">Verify a gist on the Road — your receipts appear here with Witness gold etc.</p>
+                </div>
+              ) : (
+                <div className="mt-3 max-h-[260px] overflow-auto pr-1 divide-y divide-white/5 rounded-xl border border-white/10 bg-black/20">
+                  {proofs.map((p:any)=> (
+                    <div key={p.id} className="flex items-center gap-2 px-3 py-2.5">
+                      <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-black ${p.vote==="YES" ? "bg-emerald-500 text-white" : p.vote==="NO" ? "bg-red-500 text-white" : "bg-slate-600 text-white"}`}>{p.vote?.slice(0,1)||"•"}</span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[12px] font-semibold text-white">{String(p.event_title||p.event_id).slice(0,40)}</p>
+                        <p className="truncate font-mono text-[10px] text-slate-500">{String(p.event_venue||"")} · {String(p.event_date||"").slice(0,10)} {String(p.event_time||"").slice(0,5)} · {p.vote} · {Number(p.authority_weight||0).toFixed(1)}w</p>
+                      </div>
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        {p.is_witness ? <span className="rounded-full bg-yellow-400 px-2 py-0.5 text-[10px] font-black text-black border border-yellow-300">Witness gold</span> : <span className="rounded-full bg-slate-700 px-2 py-0.5 text-[10px] font-bold text-slate-300">Remote</span>}
+                        <div className="flex gap-1">
+                          {p.squad_boost && <span className="rounded-full bg-violet-500 px-1.5 py-0.5 text-[9px] font-bold text-white">squad 1.5×</span>}
+                          <span className="rounded-full bg-white/10 px-1.5 py-0.5 font-mono text-[9px] text-slate-300">+{Number(p.award||0).toFixed(1)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
