@@ -1,4 +1,6 @@
 "use client";
+import { Fredoka } from "next/font/google";
+const fredoka = Fredoka({ subsets: ["latin"], weight: ["400","500","600","700"], display: "swap", variable: "--font-fredoka" });
 import { useEffect, useState, useCallback, useMemo, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
@@ -1459,7 +1461,7 @@ function RoadmapInner() {
   const upcomingCount = (filteredRoadItems.length ? filteredRoadItems.length : roadItems.length) - nowIdx;
 
   return (
-    <div className="relative -mx-4 -mt-5 w-[100vw] max-w-[100vw] sm:-mx-6 lg:-mx-8">
+    <div className={`${fredoka.className} ${fredoka.variable} relative -mx-4 -mt-5 w-[100vw] max-w-[100vw] sm:-mx-6 lg:-mx-8`}>
       <style>{`@keyframes canonicalPop{0%{transform:scale(0.72)}50%{transform:scale(1.22)}100%{transform:scale(1)}} @keyframes tickPulse{0%,100%{opacity:1}50%{opacity:.55}} @keyframes roadShimmer{0%{stroke-dashoffset:0}100%{stroke-dashoffset:28}} @keyframes scaleIn{0%{transform:scale(0.35);opacity:0}60%{transform:scale(1.14);opacity:1}100%{transform:scale(1);opacity:1}} @keyframes nowPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.06);opacity:.94}} @keyframes ghostDrift{0%{transform:translateY(0) translateX(0)}25%{transform:translateY(-10px) translateX(7px)}50%{transform:translateY(-16px) translateX(-5px)}75%{transform:translateY(-8px) translateX(4px)}100%{transform:translateY(0) translateX(0)}} @keyframes ghostPulse{0%,100%{opacity:.92}50%{opacity:.56}} @keyframes candyPop{0%{transform:translate(-50%,-10px) scale(0.5);opacity:0}18%{transform:translate(-50%,-18px) scale(1.18);opacity:1}72%{transform:translate(-50%,-42px) scale(1);opacity:1}100%{transform:translate(-50%,-64px) scale(0.9);opacity:0}} @keyframes pulseSlideIn{0%{transform:translate(-50%,-18px);opacity:0}12%{transform:translate(-50%,0);opacity:1}88%{transform:translate(-50%,0);opacity:1}100%{transform:translate(-50%,-18px);opacity:0}} @keyframes confettiFall{0%{transform:translateY(-10vh) rotate(0deg);opacity:1}100%{transform:translateY(110vh) rotate(720deg);opacity:0}} @keyframes skeletonPulse{0%,100%{opacity:0.55}50%{opacity:1}} @keyframes questFill{0%{width:0}100%{width:var(--fill)}} @keyframes fabPulse{0%{transform:scale(1);box-shadow:0 8px 24px rgba(139,92,246,0.5),0 4px 12px rgba(0,0,0,0.3)}50%{transform:scale(1.08);box-shadow:0 12px 36px rgba(139,92,246,0.75),0 6px 18px rgba(0,0,0,0.4)}100%{transform:scale(1);box-shadow:0 8px 24px rgba(139,92,246,0.5),0 4px 12px rgba(0,0,0,0.3)}} @keyframes pulseRing{0%{transform:scale(0.8);opacity:0.9}70%{transform:scale(1.55);opacity:0}100%{transform:scale(1.7);opacity:0}} .road-3d-wrap{perspective:800px;perspective-origin:50% 28%} .road-3d-inner{transform-style:preserve-3d;transform:perspective(800px) rotateX(4deg);transform-origin:center top;will-change:transform;clip-path:ellipse(96% 88% at 50% 46%);border-radius:28px} .road-3d-inner::before{content:"";position:absolute;inset:0;pointer-events:none;border-radius:28px;box-shadow:inset 0 10px 22px rgba(0,0,0,0.16),inset 0 -8px 16px rgba(0,0,0,0.12)} .node-3d{transform:translateZ(6px);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.55),inset 0 -2px 4px rgba(0,0,0,0.14),0 8px 20px rgba(0,0,0,0.42),0 1px 6px rgba(0,0,0,0.32);transition:transform 220ms cubic-bezier(.2,.8,.3,1),box-shadow 220ms ease} .node-3d:hover{transform:translateZ(12px) scale(1.02);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.65),inset 0 -3px 6px rgba(0,0,0,0.16),0 12px 28px rgba(0,0,0,0.5),0 4px 12px rgba(0,0,0,0.36)}`}</style>
       <div className="relative min-h-[calc(100vh-64px)] w-full overflow-hidden xl:pr-[276px]" style={{ background: "linear-gradient(180deg, #0d3b2a 0%, #143d2e 42%, #1a5c3a 100%)" }}>
         {/* ambient - parallax */}
@@ -1561,7 +1563,7 @@ function RoadmapInner() {
         {/* Quest bar - 3 dots with progress fill + daily quest ring */}
         <div className="pointer-events-none absolute left-1/2 top-[116px] z-20 flex w-full max-w-[560px] -translate-x-1/2 justify-center px-3 sm:top-[108px] sm:px-6">
           <div className="pointer-events-auto flex w-full items-center gap-2 rounded-full border border-white/10 bg-black/75 px-3 py-2 backdrop-blur-xl shadow-[0_8px_24px_rgba(0,0,0,0.5)] sm:px-4">
-            <span className="hidden font-mono text-[10px] font-bold tracking-[0.12em] text-amber-300 sm:inline">QUEST</span>
+            <span className={`hidden ${fredoka.className} text-[14px] font-black tracking-tight text-amber-300 sm:inline`}>QUEST</span>
             <div className="relative flex flex-1 items-center justify-between gap-1">
               <div className="absolute left-[14px] right-[14px] top-1/2 h-[4px] -translate-y-1/2 rounded-full bg-white/10" />
               <div className="absolute left-[14px] top-1/2 h-[4px] -translate-y-1/2 rounded-full bg-gradient-to-r from-violet-500 to-emerald-400 transition-all duration-700" style={{ width: `calc(${(questProgress/3)*100}% - 28px)`, maxWidth: 'calc(100% - 28px)' }} />
@@ -1572,11 +1574,11 @@ function RoadmapInner() {
               ].map(s=> (
                 <div key={s.idx} className="relative z-[1] flex flex-col items-center gap-1">
                   <div className={`flex h-7 w-7 items-center justify-center rounded-full border-2 text-[11px] font-black transition-all duration-300 ${s.done ? "bg-white border-white text-black scale-105" : "bg-white/10 border-white/20 text-white/60"}`}>{s.done ? "✓" : s.idx}</div>
-                  <span className={`hidden font-mono text-[9px] font-bold tracking-wide sm:inline ${s.done ? "text-white" : "text-slate-400"}`}>{s.label}</span>
+                  <span className={`hidden ${fredoka.className} text-[14px] font-black tracking-tight sm:inline ${s.done ? "text-white" : "text-slate-400"}`}>{s.label}</span>
                 </div>
               ))}
             </div>
-            <span className={`rounded-full px-2.5 py-1 font-mono text-[10px] font-black ${questDone ? "bg-emerald-500 text-white" : "bg-white/10 text-slate-300"}`}>{questDone ? "Done ✓" : `${questProgress}/3`}</span>
+            <span className={`rounded-full px-2.5 py-1 ${fredoka.className} text-[14px] font-black tracking-tight ${questDone ? "bg-emerald-500 text-white" : "bg-white/10 text-slate-300"}`}>{questDone ? "Done ✓" : `${questProgress}/3`}</span>
             {/* daily quest: Verify 3 today → +5 bonus with progress ring */}
             <div className="hidden sm:flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-500/10 px-2.5 py-1.5">
               <div className="relative h-7 w-7 shrink-0">
@@ -1587,8 +1589,8 @@ function RoadmapInner() {
                 <span className="absolute inset-0 flex items-center justify-center font-mono text-[10px] font-black text-white">{dailyCount}/3</span>
               </div>
               <div className="leading-none">
-                <p className="font-mono text-[10px] font-bold leading-none text-amber-200">Verify 3 today</p>
-                <p className="font-mono text-[9px] font-medium leading-none text-amber-300/80">→ +5 bonus {dailyBonusDone ? "✓ claimed" : ""}</p>
+                <p className={`${fredoka.className} text-[14px] font-black tracking-tight leading-none text-amber-200`}>Verify 3 today</p>
+                <p className={`${fredoka.className} text-[14px] font-black tracking-tight leading-none text-amber-300/80`}>→ +5 bonus {dailyBonusDone ? "✓ claimed" : ""}</p>
               </div>
             </div>
             {/* mobile daily ring compact */}
@@ -1603,7 +1605,7 @@ function RoadmapInner() {
         </div>
         {/* mobile daily quest label below quest bar */}
         <div className="pointer-events-none absolute left-1/2 top-[162px] z-20 flex w-full max-w-[560px] -translate-x-1/2 justify-center px-3 sm:hidden">
-          <span className="rounded-full border border-amber-400/20 bg-black/75 px-3 py-1 font-mono text-[10px] font-bold text-amber-200 backdrop-blur">Verify 3 today → +5 bonus · {dailyCount}/3 {dailyBonusDone ? "✓ done" : ""}</span>
+          <span className={`rounded-full border border-amber-400/20 bg-black/75 px-3 py-1 ${fredoka.className} text-[14px] font-black tracking-tight text-amber-200 backdrop-blur`}>Verify 3 today → +5 bonus · {dailyCount}/3 {dailyBonusDone ? "✓ done" : ""}</span>
         </div>
         {/* Filter chips row - under quest bar (pushed for daily label on mobile) */}
         <div className="pointer-events-none absolute left-1/2 top-[148px] z-20 flex w-full max-w-[560px] -translate-x-1/2 justify-center px-3 sm:top-[116px] sm:px-6">
@@ -1774,10 +1776,11 @@ function RoadmapInner() {
             <path d="M -10 210 L 90 78 L 170 175 L 250 54 L 340 168 L 430 92 L 560 210 Z" fill="rgba(13,59,42,0.32)" stroke="rgba(255,255,255,0.10)" strokeWidth={1} />
             <path d="M -10 240 L 70 150 L 145 210 L 250 120 L 370 210 L 470 155 L 560 240 Z" fill="rgba(26,92,58,0.28)" />
             {[42, 92, 410, 462].map((x, i) => (
-              <g key={i} opacity={0.32}>
-                <path d={`M ${x} 420 L ${x - 22} 462 L ${x + 22} 462 Z`} fill={i % 2 === 0 ? "#0d3b2a" : "#1a5c3a"} />
-                <path d={`M ${x} 392 L ${x - 18} 426 L ${x + 18} 426 Z`} fill={i % 2 === 0 ? "#2d6a4f" : "#40916c"} opacity={0.95} />
-                <rect x={x - 4} y={462} width={8} height={14} rx={2} fill="#2f3e2a" opacity={0.9} />
+              <g key={i} opacity={0.38}>
+                <rect x={x - 3.5} y={460} width={7} height={18} rx={3} fill="#5a3e1b" />
+                <circle cx={x} cy={436} r={20} fill="#52b788" stroke="rgba(255,255,255,0.16)" strokeWidth={1.4} />
+                <circle cx={x} cy={436} r={13} fill="rgba(255,255,255,0.08)" />
+                <circle cx={x + 6} cy={428} r={3.4} fill="#fbbf24" stroke="rgba(255,255,255,0.9)" strokeWidth={0.8} />
               </g>
             ))}
             <g opacity={0.32}>
@@ -1799,6 +1802,9 @@ function RoadmapInner() {
               </linearGradient>
               <filter id="roadShadow"><feDropShadow dx="0" dy="4" stdDeviation={6} floodColor="rgba(0,0,0,0.42)" /></filter>
               <filter id="nodeGlow"><feDropShadow dx="0" dy="2" stdDeviation={5} floodColor="rgba(255,255,255,0.14)" /></filter>
+              <pattern id="sprinkleDots" patternUnits="userSpaceOnUse" width={42} height={12} patternTransform="rotate(12)">
+                <circle cx={6} cy={6} r={2.8} fill="rgba(255,255,255,0.70)" />
+              </pattern>
             </defs>
 
             {/* purple road — subtle depth */}
@@ -1806,8 +1812,11 @@ function RoadmapInner() {
             {/* soft offset for emboss */}
             <path d={roadD} fill="none" stroke="#4c1d95" strokeWidth={44} strokeLinecap="round" strokeLinejoin="round" opacity={0.88} style={{ transform: "translate(4px, 4px)" } as any} />
             <path d={roadD} fill="none" stroke="url(#purpleRoad)" strokeWidth={44} strokeLinecap="round" strokeLinejoin="round" style={{ filter: "drop-shadow(0 3px 8px rgba(0,0,0,0.32))" } as any} />
-            {/* bevel highlight on top edge */}
-            <path d={roadD} fill="none" stroke="rgba(255,255,255,0.22)" strokeWidth={46} strokeLinecap="round" strokeLinejoin="round" opacity={0} style={{ transform: "translate(-1px, -1.5px)" } as any} />
+            {/* inner bevel white 0.14 — subtle highlight */}
+            <path d={roadD} fill="none" stroke="rgba(255,255,255,0.14)" strokeWidth={44} strokeLinecap="round" strokeLinejoin="round" opacity={1} style={{ transform: "translate(-1px, -1.8px)" } as any} />
+            {/* candy sprinkle dots along road edge — small white/70 circles every 42px */}
+            <path d={roadD} fill="none" stroke="rgba(255,255,255,0.70)" strokeWidth={4.6} strokeLinecap="round" strokeDasharray="0 42" strokeDashoffset={3} opacity={0.92} style={{ transform: "translate(-15px, 0px)" } as any} />
+            <path d={roadD} fill="none" stroke="rgba(255,255,255,0.70)" strokeWidth={4.6} strokeLinecap="round" strokeDasharray="0 42" strokeDashoffset={24} opacity={0.92} style={{ transform: "translate(15px, 0px)" } as any} />
             <path d={roadD} fill="none" stroke="white" strokeWidth={3.2} strokeLinecap="round" strokeDasharray="14 14" opacity={0.92} style={{ animation: "roadShimmer 1.2s linear infinite" }} />
             <path d={roadD} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth={1} opacity={0.5} />
 
@@ -1923,7 +1932,7 @@ function RoadmapInner() {
                       >
                         <circle cx={p.x} cy={p.y} r={nodeR} fill={isPersonal ? "#e7e5e4" : "white"} stroke={outline} strokeWidth={isActive ? 3.8 : 3} strokeDasharray={isDemo ? "8 6" : undefined} filter="url(#nodeGlow)" opacity={isPersonal ? 0.72 : isDemo ? 0.96 : 1} style={{ transform: isActive ? "translateZ(18px)" : "translateZ(12px)" } as any} />
                         <circle cx={p.x} cy={p.y} r={nodeR - 10} fill={isDemo ? "#f5f3ff" : st.key === "canonical" ? "#ecfdf5" : st.key === "almost" ? "#f7fee7" : st.key === "advisory" ? "#fffbeb" : st.key === "waiting" ? "#eff6ff" : "#f4f4f5"} stroke={isDemo ? "#8b5cf6" : "rgba(0,0,0,0.06)"} strokeWidth={1} strokeDasharray={isDemo ? "4 3" : undefined} />
-                        <text x={p.x} y={p.y + 6} textAnchor="middle" fontSize={isDemo ? 13 : isPersonal ? 10 : st.key === "canonical" ? 17 : 14} fontWeight={800} fill={isDemo ? "#6d28d9" : st.key === "canonical" ? "#065f46" : st.key === "almost" ? "#3f6212" : st.key === "advisory" ? "#92400e" : st.key === "waiting" ? "#1e40af" : "#52525b"} style={{ fontFamily: "ui-monospace, monospace" }}>
+                        <text x={p.x} y={p.y + 6} textAnchor="middle" fontSize={isDemo ? 13 : isPersonal ? 10 : st.key === "canonical" ? 17 : 14} fontWeight={800} fill={isDemo ? "#6d28d9" : st.key === "canonical" ? "#065f46" : st.key === "almost" ? "#3f6212" : st.key === "advisory" ? "#92400e" : st.key === "waiting" ? "#1e40af" : "#52525b"} style={{ fontFamily: fredoka.style.fontFamily, letterSpacing: "-0.025em" }}>
                           {isDemo ? ( (item as DemoItem).localId==="demo_welcome" ? "✦" : (item as DemoItem).localId==="demo_swipe" ? "↔" : "+" ) : isPersonal ? "◐" : st.key === "canonical" ? "✓" : st.key === "advisory" ? "●" : st.key === "almost" ? "◉" : st.key === "waiting" ? "○" : "●"}
                         </text>
                       </g>
@@ -1936,7 +1945,7 @@ function RoadmapInner() {
                       )}
                       <g opacity={isPersonal ? 0.82 : isPast ? 0.62 : 1}>
                         <rect x={pillX} y={p.y - 38} width={pillW} height={28} rx={14} fill={isActive ? "white" : "rgba(0,0,0,0.62)"} stroke={isActive ? "white" : "rgba(255,255,255,0.18)"} />
-                        <text x={pillX + pillW / 2} y={p.y - 19} textAnchor="middle" fontSize={12} fontWeight={750} fill={isActive ? "#000" : "white"}>{label}</text>
+                        <text x={pillX + pillW / 2} y={p.y - 19} textAnchor="middle" fontSize={14} fontWeight={900} fill={isActive ? "#000" : "white"} style={{ fontFamily: fredoka.style.fontFamily, letterSpacing: "-0.025em" }}>{label}</text>
                       </g>
                       <g opacity={isPast ? 0.56 : 0.96}>
                         <rect x={pillX} y={p.y + 24} width={pillW} height={18} rx={9} fill="rgba(0,0,0,0.74)" stroke="rgba(255,255,255,0.12)" />
