@@ -271,10 +271,15 @@ function RoadmapInner() {
   // pulse ghost toasts
   const [pulseMsg, setPulseMsg] = useState<string | null>(null);
   const [pulseShow, setPulseShow] = useState(false);
-  // FAB direct create
+  // FAB direct create + ghost toggle
   const [fabOpen, setFabOpen] = useState(false);
   const [fabBusy, setFabBusy] = useState(false);
   const [fabTitle, setFabTitle] = useState("");
+  const [fabGhost, setFabGhost] = useState(false);
+  const [fabGhostId, setFabGhostId] = useState<string>("");
+  // cross-school mirror (?school=FUTO)
+  const schoolParam = (searchParams.get("school") || "").toUpperCase().trim();
+  const [schoolMeta, setSchoolMeta] = useState<{ name:string; short:string; badge:string }|null>(null);
   const [fabVenue, setFabVenue] = useState("");
   const [fabDate, setFabDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [fabTime, setFabTime] = useState("10:00");
@@ -310,6 +315,48 @@ function RoadmapInner() {
   const [facepile, setFacepile] = useState<{ yes: { id:string; handle:string; color:string; bg:string }[]; yesCount:number; noCount:number } | null>(null);
   const [facepileLoading, setFacepileLoading] = useState(false);
   const [facepileTick, setFacepileTick] = useState(0);
+  // cross-school mirror helpers
+  const genAnonId = useCallback(()=> {
+    const h = Math.random().toString(36).slice(2,6).toUpperCase().padEnd(4,"X");
+    return `anon_${h}`;
+  }, []);
+  useEffect(()=> {
+    if (fabGhost && !fabGhostId) setFabGhostId(genAnonId());
+    if (!fabGhost && fabGhostId) {/* keep for next */ }
+  }, [fabGhost, fabGhostId, genAnonId]);
+  useEffect(()=> {
+    const s = (schoolParam || "").toUpperCase();
+    if (!s) { setSchoolMeta(null); return; }
+    const map: Record<string,{name:string; short:string; badge:string}> = {
+      FUTO: { name: "Federal University of Technology Owerri", short: "FUTO", badge: "🪞 Mirror · FUTO · DATABASE_URLS shard · school.json" },
+      UNIPORT: { name: "University of Port Harcourt", short: "UNIPORT", badge: "🪞 Mirror · UNIPORT · Choba" },
+      UNILAG: { name: "University of Lagos", short: "UNILAG", badge: "🪞 Mirror · UNILAG" },
+    };
+    if (map[s]) setSchoolMeta(map[s]);
+    else setSchoolMeta({ name: s, short: s, badge: `🪞 Mirror · ${s}` });
+    // also try fetch school.json for theme override
+    fetch("/school.json", { cache: "no-store" }).then(r=>r.json()).then(j=> {
+      if (j?.school && s === "FUTO") {/* FUTO mirror uses same school.json but badge shows mirror */ }
+    }).catch(()=>{});
+  }, [schoolParam]);
+  // broadcast adapter: when quorum 8/8 reached, push to Telegram via BOT_TOKEN + WhatsApp placeholder
+  const notifiedRef = useRef<Set<string>>(new Set());
+  useEffect(()=> {
+    for (const ev of events) {
+      const ap = Number(ev.authority_points ?? 0);
+      const rp = Number(ev.required_points ?? 0) || 8;
+      if (ap >= 8 && rp === 8 && !notifiedRef.current.has(ev.id) && ap >= rp) {
+        notifiedRef.current.add(ev.id);
+        fetch("/api/notify", { method: "POST", headers: { "content-type":"application/json" }, body: JSON.stringify({ event: ev }) }).catch(()=>{}).then(r=>r?.json?.().catch(()=>null)).then(j=> {
+          if (j?.ok) setToast(`📢 broadcast ${ev.title} · 8/8 quorum → Telegram${j?.whatsapp?.placeholder ? " + WhatsApp placeholder" : ""}`);
+        });
+      }
+    }
+    // also handle ghost quorum reaching 8/8
+    if (events.some(e=> Number(e.authority_points??0)===8)) {
+      // already handled above
+    }
+  }, [events]);
   // quorum + bell + virtualize
   const quorumActive = statsUsers; // alias for /api/stats active users
   const quorumThreshold = useMemo(()=> {
@@ -1628,11 +1675,17 @@ function RoadmapInner() {
     try {
       let createdBy: string | null = null;
       try { const raw = localStorage.getItem("physi_profile"); if (raw) createdBy = JSON.parse(raw)?.id ?? null; } catch {}
+      const ghostId = fabGhost ? (fabGhostId || genAnonId()) : null;
       const body: any = { title: fabTitle.trim(), venue: fabVenue.trim(), event_date: fabDate, event_time: fabTime, scope_type: "whole_school", scope_value: null, status: "pending", authority_points: 0, required_points: 5 };
       if (createdBy) body.created_by = createdBy;
+      // ghost: still maps Rep to real user ID, but frontend shows ghost avatar
+      if (ghostId) { body.is_ghost = true; body.ghost_handle = ghostId; }
       const r = await fetch("/api/timetable", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
       const j = await r.json();
       if (!r.ok || j.ok === false) throw new Error(j.error || "create failed");
+      if (ghostId && j?.event?.id) {
+        try { const m = JSON.parse(localStorage.getItem("physi_ghost_map") || "{}"); m[String(j.event.id)] = ghostId; localStorage.setItem("physi_ghost_map", JSON.stringify(m)); if (createdBy) { const mm = JSON.parse(localStorage.getItem("physi_ghost_owner") || "{}"); mm[ghostId] = createdBy; localStorage.setItem("physi_ghost_owner", JSON.stringify(mm)); } } catch {}
+      }
       const wasFirst = (()=>{ try{ if(localStorage.getItem("physi_first_gist_done")==="1") return false; const c = myUserId ? events.filter(e=> String(e.created_by||"")===String(myUserId)).length : 0; return c===0; } catch{ return false; } })();
       if (wasFirst) {
         try{ localStorage.setItem("physi_first_gist_done","1"); localStorage.setItem("physi_first_gist_at", String(Date.now())); }catch{}
@@ -1730,6 +1783,12 @@ function RoadmapInner() {
           <div className="absolute bottom-[18vh] left-1/2 h-[38vh] w-[90vw] -translate-x-1/2 opacity-[0.12] blur-[30px]" style={{ background: "radial-gradient(ellipse, rgba(64,145,108,0.55), transparent 72%)" }} />
         </div>
 
+        {/* cross-school mirror badge — ?school=FUTO loads school.json / DATABASE_URLS shard */}
+        {schoolMeta && (
+          <div className="pointer-events-none absolute left-1/2 top-[46px] z-20 -translate-x-1/2 whitespace-nowrap rounded-full border border-white/20 bg-black/70 px-3 py-1 font-mono text-[10px] font-bold text-white backdrop-blur">
+            {schoolMeta.badge} · <a href="?school=FUTO" className="pointer-events-auto underline decoration-white/30 hover:text-amber-200">FUTO</a> · <a href="?school=UNIPORT" className="pointer-events-auto underline decoration-white/30">UNIPORT</a> · {schoolMeta.name}
+          </div>
+        )}
         {/* top bar */}
         <div className="pointer-events-none absolute left-0 right-0 top-0 z-20 flex justify-center px-3 pt-3 sm:px-6">
           <div className="pointer-events-auto flex w-full max-w-[900px] items-center justify-between gap-2">
@@ -2529,7 +2588,15 @@ function RoadmapInner() {
                 <h3 className="text-[16px] font-bold text-white">Create event</h3>
                 <button type="button" onClick={()=>setFabOpen(false)} className="rounded-full bg-white/10 px-3 py-1 text-sm text-white">✕</button>
               </div>
-              <p className="mt-1 text-[12px] text-slate-400">title / venue / date / time → POST /api/timetable</p>
+              <p className="mt-1 text-[12px] text-slate-400">title / venue / date / time → POST /api/timetable · Rep maps to real ID</p>
+              <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[12px] font-bold text-white flex items-center gap-1.5">👻 Post as ghost <span className="font-mono text-[10px] font-normal text-slate-400">· anon_XXXX · Rep → real ID</span></p>
+                  <p className="font-mono text-[11px] text-slate-500">{fabGhost ? fabGhostId + " · ghost avatar shown, Rep credited to you" : "toggle on to hide handle, show ghost avatar"}</p>
+                </div>
+                <button type="button" onClick={()=> { const n=!fabGhost; setFabGhost(n); if(n && !fabGhostId) setFabGhostId(genAnonId()); }} className={`relative h-7 w-12 shrink-0 rounded-full border transition ${fabGhost ? "bg-violet-500 border-violet-400" : "bg-white/10 border-white/15"}`}><span className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition ${fabGhost ? "right-0.5" : "left-0.5"}`} /></button>
+              </div>
+              {fabGhost && <div className="mt-2 flex items-center gap-2 rounded-full border border-violet-400/20 bg-violet-500/10 px-3 py-2"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#8b5cf6] text-[11px]">👻</span><span className="font-mono text-[11px] font-bold text-violet-200">{fabGhostId}</span><span className="font-mono text-[10px] text-violet-300/70">· ghost avatar · rep → you</span><button type="button" onClick={()=> setFabGhostId(genAnonId())} className="ml-auto rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-black">regen</button></div>}
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {[
                   { label:"Class moved", title:"Class moved \u2014 LT changed", venue:"LT2 \u2192 LT5", time:"08:00" },

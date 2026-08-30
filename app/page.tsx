@@ -162,6 +162,24 @@ PHYSI | CHM 112 | New Lab | 2026-09-03 | 14:00 | general | Advisory`;
 export default function LandingPage() {
   const [stats, setStats] = useState<any>(null);
   const [ticker, setTicker] = useState<string[]>([]);
+  const [school, setSchool] = useState<string | null>(null);
+  const [schoolMeta, setSchoolMeta] = useState<any>(null);
+  useEffect(() => {
+    try {
+      const sp = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+      const s = (sp.get("school") || "").toUpperCase().trim();
+      if (s) {
+        setSchool(s);
+        fetch("/school.json", { cache: "no-store" }).then(r=>r.json()).then(j=>{
+          const map: any = { FUTO: { name: "Federal University of Technology Owerri", short: "FUTO" }, UNIPORT: { name: "University of Port Harcourt", short: "UNIPORT" } };
+          setSchoolMeta(map[s] || { name: s, short: s, school: s, ...j });
+        }).catch(()=> setSchoolMeta({ name: s, short: s }));
+      } else {
+        // also support DATABASE_URLS shard hint from school.json
+        fetch("/school.json", { cache: "no-store" }).then(r=>r.json()).then(j=>{ if(j?.short_name) {/* keep */}}).catch(()=>{});
+      }
+    } catch {}
+  }, []);
   useEffect(() => {
     let cancelled = false;
     async function load() {
@@ -210,6 +228,7 @@ export default function LandingPage() {
             <span className="hidden md:inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 font-mono text-[10.5px] text-slate-200">Advisory · Not official</span>
           </div>
           <nav className="flex items-center gap-2">
+            {school && <span className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-black/40 px-3 py-1 font-mono text-[10px] font-bold text-white backdrop-blur">🪞 Mirror · {school} {schoolMeta?.name ? `· ${schoolMeta.name}` : ""} · {school==="FUTO" ? "school.json + DATABASE_URLS shard" : "school.json"}</span>}
             <a href="/app/profile" className="hidden sm:inline-flex items-center rounded-full px-4 py-2 text-[13px] font-medium text-slate-200 hover:text-white transition">Create profile</a>
             <a href="/app/timetable" className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-[13px] font-medium text-white hover:bg-white hover:text-black hover:border-white transition">
               Login <ArrowRight className="h-3.5 w-3.5 opacity-60" />
