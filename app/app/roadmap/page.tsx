@@ -1,7 +1,13 @@
 "use client";
 import { useEffect, useState, useCallback, useMemo, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { logError, getErrorMessage } from "@/lib/adapters/error";
+import SearchBar from "@/components/road/SearchBar";
+import QuorumBar from "@/components/road/QuorumBar";
+const RepExplainer = dynamic(()=> import("@/components/road/RepExplainer"), { ssr: false, loading: ()=> null }) as any;
+const RepBoard = dynamic(()=> import("@/components/road/RepBoard"), { ssr: false, loading: ()=> null }) as any;
+const ShareCard = dynamic(()=> import("@/components/road/ShareCard"), { ssr: false, loading: ()=> null });
 
 type EventRow = {
   id: string;
@@ -298,10 +304,9 @@ function RoadmapInner() {
   const [scrollPos, setScrollPos] = useState(0);
   const [viewH, setViewH] = useState(800);
   const bellSeenRef = useRef<number>(0);
-  // shareable Rep card
+  // shareable Rep card — lazy-loaded via dynamic ShareCard
   const [shareOpen, setShareOpen] = useState(false);
-  const [shareImg, setShareImg] = useState<string | null>(null);
-  const shareCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [repExplainerOpen, setRepExplainerOpen] = useState(false);
 
   const fetchFeed = useCallback(async () => {
     const ctrl = new AbortController();
@@ -435,128 +440,6 @@ function RoadmapInner() {
       }
     }catch{}
   }, [filter, viewMode, deepPulseId, selectedId, router]);
-
-  // generate share card image when modal opens
-  useEffect(()=>{
-    if(!shareOpen) return;
-    // defer to next frame so canvas exists
-    const t = setTimeout(()=> generateShareCard(), 50);
-    return ()=> clearTimeout(t);
-  }, [shareOpen, myRep, streak, youHandle, levelInfo.lvl, levelInfo.name]);
-
-  function generateShareCard(){
-    const c = shareCanvasRef.current;
-    if(!c) return;
-    const W=1080, H=1350;
-    c.width=W; c.height=H;
-    const ctx=c.getContext("2d");
-    if(!ctx) return;
-    // forest bg
-    const g=ctx.createLinearGradient(0,0,0,H);
-    g.addColorStop(0,"#0d3b2a");
-    g.addColorStop(0.45,"#143d2e");
-    g.addColorStop(1,"#52b788");
-    ctx.fillStyle=g;
-    ctx.fillRect(0,0,W,H);
-    // subtle radial highlight
-    const rg=ctx.createRadialGradient(W/2,H*0.28,0,W/2,H*0.28,W*0.7);
-    rg.addColorStop(0,"rgba(82,183,136,0.32)");
-    rg.addColorStop(1,"transparent");
-    ctx.fillStyle=rg;
-    ctx.fillRect(0,0,W,H);
-    // white card behind
-    const cardX=56, cardY=420, cardW=W-112, cardH=560, r=32;
-    ctx.fillStyle="rgba(255,255,255,0.96)";
-    ctx.beginPath();
-    // @ts-ignore roundRect
-    if(ctx.roundRect) ctx.roundRect(cardX,cardY,cardW,cardH,r);
-    else { ctx.rect(cardX,cardY,cardW,cardH); }
-    ctx.fill();
-    ctx.fillStyle="rgba(0,0,0,0.08)";
-    // candy avatar — pick color from level
-    const candyColors:Record<number,string>={1:"#10b981",2:"#0ea5e9",3:"#8b5cf6",4:"#f59e0b",5:"#fbbf24"};
-    const col=candyColors[levelInfo.lvl]||"#10b981";
-    const avX=W/2, avY=360, avR=110;
-    // glow
-    ctx.fillStyle=col+"33";
-    ctx.beginPath(); ctx.arc(avX,avY,avR+22,0,Math.PI*2); ctx.fill();
-    ctx.fillStyle=col;
-    ctx.beginPath(); ctx.arc(avX,avY,avR,0,Math.PI*2); ctx.fill();
-    ctx.strokeStyle="rgba(255,255,255,0.9)";
-    ctx.lineWidth=6;
-    ctx.stroke();
-    // initials
-    const initials=(youHandle||"YOU").slice(0,2).toUpperCase();
-    ctx.fillStyle="white";
-    ctx.font="900 64px system-ui, sans-serif";
-    ctx.textAlign="center"; ctx.textBaseline="middle";
-    ctx.fillText(initials, avX, avY+4);
-    // texts on card
-    ctx.fillStyle="#0f172a";
-    ctx.font="900 42px system-ui, sans-serif";
-    ctx.fillText((youHandle? "@"+youHandle : "@you"), W/2, cardY+92);
-    ctx.fillStyle="#475569";
-    ctx.font="700 22px system-ui, sans-serif";
-    ctx.fillText(`${levelInfo.name}  ·  Lvl ${levelInfo.lvl}`, W/2, cardY+138);
-    // Rep big
-    ctx.fillStyle="#0f172a";
-    ctx.font="900 72px system-ui, sans-serif";
-    ctx.fillText(`${myRep.toFixed(1)} Rep`, W/2, cardY+236);
-    // streak + progress bar
-    ctx.fillStyle="#f97316";
-    ctx.font="900 28px system-ui, sans-serif";
-    ctx.fillText(`🔥 ${streak} day${streak===1?"":"s"} streak`, W/2, cardY+290);
-    // progress bar
-    const barX=cardX+64, barW=cardW-128, barY=cardY+340, barH=18;
-    ctx.fillStyle="rgba(0,0,0,0.08)";
-    if(ctx.roundRect){ ctx.beginPath(); ctx.roundRect(barX,barY,barW,barH,9); ctx.fill(); } else ctx.fillRect(barX,barY,barW,barH);
-    ctx.fillStyle=levelInfo.lvl===5? "#fbbf24" : "#10b981";
-    const pw=Math.max(8, barW*levelInfo.progress);
-    if(ctx.roundRect){ ctx.beginPath(); ctx.roundRect(barX,barY,pw,barH,9); ctx.fill(); } else ctx.fillRect(barX,barY,pw,barH);
-    ctx.fillStyle="#64748b";
-    ctx.font="600 18px system-ui, sans-serif";
-    const nextTxt=levelInfo.nextAt? `${(levelInfo.nextAt-myRep).toFixed(1)} to L${levelInfo.lvl+1}` : "MAX — Legend";
-    ctx.fillText(levelInfo.lvl===5? "MAX L5 Legend" : nextTxt, W/2, barY+52);
-    // footer
-    ctx.fillStyle="rgba(255,255,255,0.92)";
-    ctx.font="700 20px system-ui, sans-serif";
-    ctx.fillText("physicoin · endless road · WAT", W/2, H-72);
-    ctx.fillStyle="rgba(255,255,255,0.64)";
-    ctx.font="500 16px system-ui, sans-serif";
-    ctx.fillText(window.location.origin+"/app/roadmap", W/2, H-42);
-    try{ setShareImg(c.toDataURL("image/png")); }catch{ setShareImg(null); }
-  }
-
-  async function handleShareCard(){
-    const c=shareCanvasRef.current;
-    if(!c){ setToast("card not ready"); return; }
-    // try Web Share with file
-    try{
-      const blob: Blob | null = await new Promise(res=> c.toBlob(b=>res(b),"image/png",0.92));
-      if(blob && (navigator as any).canShare){
-        const file=new File([blob],"physicoin-rep.png",{type:"image/png"});
-        if((navigator as any).canShare({files:[file]})){
-          await (navigator as any).share({title:"My Physicoin Rep", text:`Lvl ${levelInfo.lvl} ${levelInfo.name} · ${myRep.toFixed(1)} Rep · 🔥 ${streak} days`, files:[file]});
-          setToast("shared ✓");
-          return;
-        }
-      }
-      if((navigator as any).share && shareImg){
-        // fallback text share with url
-        await (navigator as any).share({title:"My Physicoin Rep", text:`Lvl ${levelInfo.lvl} ${levelInfo.name} · ${myRep.toFixed(1)} Rep · 🔥 ${streak} days — ${window.location.href}`, url: window.location.href});
-        setToast("shared ✓");
-        return;
-      }
-    }catch{}
-    // download fallback
-    try{
-      const url=c.toDataURL("image/png");
-      const a=document.createElement("a");
-      a.href=url; a.download=`physicoin-lvl${levelInfo.lvl}-${(youHandle||"you")}.png`;
-      document.body.appendChild(a); a.click(); a.remove();
-      setToast("image downloaded");
-    }catch{ setToast("could not share — long-press image to save"); }
-  }
 
   // you highlight via physi_profile + streak via /api/mining or localStorage physi_streak
   useEffect(() => {
@@ -1555,7 +1438,17 @@ function RoadmapInner() {
       const r = await fetch("/api/timetable", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
       const j = await r.json();
       if (!r.ok || j.ok === false) throw new Error(j.error || "create failed");
-      setToast(`created “${fabTitle.trim()}” ✓`);
+      const wasFirst = (()=>{ try{ if(localStorage.getItem("physi_first_gist_done")==="1") return false; const c = myUserId ? events.filter(e=> String(e.created_by||"")===String(myUserId)).length : 0; return c===0; } catch{ return false; } })();
+      if (wasFirst) {
+        try{ localStorage.setItem("physi_first_gist_done","1"); localStorage.setItem("physi_first_gist_at", String(Date.now())); }catch{}
+        setMyRep(prev=> prev+5);
+        try{ const raw=localStorage.getItem("physi_profile"); if(raw){ const p=JSON.parse(raw); const nb=Number(p.mining_balance||0)+5; p.mining_balance=nb; localStorage.setItem("physi_profile", JSON.stringify(p)); } }catch{}
+        setCandy("+5 bonus!");
+        setTimeout(()=> setCandy(null), 1600);
+        setToast(`first gist! +5 bonus 🎉`);
+      } else {
+        setToast(`created “${fabTitle.trim()}” ✓`);
+      }
       setFabOpen(false); setFabTitle(""); setFabVenue(""); setFabTime("10:00"); setFabDate(new Date().toISOString().slice(0,10));
       fetchFeed();
     } catch (err:any) { logError("TIMETABLE_CREATE_FAILED", err, { page: "roadmap" }); setToast(getErrorMessage("TIMETABLE_CREATE_FAILED")); }
@@ -1567,7 +1460,7 @@ function RoadmapInner() {
 
   return (
     <div className="relative -mx-4 -mt-5 w-[100vw] max-w-[100vw] sm:-mx-6 lg:-mx-8">
-      <style>{`@keyframes canonicalPop{0%{transform:scale(0.72)}50%{transform:scale(1.22)}100%{transform:scale(1)}} @keyframes tickPulse{0%,100%{opacity:1}50%{opacity:.55}} @keyframes roadShimmer{0%{stroke-dashoffset:0}100%{stroke-dashoffset:28}} @keyframes scaleIn{0%{transform:scale(0.35);opacity:0}60%{transform:scale(1.14);opacity:1}100%{transform:scale(1);opacity:1}} @keyframes nowPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.06);opacity:.94}} @keyframes ghostDrift{0%{transform:translateY(0) translateX(0)}25%{transform:translateY(-10px) translateX(7px)}50%{transform:translateY(-16px) translateX(-5px)}75%{transform:translateY(-8px) translateX(4px)}100%{transform:translateY(0) translateX(0)}} @keyframes ghostPulse{0%,100%{opacity:.92}50%{opacity:.56}} @keyframes candyPop{0%{transform:translate(-50%,-10px) scale(0.5);opacity:0}18%{transform:translate(-50%,-18px) scale(1.18);opacity:1}72%{transform:translate(-50%,-42px) scale(1);opacity:1}100%{transform:translate(-50%,-64px) scale(0.9);opacity:0}} @keyframes pulseSlideIn{0%{transform:translate(-50%,-18px);opacity:0}12%{transform:translate(-50%,0);opacity:1}88%{transform:translate(-50%,0);opacity:1}100%{transform:translate(-50%,-18px);opacity:0}} @keyframes confettiFall{0%{transform:translateY(-10vh) rotate(0deg);opacity:1}100%{transform:translateY(110vh) rotate(720deg);opacity:0}} @keyframes skeletonPulse{0%,100%{opacity:0.55}50%{opacity:1}} @keyframes questFill{0%{width:0}100%{width:var(--fill)}} @keyframes pulseRing{0%{transform:scale(0.8);opacity:0.9}70%{transform:scale(1.55);opacity:0}100%{transform:scale(1.7);opacity:0}} .road-3d-wrap{perspective:800px;perspective-origin:50% 28%} .road-3d-inner{transform-style:preserve-3d;transform:perspective(800px) rotateX(4deg);transform-origin:center top;will-change:transform;clip-path:ellipse(96% 88% at 50% 46%);border-radius:28px} .road-3d-inner::before{content:"";position:absolute;inset:0;pointer-events:none;border-radius:28px;box-shadow:inset 0 10px 22px rgba(0,0,0,0.16),inset 0 -8px 16px rgba(0,0,0,0.12)} .node-3d{transform:translateZ(6px);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.55),inset 0 -2px 4px rgba(0,0,0,0.14),0 8px 20px rgba(0,0,0,0.42),0 1px 6px rgba(0,0,0,0.32);transition:transform 220ms cubic-bezier(.2,.8,.3,1),box-shadow 220ms ease} .node-3d:hover{transform:translateZ(12px) scale(1.02);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.65),inset 0 -3px 6px rgba(0,0,0,0.16),0 12px 28px rgba(0,0,0,0.5),0 4px 12px rgba(0,0,0,0.36)}`}</style>
+      <style>{`@keyframes canonicalPop{0%{transform:scale(0.72)}50%{transform:scale(1.22)}100%{transform:scale(1)}} @keyframes tickPulse{0%,100%{opacity:1}50%{opacity:.55}} @keyframes roadShimmer{0%{stroke-dashoffset:0}100%{stroke-dashoffset:28}} @keyframes scaleIn{0%{transform:scale(0.35);opacity:0}60%{transform:scale(1.14);opacity:1}100%{transform:scale(1);opacity:1}} @keyframes nowPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.06);opacity:.94}} @keyframes ghostDrift{0%{transform:translateY(0) translateX(0)}25%{transform:translateY(-10px) translateX(7px)}50%{transform:translateY(-16px) translateX(-5px)}75%{transform:translateY(-8px) translateX(4px)}100%{transform:translateY(0) translateX(0)}} @keyframes ghostPulse{0%,100%{opacity:.92}50%{opacity:.56}} @keyframes candyPop{0%{transform:translate(-50%,-10px) scale(0.5);opacity:0}18%{transform:translate(-50%,-18px) scale(1.18);opacity:1}72%{transform:translate(-50%,-42px) scale(1);opacity:1}100%{transform:translate(-50%,-64px) scale(0.9);opacity:0}} @keyframes pulseSlideIn{0%{transform:translate(-50%,-18px);opacity:0}12%{transform:translate(-50%,0);opacity:1}88%{transform:translate(-50%,0);opacity:1}100%{transform:translate(-50%,-18px);opacity:0}} @keyframes confettiFall{0%{transform:translateY(-10vh) rotate(0deg);opacity:1}100%{transform:translateY(110vh) rotate(720deg);opacity:0}} @keyframes skeletonPulse{0%,100%{opacity:0.55}50%{opacity:1}} @keyframes questFill{0%{width:0}100%{width:var(--fill)}} @keyframes fabPulse{0%{transform:scale(1);box-shadow:0 8px 24px rgba(139,92,246,0.5),0 4px 12px rgba(0,0,0,0.3)}50%{transform:scale(1.08);box-shadow:0 12px 36px rgba(139,92,246,0.75),0 6px 18px rgba(0,0,0,0.4)}100%{transform:scale(1);box-shadow:0 8px 24px rgba(139,92,246,0.5),0 4px 12px rgba(0,0,0,0.3)}} @keyframes pulseRing{0%{transform:scale(0.8);opacity:0.9}70%{transform:scale(1.55);opacity:0}100%{transform:scale(1.7);opacity:0}} .road-3d-wrap{perspective:800px;perspective-origin:50% 28%} .road-3d-inner{transform-style:preserve-3d;transform:perspective(800px) rotateX(4deg);transform-origin:center top;will-change:transform;clip-path:ellipse(96% 88% at 50% 46%);border-radius:28px} .road-3d-inner::before{content:"";position:absolute;inset:0;pointer-events:none;border-radius:28px;box-shadow:inset 0 10px 22px rgba(0,0,0,0.16),inset 0 -8px 16px rgba(0,0,0,0.12)} .node-3d{transform:translateZ(6px);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.55),inset 0 -2px 4px rgba(0,0,0,0.14),0 8px 20px rgba(0,0,0,0.42),0 1px 6px rgba(0,0,0,0.32);transition:transform 220ms cubic-bezier(.2,.8,.3,1),box-shadow 220ms ease} .node-3d:hover{transform:translateZ(12px) scale(1.02);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.65),inset 0 -3px 6px rgba(0,0,0,0.16),0 12px 28px rgba(0,0,0,0.5),0 4px 12px rgba(0,0,0,0.36)}`}</style>
       <div className="relative min-h-[calc(100vh-64px)] w-full overflow-hidden xl:pr-[276px]" style={{ background: "linear-gradient(180deg, #0d3b2a 0%, #143d2e 42%, #1a5c3a 100%)" }}>
         {/* ambient - parallax */}
         <div className="pointer-events-none absolute inset-0" style={{ transform: `translateY(${parallaxY}px)`, willChange:"transform" }}>
@@ -1594,6 +1487,7 @@ function RoadmapInner() {
                   <div className="h-1.5 w-16 overflow-hidden rounded-full bg-white/10"><div className={`h-full ${levelInfo.lvl===5 ? "bg-gradient-to-r from-amber-400 to-yellow-300" : "bg-emerald-400"}`} style={{ width: `${levelInfo.progress*100}%` }} /></div>
                   <RepSparkline rep={myRep} />
                   <span className="font-mono text-[9px] text-slate-500">{levelInfo.nextAt ? `${(levelInfo.nextAt - myRep).toFixed(1)} to L${levelInfo.lvl+1}` : "MAX"}</span>
+                  <button onClick={()=> setRepExplainerOpen(true)} aria-label="What is Rep?" className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-white/20 bg-white/10 text-[11px] font-black text-white hover:bg-white hover:text-black transition" title="What is Rep?">ⓘ</button>
                 </div>
               </div>
             </div>
@@ -1744,31 +1638,10 @@ function RoadmapInner() {
             })}
           </div>
         </div>
-        {/* Search bar — under filters, live title/venue/date contains + Jump */}
+        {/* Search bar — extracted to components/road/SearchBar */}
         <div className="pointer-events-none absolute left-1/2 top-[228px] z-20 flex w-full max-w-[560px] -translate-x-1/2 justify-center px-3 sm:top-[184px] sm:px-6">
-          <div className="pointer-events-auto flex w-full items-center gap-2 rounded-full border border-white/10 bg-black/75 px-2.5 py-1.5 backdrop-blur-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)]">
-            <span className="ml-1 text-[13px] opacity-70">🔍</span>
-            <input
-              value={searchQuery}
-              onChange={e=> setSearchQuery(e.target.value)}
-              onKeyDown={e=> { if(e.key==="Enter") handleJump(); }}
-              placeholder="search title · venue · date (e.g. LT2, 2026-01)"
-              className="flex-1 bg-transparent text-[13px] text-white placeholder:text-slate-500 outline-none"
-              aria-label="Search road"
-            />
-            {searchQuery && (
-              <span className="hidden sm:inline font-mono text-[10px] text-slate-400">{searchMatchCount} match{searchMatchCount===1?"":"es"}</span>
-            )}
-            <button
-              onClick={handleJump}
-              disabled={!searchQ || filteredRoadItems.length===0}
-              className={`shrink-0 rounded-full px-3.5 py-1.5 text-[11px] font-black transition ${!searchQ || filteredRoadItems.length===0 ? "bg-white/10 text-slate-500 cursor-not-allowed" : "bg-white text-black hover:bg-slate-100 animate-pulse shadow"}`}
-            >
-              Jump ↓
-            </button>
-            {searchQuery && (
-              <button onClick={()=> setSearchQuery("")} className="shrink-0 rounded-full bg-white/10 px-2 py-1 text-[11px] font-bold text-slate-300 hover:bg-white/15">✕</button>
-            )}
+          <div className="pointer-events-auto w-full">
+            <SearchBar searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchMatchCount={searchMatchCount} onJump={handleJump} />
           </div>
         </div>
         {/* Live pulse toasts - top center sliding in/out pure UI ghosts */}
@@ -1806,31 +1679,9 @@ function RoadmapInner() {
             </div>
           </div>
         )}
-        {/* Mobile Rep sheet (collapsible) */}
+        {/* Mobile + Desktop Rep board — extracted to components/road/RepBoard */}
         <div className="pointer-events-auto absolute left-1/2 top-[148px] z-20 flex w-full max-w-[560px] -translate-x-1/2 justify-center px-3 xl:hidden" style={{ marginTop: inviteNudge ? "64px" : "0" }}>
-          <div className="w-full rounded-2xl border border-white/10 bg-black/70 backdrop-blur-xl overflow-hidden">
-            <button onClick={() => setRepSheetOpen((v)=>!v)} className="flex w-full items-center justify-between px-4 py-2.5">
-              <span className="flex items-center gap-2 font-mono text-[11px] font-bold tracking-wide text-white"><span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" /> Top 5 Rep <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] text-slate-300">{repBoard.length}</span><span onClick={(e:any)=>{ e.stopPropagation(); setShareOpen(true); }} className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black hover:scale-105 transition cursor-pointer ${levelInfo.lvl===5 ? "bg-gradient-to-r from-amber-400 to-yellow-300 text-black ring-1 ring-amber-500" : "bg-white/10 text-white"}`}>Lvl {levelInfo.lvl} {levelInfo.name}</span><span className="ml-1 inline-flex items-center gap-1 rounded-full bg-orange-500/15 px-2 py-0.5 text-[10px] text-orange-300">🔥 {streak}</span></span>
-              <span className="text-xs text-slate-400">{repSheetOpen ? "⌄" : "⌃"} {repSheetOpen ? "hide" : "show"}</span>
-            </button>
-            {repSheetOpen && (
-              <div className="grid gap-1.5 px-3 pb-3">
-                {repBoard.slice(0,5).map((u, i) => {
-                  const isYou = youHandle && String(u.handle).toLowerCase() === youHandle;
-                  return (
-                    <div key={u.handle+"_m_"+i} className={`flex items-center gap-3 rounded-xl px-3 py-2 ${isYou ? "bg-white text-black border border-violet-400/30" : "bg-white/[0.06] text-white"}`}>
-                      <span className="font-mono text-[11px] font-bold text-slate-400 w-4">{i+1}</span>
-                      <span className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-black text-white shrink-0" style={{ background: u.color, boxShadow: `0 0 0 4px ${u.color}22` }}>{String(u.handle).slice(0,2).toUpperCase()}</span>
-                      <span className={`flex-1 font-mono text-[12px] font-bold truncate ${isYou ? "text-black" : "text-white"}`}>{u.handle} {isYou ? "· you" : ""}</span>
-                      <span className={`font-mono text-[11px] font-black ${isYou ? "text-black" : "text-emerald-300"}`}>{Number(u.rep).toFixed(1)}</span>
-                    </div>
-                  );
-                })}
-                <div className="flex items-center gap-2 px-1"><div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10"><div className={`h-full ${levelInfo.lvl===5 ? "bg-gradient-to-r from-amber-400 to-yellow-300" : "bg-emerald-400"}`} style={{ width: `${levelInfo.progress*100}%` }} /></div><RepSparkline rep={myRep} /><span className="font-mono text-[10px] text-slate-500">{myRep.toFixed(1)} Rep · {levelInfo.nextAt ? `${(levelInfo.nextAt - myRep).toFixed(1)} to L${levelInfo.lvl+1}` : "MAX L5 Legend"}</span>{levelInfo.lvl===5 && <span className="h-2 w-2 rounded-full bg-amber-400 ring-2 ring-amber-300" />}</div>
-                <p className="font-mono text-[10px] text-slate-500 px-1 flex items-center gap-2">Live poll 30s · ghosts · 7-day <RepSparkline rep={myRep} /></p>
-              </div>
-            )}
-          </div>
+          <RepBoard repBoard={repBoard} youHandle={youHandle} streak={streak} myRep={myRep} levelInfo={levelInfo} onShare={()=> setShareOpen(true)} repSheetOpen={repSheetOpen} setRepSheetOpen={setRepSheetOpen} />
         </div>
         {/* Confetti on quest complete */}
         {showConfetti && (
@@ -1848,42 +1699,10 @@ function RoadmapInner() {
 
         {toast && <div className="fixed bottom-28 left-1/2 z-50 -translate-x-1/2 rounded-full bg-white px-5 py-2.5 text-[13px] font-medium text-black shadow-xl">{toast}</div>}
 
-        {/* Desktop Right-rail Rep board — fixed right 260px */}
-        <aside className="hidden xl:flex fixed right-4 top-[84px] z-20 w-[260px] flex-col gap-3">
-          <div className="rounded-[20px] border border-white/10 bg-black/75 backdrop-blur-xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.6)]">
-            <div className="flex items-center justify-between">
-              <h3 className="font-mono text-[11px] font-black tracking-[0.12em] text-white">REP BOARD</h3>
-              <button onClick={()=> setShareOpen(true)} className={`rounded-full px-2 py-0.5 font-mono text-[10px] font-black hover:scale-105 transition ${levelInfo.lvl===5 ? "bg-gradient-to-r from-amber-400 to-yellow-300 text-black ring-1 ring-amber-500" : "bg-white/10 text-slate-300"}`}>Lvl {levelInfo.lvl} · {levelInfo.name} · {myRep.toFixed(1)} Rep</button>
-            </div>
-            <div className="mt-2 flex items-center gap-2"><div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10"><div className={`h-full ${levelInfo.lvl===5 ? "bg-gradient-to-r from-amber-400 to-yellow-300" : "bg-emerald-400"}`} style={{ width: `${levelInfo.progress*100}%` }} /></div><RepSparkline rep={myRep} /><span className="font-mono text-[9px] text-slate-500">{levelInfo.nextAt ? `${(levelInfo.nextAt - myRep).toFixed(1)} to L${levelInfo.lvl+1}` : "MAX"}</span>{levelInfo.lvl===5 && <span className="h-2.5 w-2.5 rounded-full bg-amber-400 ring-2 ring-amber-300 animate-pulse" />}</div>
-            <p className="mt-1 font-mono text-[10px] text-slate-500 flex items-center gap-2">Top 5 · 7-day <RepSparkline rep={myRep} /> · candy avatars</p>
-            <div className="mt-3 grid gap-2">
-              {repBoard.slice(0,5).map((u,i)=> {
-                const isYou = youHandle && String(u.handle).toLowerCase() === youHandle;
-                return (
-                  <div key={u.handle+"_d_"+i} className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 ${isYou ? "bg-white border-violet-400/30 text-black" : "bg-white/[0.06] border-white/10 text-white"}`}>
-                    <span className="font-mono text-[11px] font-bold w-4 text-center" style={{ color: isYou ? "#000" : "#94a3b8" }}>{i+1}</span>
-                    <span className="flex h-8 w-8 items-center justify-center rounded-full text-[11px] font-black text-white shrink-0 border border-white/20" style={{ background: u.color, boxShadow: `0 0 0 6px ${u.color}22` }}>{String(u.handle).slice(0,2).toUpperCase()}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className={`font-mono text-[12px] font-bold leading-none truncate ${isYou ? "text-black" : "text-white"}`}>{u.handle} {isYou ? "· you" : ""}</p>
-                      <p className={`font-mono text-[10px] ${isYou ? "text-slate-600" : "text-slate-400"}`}>{isYou ? "you" : "ghost"} · {i===0?"🏆":""} </p>
-                    </div>
-                    <span className={`font-mono text-[13px] font-black ${isYou ? "text-black" : "text-emerald-300"}`}>{Number(u.rep).toFixed(1)}</span>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="mt-3 flex items-center justify-between font-mono text-[10px] text-slate-500">
-              <span className="inline-flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />poll 30s</span>
-              <span className="inline-flex items-center gap-1 rounded-full bg-orange-500/15 px-2 py-1 text-orange-300 font-black">🔥 {streak} days</span>
-            </div>
-          </div>
-          <div className="rounded-2xl border border-white/10 bg-black/60 backdrop-blur px-4 py-3">
-            <p className="font-mono text-[11px] font-bold text-white">Invite → +1 Rep</p>
-            <p className="font-mono text-[11px] text-slate-400 leading-3 mt-1">Share your road link with a course mate.</p>
-            <button onClick={async ()=>{ const link = typeof window!=="undefined" ? window.location.origin+"/app/roadmap?invite="+encodeURIComponent(youHandle||"physicoin") : ""; try{ const anyNav:any=navigator as any; if(anyNav.share){ await anyNav.share({title:"Physicoin", text:"Join me on endless road", url:link}); return; } }catch{} try{ await navigator.clipboard.writeText(link); setToast("link copied"); }catch{ setToast(link);} }} className="mt-2 w-full rounded-full bg-white py-2 text-xs font-black text-black">Share link</button>
-          </div>
-        </aside>
+        {/* Desktop Rep board — extracted */}
+        <div className="hidden xl:block">
+          <RepBoard repBoard={repBoard} youHandle={youHandle} streak={streak} myRep={myRep} levelInfo={levelInfo} onShare={()=> setShareOpen(true)} repSheetOpen={repSheetOpen} setRepSheetOpen={setRepSheetOpen} />
+        </div>
         {/* SCROLLABLE ROAD CONTAINER — endless winding purple road — subtle 3D emboss */}
         <div className={`road-3d-wrap relative mx-auto flex h-[calc(100vh-64px)] w-full max-w-[560px] justify-center overflow-hidden pt-[112px] sm:pt-[104px] ${viewMode!=="map" ? "hidden" : ""}`} style={{ perspective: "800px", perspectiveOrigin: "50% 28%" }}>
           {/* depth gradients on sides — 3D vignette */}
@@ -2222,10 +2041,23 @@ function RoadmapInner() {
           </div>
         )}
 
-        {/* FAB candy purple #8b5cf6 */}
-        <button onClick={()=>setFabOpen(true)} aria-label="Create event" className="fixed bottom-[88px] right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[#8b5cf6] text-2xl font-black text-white shadow-[0_8px_24px_rgba(139,92,246,0.5),0_4px_12px_rgba(0,0,0,0.3)] hover:bg-[#7c3aed] hover:scale-105 active:scale-95 transition sm:bottom-[92px] sm:right-6">
-          +
-        </button>
+        {/* FAB — first-gist funnel: pulses when mine count 0 */}
+        {(() => {
+          const mineCount = myUserId ? events.filter(e=> String(e.created_by||"")===String(myUserId)).length : 0;
+          const isFirstGist = mineCount === 0;
+          return (
+            <div className="fixed bottom-[88px] right-4 z-40 flex flex-col items-end gap-2 sm:bottom-[92px] sm:right-6">
+              {isFirstGist && (
+                <div className="animate-bounce rounded-full bg-white px-3 py-1.5 text-[12px] font-black text-black shadow-lg flex items-center gap-1">
+                  <span>←</span> Create first gist → +5 bonus
+                </div>
+              )}
+              <button onClick={()=>setFabOpen(true)} aria-label="Create event" className={`flex h-14 w-14 items-center justify-center rounded-full bg-[#8b5cf6] text-2xl font-black text-white shadow-[0_8px_24px_rgba(139,92,246,0.5),0_4px_12px_rgba(0,0,0,0.3)] hover:bg-[#7c3aed] hover:scale-105 active:scale-95 transition ${isFirstGist ? "animate-[fabPulse_1.6s_ease-in-out_infinite] ring-4 ring-white/30" : ""}`}>
+                +
+              </button>
+            </div>
+          );
+        })()}
         {/* FAB create modal - POST /api/timetable */}
         {fabOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
@@ -2399,19 +2231,7 @@ function RoadmapInner() {
                           <p className="mt-1.5 font-mono text-[11px] text-slate-500">{verified ? "✓ canonical pop — enough Yes to trust" : isAlmost ? "amber → green scaling — almost verified, one more Yes to pop" : "needs more Yes taps to flip to green tick"}</p>
                         </div>
                       )}
-                      {/* Quorum bar — bottom sheet */}
-                      {(() => { const yesQ = Number(ap||0); const qPct = quorumThreshold>0 ? Math.min(100, Math.round((yesQ/quorumThreshold)*100)) : 0; const isAlmostQ = qPct===88 || qPct===87 || yesQ===quorumThreshold-1; return (
-                        <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
-                          <div className="flex items-center justify-between font-mono text-[11px]">
-                            <span className={isAlmostQ ? "font-black text-amber-300" : "text-slate-400"}>{isAlmostQ ? "1 more!" : "Quorum"} · {yesQ}/{quorumThreshold} · {qPct}%</span>
-                            <span className={`text-[10px] ${qPct>=100 ? "text-emerald-300" : "text-slate-500"}`}>{qPct>=100 ? "quorum reached" : `${quorumThreshold - yesQ} more to quorum`}</span>
-                          </div>
-                          <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-white/10">
-                            <div className="h-full bg-emerald-400 transition-all duration-500" style={{ width: `${qPct}%` }} />
-                          </div>
-                          {isAlmostQ && <p className="mt-1 font-mono text-[11px] font-black text-amber-300">Almost — 1 more! 87.5%</p>}
-                        </div>
-                      ); })()}
+                      <QuorumBar ap={ap} threshold={quorumThreshold} />
                       {!rp && verified && <p className="mt-4 rounded-xl bg-emerald-500/10 px-3 py-2.5 text-[12.5px] text-emerald-200">Verified — coursemates confirmed this happened.</p>}
                       {!rp && !verified && <p className="mt-4 rounded-xl bg-amber-500/10 px-3 py-2.5 text-[12.5px] text-amber-200">Advisory — fresh gist, waiting for confirmations.</p>}
                       {/* Facepile — YES voters candy avatars + counts */}
@@ -2521,27 +2341,9 @@ function RoadmapInner() {
             </form>
           </div>
         )}
-        {/* Share Rep card modal — canvas-generated forest bg + candy avatar */}
-        {shareOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm" onClick={()=> setShareOpen(false)}>
-            <div onClick={e=> e.stopPropagation()} className="w-full max-w-[360px] rounded-[24px] border border-white/10 bg-[#0b0f1e] p-5 shadow-2xl max-h-[90vh] overflow-auto">
-              <div className="flex items-center justify-between">
-                <h3 className="text-[15px] font-black text-white">Your Rep Card</h3>
-                <button onClick={()=> setShareOpen(false)} className="rounded-full bg-white/10 px-3 py-1 text-sm text-white">✕</button>
-              </div>
-              <p className="mt-1 font-mono text-[11px] text-slate-400">Tap Share to send your forest card — candy avatar + Lvl + Rep + streak</p>
-              <div className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-black">
-                <canvas ref={shareCanvasRef} className="h-auto w-full" style={{ display: shareImg ? "none" : "block" }} />
-                {shareImg && <img src={shareImg} alt="Rep card" className="h-auto w-full" />}
-              </div>
-              <div className="mt-4 grid gap-2">
-                <button onClick={handleShareCard} className="w-full rounded-full bg-white py-3 text-[14px] font-black text-black hover:bg-slate-100">Share — navigator.share or download</button>
-                <button onClick={()=> generateShareCard()} className="w-full rounded-full border border-white/10 bg-white/5 py-2.5 text-[13px] font-semibold text-white">↻ Regenerate</button>
-              </div>
-              <p className="mt-2 text-center font-mono text-[10px] text-slate-500">Forest green bg · candy avatar · Lvl {levelInfo.lvl} {levelInfo.name} · {myRep.toFixed(1)} Rep · 🔥 {streak}</p>
-            </div>
-          </div>
-        )}
+        {/* Share Rep card modal — lazy-loaded heavy canvas */}
+        {shareOpen && <ShareCard open={shareOpen} onClose={()=> setShareOpen(false)} myRep={myRep} streak={streak} youHandle={youHandle} levelInfo={levelInfo} />}
+        <RepExplainer open={repExplainerOpen} onClose={()=> setRepExplainerOpen(false)} rep={myRep} levelInfo={levelInfo} />
       </div>
     </div>
   );

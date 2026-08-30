@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, useMemo, useRef } from "react";
 import { logError, getErrorMessage } from "@/lib/adapters/error";
+import RepExplainer from "@/components/road/RepExplainer";
 
 type StoredProfile = {
   id: string;
@@ -170,6 +171,7 @@ export default function ProfilePage(){
   const [gistsLoading,setGistsLoading]=useState(false);
   const [shareOpen,setShareOpen]=useState(false);
   const [shareImg,setShareImg]=useState<string|null>(null);
+  const [repExplainerOpen,setRepExplainerOpen]=useState(false);
   const shareCanvasRef = useRef<HTMLCanvasElement>(null);
   useEffect(()=>{ setCandy(randomCandy()); },[]);
   function shuffleSuggestions(){
@@ -381,6 +383,7 @@ export default function ProfilePage(){
                 )}
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-black ${lvl.lvl===5? "bg-gradient-to-r from-amber-400 to-yellow-300 text-black ring-2 ring-amber-300":"bg-white text-black"}`}>Lvl {lvl.lvl} · {lvl.name}</span>
+                  <button onClick={()=> setRepExplainerOpen(true)} aria-label="What is Rep?" className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-white/20 bg-white/10 text-[11px] font-black text-white hover:bg-white hover:text-black transition" title="What is Rep?">ⓘ</button>
                   <span className="font-mono text-[12px] font-bold text-white">{rep} Rep</span>
                   <button onClick={()=> setShareOpen(true)} className="sm:hidden inline-flex items-center rounded-full bg-white px-3 py-1.5 text-[12px] font-bold text-black">Share card</button>
                 </div>
@@ -562,6 +565,7 @@ export default function ProfilePage(){
           </div>
         )}
 
+        <RepExplainer open={repExplainerOpen} onClose={()=> setRepExplainerOpen(false)} rep={repN} levelInfo={lvl} />
         {toast && <div className="fixed bottom-20 left-1/2 z-50 -translate-x-1/2 rounded-full border border-white/10 bg-[#0f172a] px-4 py-2 text-[13px] text-white shadow-xl">{toast}</div>}
       </div>
     );
