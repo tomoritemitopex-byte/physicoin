@@ -322,6 +322,10 @@ function RoadmapInner() {
   // shareable Rep card — lazy-loaded via dynamic ShareCard
   const [shareOpen, setShareOpen] = useState(false);
   const [repExplainerOpen, setRepExplainerOpen] = useState(false);
+  // panic/stake/ghost state
+  const [stakeOn, setStakeOn] = useState(false);
+  const [ghostModal, setGhostModal] = useState<{ open:boolean; ev: EventRow|null; forkIx?: number; voters?: any[] }|null>(null);
+  const [ghostConfetti, setGhostConfetti] = useState(false);
 
   const fetchFeed = useCallback(async () => {
     const ctrl = new AbortController();
@@ -1321,6 +1325,23 @@ function RoadmapInner() {
       openPickerForVote(id, v, isFlag);
       return;
     }
+    // stake: if fork vote with stakeOn, deduct 0.5 upfront + check balance
+    let forkStake = false;
+    if(stakeOn){
+      const isForkId = events.some(e=> String(e.id).split("__tile")[0]===String(id).split("__tile")[0] && conflictMap.has(String(e.id)));
+      const isForkGroup = forkGroupedRoadItems.some((it:any)=> it.kind==="fork" && (it.ids as string[]).includes(String(id).split("__tile")[0]));
+      if(isForkId || isForkGroup){
+        if(myRep < 0.5){ setToast("Need 0.5 Rep to stake"); return; }
+        forkStake = true;
+        setMyRep(prev=> {
+          const next = Math.max(0, prev - 0.5);
+          try{ const raw=localStorage.getItem("physi_profile"); if(raw){ const p=JSON.parse(raw); p.mining_balance=next; localStorage.setItem("physi_profile", JSON.stringify(p)); } }catch{}
+          return next;
+        });
+        setCandy("-0.5 staked");
+        setTimeout(()=> setCandy(null), 900);
+      }
+    }
     // optimistic: instantly show +0.3 Rep and update local state before POST confirms
     const prevEvents = events;
     const prevRep = myRep;
@@ -1348,14 +1369,27 @@ function RoadmapInner() {
       bumpStreakDaily();
       // ghost quorum — pure UI, no DB, after Yes vote
       if (v === "YES" && !isFlag) triggerGhostQuorum(id);
+      // stake resolve: if forkStake, winning = voted YES on winning branch? Simplify: if YES then win, NO then lose (deterministic for demo)
+      if(forkStake){
+        // need repo knows fork outcome: we treat YES as win if that event is winner threshold else lose; optimistic decide win = v==="YES"
+        setTimeout(()=> applyStake(v==="YES"), 900);
+      }
       fetchFeed();
       fetchRepBoard();
       setFacepileTick(t=>t+1);
     } catch (e: unknown) {
-      // revert optimistic on failure
+      // revert optimistic on failure + refund stake if any
       setEvents(prevEvents);
-      setMyRep(prevRep);
-      try{ const raw=localStorage.getItem("physi_profile"); if(raw){ const p=JSON.parse(raw); const nb=Math.max(0, Number(p.mining_balance||0)-0.3); p.mining_balance=nb; localStorage.setItem("physi_profile", JSON.stringify(p)); } }catch{}
+      let revertRep = prevRep;
+      if(forkStake){
+        // refund 0.5 stake on failure: we had deducted 0.5 then +0.3, prevRep includes -0.5, so refund +0.5
+        revertRep = prevRep + 0.5;
+        setMyRep(revertRep);
+        try{ const raw=localStorage.getItem("physi_profile"); if(raw){ const p=JSON.parse(raw); p.mining_balance=revertRep; localStorage.setItem("physi_profile", JSON.stringify(p)); } }catch{}
+      } else {
+        setMyRep(prevRep);
+        try{ const raw=localStorage.getItem("physi_profile"); if(raw){ const p=JSON.parse(raw); const nb=Math.max(0, Number(p.mining_balance||0)-0.3); p.mining_balance=nb; localStorage.setItem("physi_profile", JSON.stringify(p)); } }catch{}
+      }
       logError("VERIFY_SUBMIT_FAILED", e, { page: "roadmap" });
       setToast(getErrorMessage("VERIFY_SUBMIT_FAILED"));
     } finally {
@@ -1536,10 +1570,74 @@ function RoadmapInner() {
 
   const pastCount = nowIdx;
   const upcomingCount = (filteredRoadItems.length ? filteredRoadItems.length : roadItems.length) - nowIdx;
+  // panic: event within 2h of now (eventInstant vs Date.now)
+  const panicInfo = useMemo(()=>{
+    const twoH = 2*60*60*1000;
+    let best: { item: RoadItem; ms:number; delta:number; id:string }|null = null;
+    const src = filteredRoadItems.length ? filteredRoadItems : roadItems;
+    for(const it of src){
+      if((it as any).kind==="personal" || (it as any).kind==="demo") continue;
+      if((it as any).kind==="fork"){
+        const ev0 = (it as any).events?.[0] as EventRow | undefined;
+        if(!ev0) continue;
+        const ms = eventInstant(ev0.event_date, ev0.event_time);
+        const d = ms - now;
+        if(d>0 && d<=twoH && (!best || d<best.delta)) best={ item: it, ms, delta:d, id: String(ev0.id).split("__tile")[0] };
+        continue;
+      }
+      const ev = (it as any).ev as EventRow | undefined;
+      if(!ev) continue;
+      const ms = eventInstant(ev.event_date, ev.event_time);
+      const d = ms - now;
+      if(d>0 && d<=twoH && (!best || d<best.delta)) best={ item: it, ms, delta:d, id: String(ev.id).split("__tile")[0] };
+    }
+    return best;
+  }, [filteredRoadItems, roadItems, now]);
+  const panicId = panicInfo?.id ?? null;
+  const panicDeltaFmt = useMemo(()=>{
+    if(!panicInfo) return null;
+    const m = Math.max(0, Math.floor(panicInfo.delta/60000));
+    const h = Math.floor(m/60);
+    const min = m%60;
+    return h>0 ? `${h}h ${String(min).padStart(2,"0")}m` : `${min}m`;
+  }, [panicInfo]);
+
+  // stake persistence + apply win/lose
+  useEffect(()=>{
+    try{ const v=localStorage.getItem("physi_stake_on"); if(v==="1") setStakeOn(true); }catch{}
+  },[]);
+  useEffect(()=>{
+    try{ localStorage.setItem("physi_stake_on", stakeOn ? "1":"0"); }catch{}
+  },[stakeOn]);
+  function applyStake(isWin:boolean){
+    try{
+      const curRep = Number(localStorage.getItem("physi_rep_stake") || String(myRep) || "0");
+      // spec: stake 0.5 Rep toggle, win +0.7 lose -0.2 ; we already deducted 0.5 on stake vote, now resolve
+      const delta = isWin ? 0.7 : -0.2;
+      const next = Math.max(0, myRep + delta);
+      setMyRep(next);
+      // persist via physi_profile mining_balance
+      try{
+        const raw=localStorage.getItem("physi_profile");
+        if(raw){ const p=JSON.parse(raw); p.mining_balance=next; localStorage.setItem("physi_profile", JSON.stringify(p)); }
+      }catch{}
+      // log
+      const histRaw = localStorage.getItem("physi_stake_hist");
+      let hist:any[]=[]; try{ if(histRaw) hist=JSON.parse(histRaw); }catch{}
+      hist.push({ at: Date.now(), win:isWin, delta, rep: next });
+      if(hist.length>50) hist=hist.slice(-50);
+      localStorage.setItem("physi_stake_hist", JSON.stringify(hist));
+      localStorage.setItem("physi_rep_stake", String(next));
+      setCandy(isWin ? "+0.7 Rep" : "-0.2 Rep");
+      setTimeout(()=> setCandy(null), 1400);
+      if(isWin){ setGhostConfetti(true); setTimeout(()=> setGhostConfetti(false), 2800); setShowConfetti(true); setTimeout(()=> setShowConfetti(false), 2800); }
+      setToast(isWin ? "Stake won +0.7 Rep 🎉" : "Stake lost -0.2 Rep");
+    }catch{}
+  }
 
   return (
     <div className={`${fredoka.className} ${fredoka.variable} relative -mx-4 -mt-5 w-[100vw] max-w-[100vw] sm:-mx-6 lg:-mx-8`}>
-      <style>{`@keyframes canonicalPop{0%{transform:scale(0.72)}50%{transform:scale(1.22)}100%{transform:scale(1)}} @keyframes tickPulse{0%,100%{opacity:1}50%{opacity:.55}} @keyframes roadShimmer{0%{stroke-dashoffset:0}100%{stroke-dashoffset:28}} @keyframes scaleIn{0%{transform:scale(0.35);opacity:0}60%{transform:scale(1.14);opacity:1}100%{transform:scale(1);opacity:1}} @keyframes nowPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.06);opacity:.94}} @keyframes ghostDrift{0%{transform:translateY(0) translateX(0)}25%{transform:translateY(-10px) translateX(7px)}50%{transform:translateY(-16px) translateX(-5px)}75%{transform:translateY(-8px) translateX(4px)}100%{transform:translateY(0) translateX(0)}} @keyframes ghostPulse{0%,100%{opacity:.92}50%{opacity:.56}} @keyframes candyPop{0%{transform:translate(-50%,-10px) scale(0.5);opacity:0}18%{transform:translate(-50%,-18px) scale(1.18);opacity:1}72%{transform:translate(-50%,-42px) scale(1);opacity:1}100%{transform:translate(-50%,-64px) scale(0.9);opacity:0}} @keyframes pulseSlideIn{0%{transform:translate(-50%,-18px);opacity:0}12%{transform:translate(-50%,0);opacity:1}88%{transform:translate(-50%,0);opacity:1}100%{transform:translate(-50%,-18px);opacity:0}} @keyframes confettiFall{0%{transform:translateY(-10vh) rotate(0deg);opacity:1}100%{transform:translateY(110vh) rotate(720deg);opacity:0}} @keyframes skeletonPulse{0%,100%{opacity:0.55}50%{opacity:1}} @keyframes questFill{0%{width:0}100%{width:var(--fill)}} @keyframes forkMerge{0%{transform:translateX(0)}100%{transform:translateX(0)}} @keyframes forkWinnerPulse{0%,100%{filter:drop-shadow(0 0 0 rgba(16,185,129,0))}50%{filter:drop-shadow(0 0 8px rgba(16,185,129,0.9))}} @keyframes fabPulse{0%{transform:scale(1);box-shadow:0 8px 24px rgba(139,92,246,0.5),0 4px 12px rgba(0,0,0,0.3)}50%{transform:scale(1.08);box-shadow:0 12px 36px rgba(139,92,246,0.75),0 6px 18px rgba(0,0,0,0.4)}100%{transform:scale(1);box-shadow:0 8px 24px rgba(139,92,246,0.5),0 4px 12px rgba(0,0,0,0.3)}} @keyframes pulseRing{0%{transform:scale(0.8);opacity:0.9}70%{transform:scale(1.55);opacity:0}100%{transform:scale(1.7);opacity:0}} .road-3d-wrap{perspective:800px;perspective-origin:50% 28%} .road-3d-inner{transform-style:preserve-3d;transform:perspective(800px) rotateX(4deg);transform-origin:center top;will-change:transform;clip-path:ellipse(96% 88% at 50% 46%);border-radius:28px} .road-3d-inner::before{content:"";position:absolute;inset:0;pointer-events:none;border-radius:28px;box-shadow:inset 0 10px 22px rgba(0,0,0,0.16),inset 0 -8px 16px rgba(0,0,0,0.12)} .node-3d{transform:translateZ(6px);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.55),inset 0 -2px 4px rgba(0,0,0,0.14),0 8px 20px rgba(0,0,0,0.42),0 1px 6px rgba(0,0,0,0.32);transition:transform 220ms cubic-bezier(.2,.8,.3,1),box-shadow 220ms ease} .node-3d:hover{transform:translateZ(12px) scale(1.02);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.65),inset 0 -3px 6px rgba(0,0,0,0.16),0 12px 28px rgba(0,0,0,0.5),0 4px 12px rgba(0,0,0,0.36)}`}</style>
+      <style>{`@keyframes canonicalPop{0%{transform:scale(0.72)}50%{transform:scale(1.22)}100%{transform:scale(1)}} @keyframes tickPulse{0%,100%{opacity:1}50%{opacity:.55}} @keyframes roadShimmer{0%{stroke-dashoffset:0}100%{stroke-dashoffset:28}} @keyframes scaleIn{0%{transform:scale(0.35);opacity:0}60%{transform:scale(1.14);opacity:1}100%{transform:scale(1);opacity:1}} @keyframes nowPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.06);opacity:.94}} @keyframes ghostDrift{0%{transform:translateY(0) translateX(0)}25%{transform:translateY(-10px) translateX(7px)}50%{transform:translateY(-16px) translateX(-5px)}75%{transform:translateY(-8px) translateX(4px)}100%{transform:translateY(0) translateX(0)}} @keyframes ghostPulse{0%,100%{opacity:.92}50%{opacity:.56}} @keyframes candyPop{0%{transform:translate(-50%,-10px) scale(0.5);opacity:0}18%{transform:translate(-50%,-18px) scale(1.18);opacity:1}72%{transform:translate(-50%,-42px) scale(1);opacity:1}100%{transform:translate(-50%,-64px) scale(0.9);opacity:0}} @keyframes pulseSlideIn{0%{transform:translate(-50%,-18px);opacity:0}12%{transform:translate(-50%,0);opacity:1}88%{transform:translate(-50%,0);opacity:1}100%{transform:translate(-50%,-18px);opacity:0}} @keyframes confettiFall{0%{transform:translateY(-10vh) rotate(0deg);opacity:1}100%{transform:translateY(110vh) rotate(720deg);opacity:0}} @keyframes skeletonPulse{0%,100%{opacity:0.55}50%{opacity:1}} @keyframes questFill{0%{width:0}100%{width:var(--fill)}} @keyframes forkMerge{0%{transform:translateX(0)}100%{transform:translateX(0)}} @keyframes forkWinnerPulse{0%,100%{filter:drop-shadow(0 0 0 rgba(16,185,129,0))}50%{filter:drop-shadow(0 0 8px rgba(16,185,129,0.9))}} @keyframes fabPulse{0%{transform:scale(1);box-shadow:0 8px 24px rgba(139,92,246,0.5),0 4px 12px rgba(0,0,0,0.3)}50%{transform:scale(1.08);box-shadow:0 12px 36px rgba(139,92,246,0.75),0 6px 18px rgba(0,0,0,0.4)}100%{transform:scale(1);box-shadow:0 8px 24px rgba(139,92,246,0.5),0 4px 12px rgba(0,0,0,0.3)}} @keyframes pulseRing{0%{transform:scale(0.8);opacity:0.9}70%{transform:scale(1.55);opacity:0}100%{transform:scale(1.7);opacity:0}} @keyframes panicDoublePulse{0%{transform:scale(0.85);opacity:0.95}25%{transform:scale(1.35);opacity:0.7}50%{transform:scale(0.9);opacity:0.95}75%{transform:scale(1.45);opacity:0}100%{transform:scale(1.6);opacity:0}} @keyframes panicGlow{0%,100%{filter:drop-shadow(0 0 0 rgba(239,68,68,0))}50%{filter:drop-shadow(0 0 14px rgba(239,68,68,0.9))}} .road-3d-wrap{perspective:800px;perspective-origin:50% 28%} .road-3d-inner{transform-style:preserve-3d;transform:perspective(800px) rotateX(4deg);transform-origin:center top;will-change:transform;clip-path:ellipse(96% 88% at 50% 46%);border-radius:28px} .road-3d-inner::before{content:\"\";position:absolute;inset:0;pointer-events:none;border-radius:28px;box-shadow:inset 0 10px 22px rgba(0,0,0,0.16),inset 0 -8px 16px rgba(0,0,0,0.12)} .node-3d{transform:translateZ(6px);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.55),inset 0 -2px 4px rgba(0,0,0,0.14),0 8px 20px rgba(0,0,0,0.42),0 1px 6px rgba(0,0,0,0.32);transition:transform 220ms cubic-bezier(.2,.8,.3,1),box-shadow 220ms ease} .node-3d:hover{transform:translateZ(12px) scale(1.02);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.65),inset 0 -3px 6px rgba(0,0,0,0.16),0 12px 28px rgba(0,0,0,0.5),0 4px 12px rgba(0,0,0,0.36)}`}</style>
       <div className="relative min-h-[calc(100vh-64px)] w-full overflow-hidden xl:pr-[276px]" style={{ background: "linear-gradient(180deg, #0d3b2a 0%, #143d2e 42%, #1a5c3a 100%)" }}>
         {/* ambient - parallax */}
         <div className="pointer-events-none absolute inset-0" style={{ transform: `translateY(${parallaxY}px)`, willChange:"transform" }}>
@@ -1572,10 +1670,15 @@ function RoadmapInner() {
             </div>
             <div className="flex items-center gap-1.5 sm:gap-2">
               <div className="relative">
-                <button onClick={()=>{ setBellOpen(v=>!v); if(!bellOpen){ bellSeenRef.current=Date.now(); setBellCount(0); try{ localStorage.setItem(`physi_bell_seen_${myUserId||'anon'}`, String(Date.now())); }catch{} } }} aria-label="Notifications" className="relative flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white backdrop-blur hover:bg-white hover:text-black transition">
-                  <span className="text-[14px]">🔔</span>
+                <button onClick={()=>{ setBellOpen(v=>!v); if(!bellOpen){ bellSeenRef.current=Date.now(); setBellCount(0); try{ localStorage.setItem(`physi_bell_seen_${myUserId||'anon'}`, String(Date.now())); }catch{} } }} aria-label="Notifications" className={`relative flex items-center justify-center rounded-full border backdrop-blur transition ${panicInfo ? "h-16 w-16 text-[28px] border-red-500 bg-gradient-to-br from-amber-500 to-red-600 text-white shadow-[0_0_22px_rgba(239,68,68,0.7)] animate-[panicGlow_1s_ease-in-out_infinite]" : "h-8 w-8 text-[14px] border-white/10 bg-black/60 text-white hover:bg-white hover:text-black"}`}>
+                  <span className={panicInfo ? "text-[28px]" : "text-[14px]"}>🔔</span>
                   {(bellCount>0 || mineHasNew) && <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-black text-white ring-2 ring-black">{bellCount>0 ? bellCount : 1}</span>}
                 </button>
+                {panicInfo && panicDeltaFmt && (
+                  <div className="absolute left-1/2 top-[68px] -translate-x-1/2 whitespace-nowrap rounded-full bg-gradient-to-r from-amber-400 to-red-500 px-3 py-1.5 text-center shadow-xl ring-2 ring-white/20">
+                    <p className="font-mono text-[12px] font-black leading-none text-white">in {panicDeltaFmt} — act now</p>
+                  </div>
+                )}
                 {bellOpen && (
                   <div className="absolute right-0 top-9 z-40 w-[300px] overflow-hidden rounded-2xl border border-white/10 bg-[#0b0f1e] shadow-2xl">
                     <div className="flex items-center justify-between border-b border-white/10 px-4 py-2.5">
@@ -1630,8 +1733,16 @@ function RoadmapInner() {
             <button onClick={() => { navigator.clipboard?.writeText(window.location.href); setToast("link copied — share the road"); }} className="rounded-full border border-white/10 bg-black/70 px-3.5 py-1.5 text-xs font-semibold text-white backdrop-blur">↗ Share</button>
             <button onClick={() => setToast("saved to your map")} className="rounded-full border border-white/10 bg-black/70 px-3.5 py-1.5 text-xs font-semibold text-white backdrop-blur">♡ Save</button>
             <button onClick={() => scrollToNow(true)} className="rounded-full border border-white/10 bg-black/70 px-3.5 py-1.5 text-xs font-semibold text-white backdrop-blur sm:hidden">◎ NOW</button>
+            <label className="flex items-center gap-1.5 rounded-full border border-amber-400/30 bg-black/70 px-3 py-1.5 cursor-pointer backdrop-blur">
+              <input type="checkbox" checked={stakeOn} onChange={e=> setStakeOn(e.target.checked)} className="h-3.5 w-3.5 accent-amber-500" />
+              <span className="font-mono text-[11px] font-bold text-amber-200">stake 0.5 Rep</span>
+            </label>
           </div>
           <button onClick={() => scrollToNow(true)} className="pointer-events-auto rounded-full border border-violet-400/30 bg-violet-500 px-3 py-1.5 text-[11px] font-black text-white sm:hidden">◎ NOW</button>
+          <label className="pointer-events-auto flex sm:hidden items-center gap-1 rounded-full border border-amber-400/30 bg-black/70 px-2.5 py-1.5 cursor-pointer backdrop-blur">
+            <input type="checkbox" checked={stakeOn} onChange={e=> setStakeOn(e.target.checked)} className="h-3 w-3 accent-amber-500" />
+            <span className="font-mono text-[10px] font-bold text-amber-200">0.5 stake</span>
+          </label>
         </div>
 
         <p className="absolute left-1/2 top-[92px] z-10 -translate-x-1/2 whitespace-nowrap rounded-full border border-white/10 bg-black/70 px-3 py-1 font-mono text-[10px] tracking-wide text-slate-400 backdrop-blur sm:hidden">
@@ -1909,6 +2020,10 @@ function RoadmapInner() {
                 <stop offset="50%" stopColor="#8b5cf6" />
                 <stop offset="100%" stopColor="#a78bfa" />
               </linearGradient>
+              <linearGradient id="panicRoad" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stopColor="#f59e0b" />
+                <stop offset="100%" stopColor="#ef4444" />
+              </linearGradient>
               <filter id="roadShadow"><feDropShadow dx="0" dy="4" stdDeviation={6} floodColor="rgba(0,0,0,0.42)" /></filter>
               <filter id="nodeGlow"><feDropShadow dx="0" dy="2" stdDeviation={5} floodColor="rgba(255,255,255,0.14)" /></filter>
               <pattern id="sprinkleDots" patternUnits="userSpaceOnUse" width={42} height={12} patternTransform="rotate(12)">
@@ -1918,6 +2033,8 @@ function RoadmapInner() {
 
             {/* purple road — subtle depth */}
             <path d={roadD} fill="none" stroke="#1a1033" strokeWidth={52} strokeLinecap="round" strokeLinejoin="round" opacity={0.92} style={{ filter: "url(#roadShadow)" }} />
+            {/* panic amber->red gradient overlay when event within 2h */}
+            {panicInfo && <path d={roadD} fill="none" stroke="url(#panicRoad)" strokeWidth={46} strokeLinecap="round" strokeLinejoin="round" opacity={0.88} style={{ filter: "drop-shadow(0 0 10px rgba(239,68,68,0.55))" } as any} />}
             {/* soft offset for emboss */}
             <path d={roadD} fill="none" stroke="#4c1d95" strokeWidth={44} strokeLinecap="round" strokeLinejoin="round" opacity={0.88} style={{ transform: "translate(4px, 4px)" } as any} />
             <path d={roadD} fill="none" stroke="url(#purpleRoad)" strokeWidth={44} strokeLinecap="round" strokeLinejoin="round" style={{ filter: "drop-shadow(0 3px 8px rgba(0,0,0,0.32))" } as any} />
@@ -2035,7 +2152,23 @@ function RoadmapInner() {
                           const venue = String(ev.venue||"").slice(0,12);
                           const leftSideBranch = bIdx===0;
                           return (
-                            <g key={ev.id} opacity={opacity} style={isWinner ? { animation: "forkWinnerPulse 1.4s ease-in-out infinite" } as any : undefined} onClick={(e)=>{ e.stopPropagation(); setQTap(true); setSelectedId(String(ev.id).split("__tile")[0]); setSheetOpen(true); }}>
+                            <g key={ev.id} opacity={opacity} style={{ ...(isWinner ? { animation: "forkWinnerPulse 1.4s ease-in-out infinite" } as any : {}), cursor: isLoser && isPastFork ? "pointer" : "pointer" }} onClick={(e)=>{ e.stopPropagation(); if(isLoser && isPastFork){
+                              // ghost replay: fetch voters then modal with WAT timestamp + outcome + confetti
+                              (async()=>{
+                                let voters:any[]=[];
+                                try{
+                                  const r=await fetch(`/api/verify?event_id=${encodeURIComponent(String(ev.id).split("__tile")[0])}`,{cache:"no-store"});
+                                  const j=await r.json().catch(()=>({} as any));
+                                  voters = j.verifications ?? j.rows ?? [];
+                                }catch{}
+                                setGhostModal({ open:true, ev, voters, forkIx: bIdx });
+                                // small delay confetti replay
+                                setGhostConfetti(true); setTimeout(()=> setGhostConfetti(false), 2800);
+                                vibrate(20);
+                              })();
+                              return;
+                            }
+                            setQTap(true); setSelectedId(String(ev.id).split("__tile")[0]); setSheetOpen(true); }}>
                               {/* node circle */}
                               <circle cx={bx} cy={p.y+6} r={28} fill="black" opacity={0.34} />
                               <g style={{ transformOrigin: `${bx}px ${p.y}px`, transform: isWinner ? "translateZ(14px) scale(1.06)" : "translateZ(10px)" } as any}>
@@ -2145,6 +2278,13 @@ function RoadmapInner() {
                       }}
                     >
                       {isActive && <circle cx={p.x} cy={p.y} r={nodeR + 20} fill="white" opacity={0.09} />}
+                      {panicId && (baseId===panicId || item.id===panicId) && (
+                        <>
+                          <circle cx={p.x} cy={p.y} r={nodeR+14} fill="none" stroke="#ef4444" strokeWidth={3.2} opacity={0.95} style={{ animation:"panicDoublePulse 1.1s ease-out infinite" }} />
+                          <circle cx={p.x} cy={p.y} r={nodeR+24} fill="none" stroke="#f59e0b" strokeWidth={2.4} opacity={0.85} style={{ animation:"panicDoublePulse 1.1s ease-out infinite 0.22s" }} />
+                          <circle cx={p.x} cy={p.y} r={nodeR+6} fill="none" stroke="#ef4444" strokeWidth={2} opacity={0.7} style={{ animation:"panicGlow 0.9s ease-in-out infinite" }} />
+                        </>
+                      )}
                       {((deepPulseId && (deepPulseId===baseId || deepPulseId===item.id)) || (searchPulseId && (searchPulseId===baseId || searchPulseId===item.id))) && (
                         <>
                           <circle cx={p.x} cy={p.y} r={nodeR+10} fill="none" stroke="#8b5cf6" strokeWidth={3} opacity={0.9} style={{ animation:"pulseRing 1.1s ease-out infinite" }} />
@@ -2584,6 +2724,50 @@ function RoadmapInner() {
         {/* Share Rep card modal — lazy-loaded heavy canvas */}
         {shareOpen && <ShareCard open={shareOpen} onClose={()=> setShareOpen(false)} myRep={myRep} streak={streak} youHandle={youHandle} levelInfo={levelInfo} />}
         <RepExplainer open={repExplainerOpen} onClose={()=> setRepExplainerOpen(false)} rep={myRep} levelInfo={levelInfo} />
+        {/* Ghost replay modal: past fork loser tappable */}
+        {ghostModal?.open && ghostModal.ev && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm" onClick={()=> setGhostModal(null)}>
+            <div onClick={e=>e.stopPropagation()} className="w-full max-w-[420px] rounded-[22px] border border-white/10 bg-[#0b0f1e] p-5 shadow-2xl relative overflow-hidden">
+              {ghostConfetti && (
+                <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+                  {Array.from({length:18}).map((_,i)=>{
+                    const left=(i*6.2)%100; const delay=(Math.random()*0.4).toFixed(2); const dur=(1.6+Math.random()*1).toFixed(2);
+                    const bg=["#8b5cf6","#10b981","#f59e0b","#ec4899","#06b6d4"][i%5];
+                    return <div key={i} className="absolute top-0 h-3 w-2 rounded-sm" style={{ left:left+"%", background:bg, animation:`confettiFall ${dur}s ${delay}s ease-in forwards` }} />;
+                  })}
+                </div>
+              )}
+              <div className="flex items-center justify-between">
+                <h3 className="text-[15px] font-black text-white">Ghost replay · fork loser</h3>
+                <button onClick={()=> setGhostModal(null)} className="rounded-full bg-white/10 px-3 py-1 text-xs text-white">✕</button>
+              </div>
+              <p className="mt-1 font-mono text-[11px] text-slate-400">opacity 0.35 · tap to replay confetti · past node</p>
+              <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.04] p-3">
+                <p className="text-[14px] font-bold text-white">{ghostModal.ev.title}</p>
+                <p className="font-mono text-[11px] text-slate-400">{ghostModal.ev.venue} · {fmtDate(ghostModal.ev.event_date)} {fmtTime(ghostModal.ev.event_time)} WAT</p>
+                <p className="mt-1 font-mono text-[10px] text-slate-500">Fork outcome: {Number(ghostModal.ev.authority_points||0) >= FORK_THRESHOLD ? "WIN ✓" : "LOST — 0.35 dim"} · {ghostModal.ev.authority_points}/{FORK_THRESHOLD} · threshold {FORK_THRESHOLD}</p>
+                <p className="mt-1 font-mono text-[10px] text-amber-200">Timestamp WAT: {(() => { const ts=eventInstant(ghostModal.ev!.event_date, ghostModal.ev!.event_time); const w=formatWAT(ts); return `${w.wday} ${w.datePart} ${w.timePart} WAT`; })()}</p>
+              </div>
+              <div className="mt-3">
+                <p className="font-mono text-[11px] font-bold text-white">Who voted</p>
+                {ghostModal.voters && ghostModal.voters.length>0 ? (
+                  <ul className="mt-1 max-h-[140px] overflow-auto space-y-1">
+                    {ghostModal.voters.slice(0,12).map((v:any,i:number)=>(
+                      <li key={i} className="flex items-center justify-between rounded-full bg-white/5 px-3 py-1.5 font-mono text-[11px] text-slate-200">
+                        <span>{String(v.verifier_id||v.handle||"anon").slice(0,12)} · {String(v.vote||"YES").toUpperCase()}</span>
+                        <span className="text-[10px] text-slate-500">{v.created_at ? new Date(v.created_at).toLocaleTimeString() : ""}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : <p className="mt-1 font-mono text-[11px] text-slate-500">No voters yet — be first to decide fork.</p>}
+              </div>
+              <div className="mt-4 flex gap-2">
+                <button onClick={()=>{ setGhostConfetti(true); setTimeout(()=> setGhostConfetti(false), 2800); setShowConfetti(true); setTimeout(()=> setShowConfetti(false), 2800); vibrate(20); }} className="flex-1 rounded-full bg-gradient-to-r from-amber-400 to-emerald-400 py-2.5 text-[13px] font-black text-black">Replay confetti 🎉</button>
+                <button onClick={()=> setGhostModal(null)} className="rounded-full border border-white/15 bg-white/5 px-5 py-2.5 text-[13px] font-semibold text-white">Close</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

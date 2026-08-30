@@ -4,6 +4,9 @@ import { useState, useEffect } from "react";
 import { listFeatures } from "@/lib/adapters/features";
 import "@/lib/adapters";
 
+// CSS vars unified via globals.css: --physi-forest #0d3b2a, --physi-forest-mid #1a5c3a, --physi-forest-light #52b788, --physi-purple #8b5cf6, --font-fredoka
+
+
 // UI is adapter-driven: nav comes from FeatureAdapter registry — no hard-coded core
 // Profile is separate CTA (not in main tabs); stats/health have no nav
 // Bottom game nav: 2 big buttons Road + Timetable only — Verify/Mining are node actions
@@ -161,9 +164,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const isFullBleed = isRoadmap;
 
   return (
-    <div className="min-h-screen bg-[#070a12] text-slate-200 selection:bg-white selection:text-[#070a12]">
+    <div className="min-h-screen bg-[var(--physi-bg)] text-slate-200 selection:bg-white selection:text-[var(--physi-bg)]" style={{ fontFamily: 'var(--font-fredoka), system-ui, sans-serif' }}>
       <div className="pointer-events-none fixed inset-0 -z-10">
-        <div className="absolute inset-0 bg-[#070a12]" />
+        <div className="absolute inset-0 bg-[var(--physi-bg)]" />
         <div className="absolute -top-[30vh] left-1/2 h-[70vh] w-[110vw] -translate-x-1/2 rounded-[100%] bg-white/[0.025] blur-[80px]" />
         <div className="absolute top-[18vh] left-[8%] h-64 w-64 rounded-full bg-emerald-500/10 blur-[90px]" />
         <div className="absolute top-[45vh] right-[10%] h-72 w-72 rounded-full bg-indigo-500/10 blur-[90px]" />

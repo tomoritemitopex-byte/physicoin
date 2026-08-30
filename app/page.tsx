@@ -1,6 +1,6 @@
 "use client";
 // FRONT landing — forest palette + road peek, Cruip-tier polish, Naija-voice copy.
-// Palette: forest #0d3b2a→#1a5c3a, purple road #8b5cf6, Fredoka hero, lollipop tree accent
+// Palette: forest var(--physi-forest) #0d3b2a→var(--physi-forest-mid) #1a5c3a, purple road var(--physi-purple) #8b5cf6, Fredoka hero (global --font-fredoka), lollipop tree accent
 import { Fredoka } from "next/font/google";
 const fredoka = Fredoka({ subsets: ["latin"], weight: ["400","500","600","700"], display: "swap", variable: "--font-fredoka" });
 import { useEffect, useState } from 'react';
@@ -146,7 +146,7 @@ PHYSI | CHM 112 | New Lab | 2026-09-03 | 14:00 | general | Advisory`;
         <button onClick={onSnap} disabled={loading} className="inline-flex items-center gap-1.5 rounded-full bg-white px-5 py-2 text-[13px] font-black text-black disabled:opacity-50 hover:bg-slate-100 transition">{loading ? "Parsing…" : "Snap → Create"}</button>
         <a href="/app/roadmap" className="font-mono text-[11px] text-emerald-100/60 hover:text-white">View road →</a>
       </div>
-      {preview && <div className="mt-3 overflow-hidden rounded-xl border border-white/10 bg-black/30"><img src={preview} alt="preview" className="max-h-[220px] w-full object-contain" /><p className="px-2 py-1 font-mono text-[10px] text-white/50">preview · {preview.slice(0,22)}…</p></div>}
+      {preview && <div className="mt-3 overflow-hidden rounded-xl border border-white/10 bg-black/30"><img src={preview} alt="preview" loading="lazy" className="max-h-[220px] w-full object-contain" /><p className="px-2 py-1 font-mono text-[10px] text-white/50">preview · {preview.slice(0,22)}…</p></div>}
       {error && <p className="mt-2 rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2 font-mono text-[11px] text-red-200">{error}</p>}
       {result && (
         <div className="mt-2 rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2">
@@ -190,7 +190,7 @@ export default function LandingPage() {
   const displayVerified = verifiedCount || Math.max(1, Math.round(displayEvents * 0.35));
 
   return (
-    <div className={`${fredoka.variable} relative overflow-hidden`} style={{ background: "linear-gradient(180deg, #0d3b2a 0%, #143d2e 45%, #1a5c3a 100%)" }}>
+    <div className={`${fredoka.variable} relative overflow-hidden`} style={{ background: "linear-gradient(180deg, var(--physi-forest) 0%, var(--physi-forest-2) 45%, var(--physi-forest-mid) 100%)" }}>
       {/* ambient forest orbs + subtle grid — forest palette */}
       <div aria-hidden className="pointer-events-none absolute inset-0">
         <div className="absolute -top-[22rem] left-1/2 h-[40rem] w-[62rem] -translate-x-1/2 rounded-full opacity-[0.22]" style={{ background: "radial-gradient(ellipse at center, rgba(82,183,136,0.32), transparent 62%)" }} />
@@ -200,7 +200,7 @@ export default function LandingPage() {
       </div>
 
       {/* header — forest translucent */}
-      <header className="sticky top-0 z-20 border-b border-white/[0.07] bg-[#0d3b2a]/70 backdrop-blur-xl">
+      <header className="sticky top-0 z-20 border-b border-white/[0.07] bg-[var(--physi-forest)]/70 backdrop-blur-xl">
         <div className="mx-auto flex max-w-[1240px] items-center justify-between px-6 py-3.5 lg:px-8">
           <div className="flex items-center gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-[9px] bg-white text-[10px] font-black tracking-[-0.04em] text-slate-900">PHYSI</div>

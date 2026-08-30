@@ -10,6 +10,7 @@ const config: Config = {
       fontFamily: {
         mono: ['JetBrains Mono', 'monospace'],
         sans: ['Inter', 'system-ui', 'sans-serif'],
+        fredoka: ['var(--font-fredoka)', 'Fredoka', 'system-ui', 'sans-serif'],
       },
     },
   },

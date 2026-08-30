@@ -2,8 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Design tokens via ThemeAdapter — emitted by lib/adapters/theme.ts themeRootCss() */
-/* PHYSI dark #070a12 + forest #0d3b2a stay intact, but now adapter-driven */
+/* ── Unified Design Tokens — single source of truth for whole-web ── */
+/* Forest palette #0d3b2a #1a5c3a #52b788 + purple #8b5cf6 + Fredoka  */
 :root {
   --physi-bg: #070a12;
   --physi-card: rgba(255,255,255,0.03);
@@ -13,12 +13,20 @@
   --physi-success: #10b981;
   --physi-warning: #f59e0b;
   --physi-forest: #0d3b2a;
+  --physi-forest-mid: #1a5c3a;
+  --physi-forest-light: #52b788;
+  --physi-forest-2: #143d2e;
+  --physi-purple: #8b5cf6;
+  --physi-purple-dark: #6e45d0;
+  --physi-purple-light: #a78bfa;
+  --font-fredoka: "Fredoka", system-ui, sans-serif;
 }
 
 html,
 body {
   background: var(--physi-bg);
   color: #e2e8f0;
+  font-family: var(--font-fredoka), system-ui, sans-serif;
 }
 
 .physi-card {
@@ -30,4 +38,17 @@ body {
 
 .physi-pill {
   @apply inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium;
+}
+
+/* panic double-pulse */
+@keyframes panicDoublePulse {
+  0% { transform: scale(0.85); opacity: 0.95; }
+  25% { transform: scale(1.35); opacity: 0.7; }
+  50% { transform: scale(0.9); opacity: 0.95; }
+  75% { transform: scale(1.45); opacity: 0; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+@keyframes panicGlow {
+  0%,100% { filter: drop-shadow(0 0 0 rgba(239,68,68,0)); }
+  50% { filter: drop-shadow(0 0 12px rgba(239,68,68,0.85)); }
 }
