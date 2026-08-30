@@ -8,6 +8,9 @@ import { logError, getErrorMessage } from "@/lib/adapters/error";
 import { checkPresenceAward, requestGeolocation, persistPresence, getPresenceScore } from "@/lib/adapters/presence";
 import SearchBar from "@/components/road/SearchBar";
 import QuorumBar from "@/components/road/QuorumBar";
+import { getSquad, isSquadFormed, setSquad as saveSquad, clearSquad, shouldApplySquadBoost, SQUAD_MULTIPLIER, SQUAD_KEY } from "@/lib/squad";
+import { getLecturer, isLecturerVerified, isEmeraldPinVerified, hasEmeraldBypass, verifyLecturerEmail, verifyLecturerPin, lecturerBadgeLabel, LECTURER_KEY, OFFICIAL_PIN } from "@/lib/lecturer";
+import { generateICS, downloadICS } from "@/lib/calendar";
 const RepExplainer = dynamic(()=> import("@/components/road/RepExplainer"), { ssr: false, loading: ()=> null }) as any;
 const RepBoard = dynamic(()=> import("@/components/road/RepBoard"), { ssr: false, loading: ()=> null }) as any;
 const ShareCard = dynamic(()=> import("@/components/road/ShareCard"), { ssr: false, loading: ()=> null });
@@ -385,6 +388,15 @@ function RoadmapInner() {
   // Road chat 24h ephemeral
   const [chatMsgs, setChatMsgs] = useState<{ user:string; text:string; ts:number }[]>([{user:"zara_11", text:"road is live 🌱", ts: Date.now()- 60*60*1000},{user:"zara_11", text:"who's at LT2?", ts: Date.now()- 30*60*1000}]);
   const [chatDraft, setChatDraft] = useState("");
+  // --- Squad: 3 friends forms squad, Yes 1.5x on own gists, localStorage phys_squad ---
+  const [squad, setSquadState] = useState<{ members:string[]; owner:string|null; formedAt:number }|null>(null);
+  const [squadDraft, setSquadDraft] = useState<string[]>(["","",""]);
+  const [squadOpen, setSquadOpen] = useState(false);
+  // --- Lecturer oracle: email domain + emerald pin 8/8 bypass ---
+  const [lecturer, setLecturerState] = useState<{ email:string; verified:boolean; pinVerified:boolean; badge:string|null }|null>(null);
+  const [lectEmail, setLectEmail] = useState("");
+  const [lectPin, setLectPin] = useState("");
+  const [lectOpen, setLectOpen] = useState(false);
 
   const fetchFeed = useCallback(async () => {
     const ctrl = new AbortController();
@@ -568,6 +580,24 @@ function RoadmapInner() {
         }
       } catch {}
     })();
+  }, []);
+
+  // --- Squad + Lecturer hydrate from localStorage + handle invite param ---
+  useEffect(()=>{
+    try{
+      const s = getSquad();
+      if(s){ setSquadState(s); setSquadDraft([s.members[0]||"", s.members[1]||"", s.members[2]||""]); }
+      const l = getLecturer();
+      if(l){ setLecturerState(l as any); setLectEmail(l.email||""); }
+      const sp = new URLSearchParams(window.location.search);
+      const inv = sp.get("invite");
+      if(inv && !s){
+        // if invite param present and squad not formed, prefill first slot
+        setSquadDraft(prev=>{ const a=[...prev]; if(!a[0]) a[0]=inv.toLowerCase(); return a; });
+        // also set toast hint
+        setTimeout(()=> setToast(`Invite from @${inv} — add 2 more to form squad 1.5x`), 900);
+      }
+    }catch{}
   }, []);
 
   function daysBetween(a: string, b: string): number {
@@ -1460,6 +1490,31 @@ function RoadmapInner() {
       openPickerForVote(id, v, isFlag);
       return;
     }
+    // --- Squad 1.5x detection: YES on own gist when squad formed ---
+    let squadBoost = false;
+    let squadInfo: { members:string[]; owner:string|null }|null = null;
+    try{
+      const s = getSquad();
+      squadInfo = s ? { members: s.members, owner: s.owner } : null;
+      const evRowS = events.find(e=> String(e.id)===String(id) || String(e.id).split("__tile")[0]===String(id).split("__tile")[0]);
+      const createdBy = evRowS?.created_by ? String(evRowS.created_by) : null;
+      // try to resolve handle for created_by via local profile or squad - best effort
+      const should = shouldApplySquadBoost({ vote: v, squad: s, myHandle: youHandle, myId: verifierId, createdBy, createdByHandle: null });
+      if(should){
+        squadBoost = true;
+        // optimistic UI hint
+        setCandy("1.5x squad Yes!");
+        setTimeout(()=> setCandy(null), 1100);
+      }
+    }catch{}
+    // --- Lecturer emerald bypass detection ---
+    let lecturerEmerald = false;
+    try{
+      const l = getLecturer();
+      if(l && hasEmeraldBypass(l as any) && v==="YES"){
+        lecturerEmerald = true;
+      }
+    }catch{}
     // stake: if fork vote with stakeOn, deduct 0.5 upfront + check balance
     let forkStake = false;
     if(stakeOn){
@@ -1482,19 +1537,19 @@ function RoadmapInner() {
     const prevRep = myRep;
     vibrate(v === "CANCEL" ? 20 : 35);
     playPop();
-    const _award = presAward;
-    setCandy(_award>=1 ? "+1.0 gold Witness" : "+0.3 grey Remote");
+    const _award = presAward + (squadBoost ? 0.2 : 0) + (lecturerEmerald ? 0.5 : 0);
+    setCandy(lecturerEmerald ? "emerald 8/8 ✓" : squadBoost ? "1.5x squad Yes!" : _award>=1 ? "+1.0 gold Witness" : "+0.3 grey Remote");
     setMyRep((prev)=> prev + _award);
     try{ const raw=localStorage.getItem("physi_profile"); if(raw){ const p=JSON.parse(raw); const nb=Number(p.mining_balance||0)+_award; p.mining_balance=nb; localStorage.setItem("physi_profile", JSON.stringify(p)); } }catch{}
     setTimeout(() => setCandy(null), 1100);
-    // optimistic event authority bump
-    setEvents((prev)=> prev.map(e=> e.id===id ? { ...e, authority_points: Number(e.authority_points||0)+ (v==="YES"?1:0) } as any : e));
+    // optimistic event authority bump — squad 1.5x counts as +1.5 authority
+    setEvents((prev)=> prev.map(e=> e.id===id ? { ...e, authority_points: Number(e.authority_points||0)+ (v==="YES"?(lecturerEmerald?8: squadBoost?1.5:1):0), status: lecturerEmerald ? "verified" : e.status } as any : e));
     setVoteBusy(id + v);
     try {
       const r = await fetch("/api/verify", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ verifier_id: verifierId, event_id: id, vote: v }),
+        body: JSON.stringify({ verifier_id: verifierId, event_id: id, vote: v, squad: squadBoost, lecturer: !!getLecturer()?.verified, emerald: lecturerEmerald }),
       });
       const j = await r.json();
       if (!r.ok || j.ok === false) throw new Error(j.error || "vote failed");
@@ -2119,6 +2174,18 @@ function RoadmapInner() {
             </div>
           </div>
         )}
+        {/* Squad + Lecturer oracle quick bar */}
+        <div className="pointer-events-auto absolute left-1/2 top-[192px] z-20 flex w-full max-w-[560px] -translate-x-1/2 justify-center gap-2 px-3 sm:top-[188px] sm:px-6" style={{ marginTop: inviteNudge ? "56px" : "0" }}>
+          <button onClick={()=> setSquadOpen(true)} className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-black backdrop-blur transition ${squad && isSquadFormed(squad as any) ? "border-emerald-400/40 bg-emerald-500 text-white shadow" : "border-white/15 bg-black/60 text-white hover:bg-white hover:text-black"}`}>
+            <span>👥</span> {squad && isSquadFormed(squad as any) ? `Squad ${squad.members.length}/3 ✓ 1.5x` : `Squad ${squad?.members?.filter(Boolean).length||0}/3`}
+          </button>
+          <button onClick={()=> setLectOpen(true)} className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-black backdrop-blur transition ${lecturer?.pinVerified ? "border-emerald-400/40 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow" : lecturer?.verified ? "border-amber-400/30 bg-amber-500/20 text-amber-200" : "border-white/15 bg-black/60 text-white hover:bg-white hover:text-black"}`}>
+            <span>🎓</span> {lecturer?.pinVerified ? "Lecturer Emerald 8/8 ✓" : lecturer?.verified ? "Lecturer verified" : "Lecturer oracle"}
+          </button>
+          {verifiedCount>0 && (
+            <span className="hidden sm:inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-black/60 px-3 py-1.5 text-[11px] font-bold text-emerald-200 backdrop-blur">📅 {verifiedCount} verified · calendar ready</span>
+          )}
+        </div>
         {/* Mobile + Desktop Rep board — extracted to components/road/RepBoard */}
         <div className="pointer-events-auto absolute left-1/2 top-[148px] z-20 flex w-full max-w-[560px] -translate-x-1/2 justify-center px-3 xl:hidden" style={{ marginTop: inviteNudge ? "64px" : "0" }}>
           <RepBoard repBoard={repBoard} youHandle={youHandle} streak={streak} myRep={myRep} levelInfo={levelInfo} onShare={()=> setShareOpen(true)} repSheetOpen={repSheetOpen} setRepSheetOpen={setRepSheetOpen} />
@@ -2877,6 +2944,24 @@ function RoadmapInner() {
                       </div>
                       <div className="mt-4">
                         <p className="font-mono text-[11px] uppercase tracking-wide text-slate-500">Were you there? <span className="normal-case tracking-normal text-slate-600">· swipe → Yes · ← No · ↑ Skip</span></p>
+                        {/* Squad + Lecturer badges */}
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {squad && isSquadFormed(squad as any) && (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-500/15 px-2.5 py-1 font-mono text-[10px] font-black text-emerald-200">👥 squad 1.5x on own gists ✓</span>
+                          )}
+                          {lecturer?.pinVerified && (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-gradient-to-r from-emerald-500 to-emerald-600 px-2.5 py-1 font-mono text-[10px] font-black text-white">🎓 emerald 8/8 bypass ✓</span>
+                          )}
+                          {lecturer?.verified && !lecturer?.pinVerified && (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-500/15 px-2.5 py-1 font-mono text-[10px] font-bold text-amber-200">🎓 lecturer verified · add emerald pin for 8/8</span>
+                          )}
+                          {!squad?.members?.length && (
+                            <button onClick={()=> setSquadOpen(true)} className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 font-mono text-[10px] font-bold text-slate-400 hover:bg-white hover:text-black">+ invite 3 to form squad 1.5x</button>
+                          )}
+                          {!lecturer?.verified && (
+                            <button onClick={()=> setLectOpen(true)} className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 font-mono text-[10px] font-bold text-slate-400 hover:bg-white hover:text-black">+ lecturer verify .edu → emerald 8/8</button>
+                          )}
+                        </div>
                         {presence && (
                           <div className={`mt-3 flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-bold ${presence.isWitness ? "border-amber-400/40 bg-gradient-to-r from-amber-400 to-yellow-300 text-black" : "border-white/15 bg-white/10 text-slate-300"}`}>
                             <span className={`h-2 w-2 rounded-full ${presence.isWitness ? "bg-amber-600 animate-pulse" : "bg-slate-400"}`} />
@@ -2908,7 +2993,13 @@ function RoadmapInner() {
                         <button onClick={() => fetchFeed()} className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-[13px] font-medium text-slate-200">↻ refresh road</button>
                         <button onClick={() => scrollToNow(true)} className="rounded-full border border-violet-400/20 bg-violet-500/15 px-4 py-2 text-[13px] font-medium text-violet-200">◎ center NOW</button>
                         <a href="/app/timetable" className="rounded-full bg-white px-4 py-2 text-[13px] font-semibold text-black">Open timetable →</a>
+                        {verified && (
+                          <button onClick={()=>{ try{ downloadICS({ id: ev.id, title: ev.title, venue: ev.venue, event_date: ev.event_date, event_time: ev.event_time }); setToast("calendar .ics downloaded — WAT time + venue"); }catch{ setToast("calendar failed"); } }} className="rounded-full border border-emerald-400/30 bg-emerald-500 px-4 py-2 text-[13px] font-bold text-white hover:bg-emerald-600 transition">📅 Add to Calendar</button>
+                        )}
                       </div>
+                      {verified && (
+                        <p className="mt-2 font-mono text-[10px] text-emerald-300/80">Verified ✓ — add to calendar includes WAT (Africa/Lagos), venue {ev.venue}, and link roadmap?event={ev.id.slice(0,8)}</p>
+                      )}
                       <div className="mt-4 flex gap-1.5 overflow-auto pb-1">
                         {events.slice(0, 12).map((e) => {
                           const v = isVerified(e); const adv = e.status === "pending" && !v;
@@ -2973,6 +3064,88 @@ function RoadmapInner() {
         {/* Share Rep card modal — lazy-loaded heavy canvas */}
         {shareOpen && <ShareCard open={shareOpen} onClose={()=> setShareOpen(false)} myRep={myRep} streak={streak} youHandle={youHandle} levelInfo={levelInfo} />}
         <RepExplainer open={repExplainerOpen} onClose={()=> setRepExplainerOpen(false)} rep={myRep} levelInfo={levelInfo} />
+        {/* Squad modal — invite 3 friends forms squad, 1.5x on own gists */}
+        {squadOpen && (
+          <div className="fixed inset-0 z-[68] flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm" onClick={()=> setSquadOpen(false)}>
+            <div onClick={e=>e.stopPropagation()} className="w-full max-w-[400px] rounded-[22px] border border-white/10 bg-[#0b0f1e] p-5 shadow-2xl">
+              <div className="flex items-center justify-between">
+                <h3 className="text-[16px] font-black text-white">👥 Squad · sup-quorum 1.5x</h3>
+                <button onClick={()=> setSquadOpen(false)} className="rounded-full bg-white/10 px-3 py-1 text-xs text-white">✕</button>
+              </div>
+              <p className="mt-1 font-mono text-[11px] text-slate-400">Invite 3 friends — squad Yes counts <b className="text-emerald-300">1.5x on own gists</b>. Stored localStorage <span className="font-mono text-violet-300">phys_squad</span>.</p>
+              {squad && isSquadFormed(squad as any) && (
+                <div className="mt-3 rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-center">
+                  <p className="text-[13px] font-black text-emerald-200">Squad formed ✓ — {squad.members.join(", ")}</p>
+                  <p className="font-mono text-[11px] text-emerald-300">Your YES on squad gists counts 1.5x</p>
+                </div>
+              )}
+              <div className="mt-3 grid gap-2">
+                {[0,1,2].map(i=> (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-[11px] font-black text-white">{i+1}</span>
+                    <input value={squadDraft[i]||""} onChange={e=>{ const a=[...squadDraft]; a[i]=e.target.value.toLowerCase().replace(/[^a-z0-9_]/g,"").slice(0,16); setSquadDraft(a); }} placeholder={`friend ${i+1} handle e.g. zara_11`} className="flex-1 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-[13px] text-white placeholder:text-slate-500 outline-none focus:border-emerald-500" />
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 flex gap-2">
+                <button onClick={()=>{
+                  const cleaned = squadDraft.map(s=> String(s).trim().toLowerCase().replace(/[^a-z0-9_]/g,"")).filter(Boolean);
+                  if(cleaned.length<3){ setToast("invite 3 friends — need 3 handles"); return; }
+                  const s = saveSquad(cleaned, youHandle);
+                  setSquadState(s); setToast("Squad formed ✓ 1.5x on own gists");
+                }} className="flex-1 rounded-full bg-emerald-500 py-2.5 text-[13px] font-black text-white hover:bg-emerald-600">Form squad 3/3 → 1.5x</button>
+                <button onClick={()=>{ clearSquad(); setSquadState(null); setSquadDraft(["","",""]); setToast("squad cleared"); }} className="rounded-full border border-white/15 bg-white/5 px-4 py-2.5 text-[13px] font-semibold text-white">Clear</button>
+              </div>
+              <p className="mt-2 text-center font-mono text-[10px] text-slate-500">phys_squad in localStorage — {squad?.members?.length||0}/3 · owner {youHandle||"anon"}</p>
+              <div className="mt-3 flex gap-2">
+                <button onClick={async()=>{ const link = typeof window!=="undefined" ? `${window.location.origin}/app/roadmap?invite=${encodeURIComponent(youHandle||"physicoin")}&squad=1` : ""; try{ await navigator.clipboard.writeText(link); setToast("squad invite link copied"); }catch{ setToast(link); } }} className="flex-1 rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 text-[11px] font-bold text-violet-200">Copy squad invite link</button>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Lecturer oracle modal — email domain + emerald pin 8/8 bypass */}
+        {lectOpen && (
+          <div className="fixed inset-0 z-[68] flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm" onClick={()=> setLectOpen(false)}>
+            <div onClick={e=>e.stopPropagation()} className="w-full max-w-[400px] rounded-[22px] border border-white/10 bg-[#0b0f1e] p-5 shadow-2xl">
+              <div className="flex items-center justify-between">
+                <h3 className="text-[16px] font-black text-white">🎓 Lecturer oracle · emerald 8/8</h3>
+                <button onClick={()=> setLectOpen(false)} className="rounded-full bg-white/10 px-3 py-1 text-xs text-white">✕</button>
+              </div>
+              <p className="mt-1 font-mono text-[11px] text-slate-400">Verify via <b className="text-amber-200">university email domain</b> (.edu / .edu.ng / .ac.ng). Official pin gives <b className="text-emerald-300">emerald bypass 8/8</b> badge.</p>
+              {lecturer?.verified && (
+                <div className={`mt-3 rounded-xl border px-3 py-2 text-center ${lecturer.pinVerified ? "border-emerald-400/40 bg-emerald-500 text-white" : "border-amber-400/30 bg-amber-500/10 text-amber-200"}`}>
+                  <p className="text-[13px] font-black">{lecturer.pinVerified ? "Emerald ✓ — 8/8 bypass active" : `Lecturer verified — ${lecturer.email}`}</p>
+                  {lecturer.pinVerified && <p className="font-mono text-[11px] opacity-90">Official pin emerald — your YES = 8/8 instant verified + badge</p>}
+                </div>
+              )}
+              <div className="mt-3 grid gap-2">
+                <label className="font-mono text-[10px] font-bold tracking-wide text-slate-400">LECTURER EMAIL (.edu)</label>
+                <div className="flex gap-2">
+                  <input value={lectEmail} onChange={e=> setLectEmail(e.target.value)} placeholder="name@futo.edu.ng" className="flex-1 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-[13px] text-white placeholder:text-slate-500 outline-none focus:border-amber-500" />
+                  <button onClick={()=>{
+                    const r = verifyLecturerEmail(lectEmail);
+                    if(!r.ok){ setToast(r.reason||"invalid email"); return; }
+                    const l = getLecturer(); setLecturerState(l as any); setToast("lecturer email verified ✓");
+                  }} className="rounded-full bg-amber-500 px-4 py-2 text-[12px] font-black text-black hover:bg-amber-600">Verify email</button>
+                </div>
+                <label className="mt-2 font-mono text-[10px] font-bold tracking-wide text-slate-400">OFFICIAL PIN (emerald)</label>
+                <div className="flex gap-2">
+                  <input value={lectPin} onChange={e=> setLectPin(e.target.value)} placeholder="EMERALD-8" className="flex-1 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-[13px] text-white placeholder:text-slate-500 outline-none focus:border-emerald-500" />
+                  <button onClick={()=>{
+                    const r = verifyLecturerPin(lectPin);
+                    if(!r.ok){ setToast(r.reason||"invalid pin"); return; }
+                    const l = getLecturer(); setLecturerState(l as any); setToast("emerald pin ✓ — 8/8 bypass active");
+                  }} className="rounded-full bg-emerald-500 px-4 py-2 text-[12px] font-black text-white hover:bg-emerald-600">Verify pin</button>
+                </div>
+                <p className="font-mono text-[10px] text-slate-500">Try official pin: <span className="text-emerald-300 font-bold">EMERALD-8</span> · requires verified email first · badge emerald appears on votes</p>
+              </div>
+              <div className="mt-3 flex gap-2">
+                <button onClick={()=>{ try{ localStorage.removeItem(LECTURER_KEY); setLecturerState(null); setLectEmail(""); setLectPin(""); setToast("lecturer cleared"); }catch{} }} className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-[12px] font-semibold text-white">Clear</button>
+                <span className="flex-1 text-center font-mono text-[10px] text-slate-500 self-center">localStorage phys_lecturer · domain check</span>
+              </div>
+            </div>
+          </div>
+        )}
         {bazaarOpen && (
           <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm" onClick={()=> setBazaarOpen(false)}>
             <div onClick={e=>e.stopPropagation()} className="w-full max-w-[360px] rounded-[22px] border border-white/10 bg-[#0b0f1e] p-5 shadow-2xl">

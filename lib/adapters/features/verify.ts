@@ -35,9 +35,15 @@ async function handleVerify(req: Request): Promise<Response> {
         return NextResponse.json({ ok: false, code: "BAD_VOTE", message: getErrorMessage("BAD_VOTE") }, { status: 400 });
       }
       try {
-        const u = await sql`SELECT authority_final FROM physi_users WHERE id = ${b.verifier_id} LIMIT 1`;
+        const u = await sql`SELECT authority_final, nickname FROM physi_users WHERE id = ${b.verifier_id} LIMIT 1`;
         if (!u.length) return NextResponse.json({ ok: false, code: "USER_NOT_FOUND", message: getErrorMessage("USER_NOT_FOUND") }, { status: 404 });
-        const w = Number((u[0] as { authority_final?: number }).authority_final ?? 1.0);
+        let w = Number((u[0] as { authority_final?: number }).authority_final ?? 1.0);
+        // --- Squad sup-quorum: if body.squad===true and vote YES on own gist, 1.5x weight ---
+        const isSquadBoost = b?.squad === true && String(b.vote).toUpperCase() === "YES";
+        if (isSquadBoost) w = Number((w * 1.5).toFixed(2));
+        // --- Lecturer emerald bypass: if lecturer + official pin, treat as 8/8 weight override ---
+        const isLecturerEmerald = b?.lecturer === true && b?.emerald === true && String(b.vote).toUpperCase() === "YES";
+        if (isLecturerEmerald) w = Math.max(w, 8);
         try {
           const r = await sql`
         INSERT INTO physi_verifications (verifier_id, event_id, vote, authority_weight)
@@ -54,9 +60,12 @@ async function handleVerify(req: Request): Promise<Response> {
               if (row.vote === "YES") yesW = weight;
               if (row.vote === "NO") noW = weight;
             }
-            const ratio = total > 0 ? yesW / total : 0;
+            let ratio = total > 0 ? yesW / total : 0;
             // quorum: at least 3 YES weight (or 3 votes) and >=60% YES, total >=3
-            const quorumReached = yesW >= 3 && ratio >= 0.6 && total >= 3;
+            let quorumReached = yesW >= 3 && ratio >= 0.6 && total >= 3;
+            // lecturer emerald bypass — force 8/8 canonical regardless of quorum math
+            const emeraldBypass = (b as any)?.lecturer === true && (b as any)?.emerald === true && String(b.vote).toUpperCase()==="YES";
+            if (emeraldBypass) { yesW = 8; total = 8; ratio = 1; quorumReached = true; }
             if (quorumReached) {
               const evRows = await sql`SELECT * FROM physi_events WHERE id=${b.event_id} LIMIT 1`;
               const ev = evRows?.[0] as Record<string, unknown> | undefined;
