@@ -201,8 +201,17 @@ function RoadmapInner() {
   const [streak, setStreak] = useState<number>(0);
   const [inviteNudge, setInviteNudge] = useState(false);
   const [inviteCopied, setInviteCopied] = useState(false);
+  // inline handle picker modal
+  const PICKER_COLORS = ["#10b981","#0ea5e9","#8b5cf6","#f59e0b"] as const;
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerHandle, setPickerHandle] = useState("");
+  const [pickerColor, setPickerColor] = useState<string>(PICKER_COLORS[0]);
+  const [pickerBusy, setPickerBusy] = useState(false);
+  const [pickerErr, setPickerErr] = useState<string|null>(null);
+  const pendingActionRef = useRef<{type:"vote", id:string, vote:"YES"|"NO"|"CANCEL", isFlag?:boolean} | {type:"fab"} | null>(null);
   // filter + levels + juice
   const [filter, setFilter] = useState<"all"|"my_level"|"today"|"verified"|"advisory"|"mine">("all");
+  const [viewMode, setViewMode] = useState<"map"|"list">("map");
   const [myLevel, setMyLevel] = useState<string|null>(null);
   const [myRep, setMyRep] = useState<number>(0);
   const [parallaxY, setParallaxY] = useState(0);
@@ -1036,14 +1045,14 @@ function RoadmapInner() {
     } catch {}
   }
 
-  async function vote(id: string, v: "YES" | "NO" | "CANCEL") {
+  async function vote(id: string, v: "YES" | "NO" | "CANCEL", isFlag?: boolean) {
     let verifierId: string | null = null;
     try {
       const raw = localStorage.getItem("physi_profile");
       if (raw) verifierId = JSON.parse(raw)?.id ?? null;
     } catch {}
     if (!verifierId) {
-      setToast("create a profile first — we need your handle to count the vote");
+      openPickerForVote(id, v, isFlag);
       return;
     }
     // optimistic: instantly show +0.3 Rep and update local state before POST confirms
@@ -1067,7 +1076,7 @@ function RoadmapInner() {
       const j = await r.json();
       if (!r.ok || j.ok === false) throw new Error(j.error || "vote failed");
       incrementDailyQuest();
-      setToast(v === "YES" ? "you said you were there — thanks!" : v === "NO" ? "marked as not there" : "skipped — all good");
+      if (isFlag) setToast("Thanks — flagged for review ✓"); else setToast(v === "YES" ? "you said you were there — thanks!" : v === "NO" ? "marked as not there" : "skipped — all good");
       setInviteNudge(true);
       setInviteCopied(false);
       bumpStreakDaily();
@@ -1083,6 +1092,63 @@ function RoadmapInner() {
     } finally {
       setVoteBusy(null);
     }
+  }
+
+  // --- picker helpers ---
+  function ensureProfile(): string | null {
+    try {
+      const raw = localStorage.getItem("physi_profile");
+      if (raw) {
+        const p = JSON.parse(raw);
+        if (p?.id) return String(p.id);
+      }
+    } catch {}
+    return null;
+  }
+  function openPickerForVote(id: string, v: "YES"|"NO"|"CANCEL", isFlag?:boolean) {
+    pendingActionRef.current = { type: "vote", id, vote: v, isFlag };
+    setPickerHandle("");
+    setPickerColor(PICKER_COLORS[Math.floor(Math.random()*PICKER_COLORS.length)]);
+    setPickerErr(null);
+    setPickerOpen(true);
+  }
+  function openPickerForFab() {
+    pendingActionRef.current = { type: "fab" };
+    setPickerHandle("");
+    setPickerColor(PICKER_COLORS[Math.floor(Math.random()*PICKER_COLORS.length)]);
+    setPickerErr(null);
+    setPickerOpen(true);
+  }
+  async function handlePickerConfirm(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+    const h = pickerHandle.trim().toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0,16);
+    if (!h || h.length < 2) { setPickerErr("pick a handle — 2-16 chars, letters/numbers/_"); return; }
+    if (h.length < 2) { setPickerErr("too short"); return; }
+    setPickerBusy(true); setPickerErr(null);
+    try {
+      const body = { nickname: h, full_name: h, programme: "Physiology", level: myLevel || "100L", statuses: [], authority_base: 1.0, authority_final: 1.0, candy_color: pickerColor };
+      const r = await fetch("/api/profile", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      const j = await r.json().catch(()=> ({} as any));
+      if (!r.ok || j.ok === false) throw new Error(j.error || j.hint || "could not create handle — maybe taken, try another");
+      const user = j.user;
+      try { localStorage.setItem("physi_profile", JSON.stringify({ ...user, candy_color: pickerColor })); } catch {}
+      setMyUserId(String(user.id));
+      setYouHandle(String(user.nickname || h).toLowerCase());
+      setPickerOpen(false);
+      setToast(`welcome @${h} ✓`);
+      // retry pending action
+      const pending = pendingActionRef.current;
+      pendingActionRef.current = null;
+      if (pending) {
+        if (pending.type === "vote") {
+          setTimeout(()=> vote(pending.id, pending.vote, pending.isFlag), 120);
+        } else if (pending.type === "fab") {
+          setTimeout(()=> { handleFabCreate(new Event("submit") as any); }, 120);
+        }
+      }
+    } catch (err:any) {
+      setPickerErr(err?.message || "could not create handle");
+    } finally { setPickerBusy(false); }
   }
 
   // swipe handlers for detail bottom sheet (touch + mouse drag)
@@ -1112,6 +1178,13 @@ function RoadmapInner() {
     if (Math.abs(x) > 30 || y < -30) setQSwipe(true);
     const shouldVote = selectedEvent && !selectedPersonal && !voteBusy;
     if (shouldVote) {
+      if (!ensureProfile()) {
+        if (x > 80) openPickerForVote(selectedEvent.id, "YES");
+        else if (x < -80) openPickerForVote(selectedEvent.id, "NO");
+        else if (y < -80) openPickerForVote(selectedEvent.id, "CANCEL");
+        setDrag({ x: 0, y: 0, active: false });
+        return;
+      }
       if (x > 80) { vibrate(35); vote(selectedEvent.id, "YES"); }
       else if (x < -80) { vibrate(35); vote(selectedEvent.id, "NO"); }
       else if (y < -80) { vibrate(20); vote(selectedEvent.id, "CANCEL"); }
@@ -1165,6 +1238,7 @@ function RoadmapInner() {
   async function handleFabCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!fabTitle.trim() || !fabVenue.trim() || !fabDate || !fabTime) { setToast("fill title, venue, date, time"); return; }
+    if (!ensureProfile()) { openPickerForFab(); return; }
     setFabBusy(true);
     try {
       let createdBy: string | null = null;
@@ -1301,6 +1375,13 @@ function RoadmapInner() {
           <span className="rounded-full border border-amber-400/20 bg-black/75 px-3 py-1 font-mono text-[10px] font-bold text-amber-200 backdrop-blur">Verify 3 today → +5 bonus · {dailyCount}/3 {dailyBonusDone ? "✓ done" : ""}</span>
         </div>
         {/* Filter chips row - under quest bar (pushed for daily label on mobile) */}
+        <div className="pointer-events-none absolute left-1/2 top-[148px] z-20 flex w-full max-w-[560px] -translate-x-1/2 justify-center px-3 sm:top-[116px] sm:px-6">
+          <div className="pointer-events-auto flex items-center gap-1 rounded-full border border-white/10 bg-black/70 px-1.5 py-1 backdrop-blur-xl">
+            <button onClick={()=> setViewMode("map")} className={`rounded-full px-3 py-1.5 font-mono text-[11px] font-bold transition ${viewMode==="map" ? "bg-white text-black shadow" : "bg-white/10 text-slate-300 hover:bg-white/15"}`}>⬢ Map</button>
+            <button onClick={()=> setViewMode("list")} className={`rounded-full px-3 py-1.5 font-mono text-[11px] font-bold transition ${viewMode==="list" ? "bg-white text-black shadow" : "bg-white/10 text-slate-300 hover:bg-white/15"}`}>▦ List</button>
+            <span className="ml-1 hidden font-mono text-[10px] text-slate-500 sm:inline">{filteredRoadItems.length} items · same filter</span>
+          </div>
+        </div>
         <div className="pointer-events-none absolute left-1/2 top-[188px] z-20 flex w-full max-w-[560px] -translate-x-1/2 justify-center px-3 sm:top-[148px] sm:px-6">
           <div className="pointer-events-auto flex items-center gap-1.5 overflow-x-auto rounded-full border border-white/10 bg-black/70 px-2 py-1.5 backdrop-blur-xl scrollbar-none">
             {([
@@ -1440,7 +1521,7 @@ function RoadmapInner() {
           </div>
         </aside>
         {/* SCROLLABLE ROAD CONTAINER — endless winding purple road — subtle 3D emboss */}
-        <div className="road-3d-wrap relative mx-auto flex h-[calc(100vh-64px)] w-full max-w-[560px] justify-center overflow-hidden pt-[112px] sm:pt-[104px]" style={{ perspective: "800px", perspectiveOrigin: "50% 28%" }}>
+        <div className={`road-3d-wrap relative mx-auto flex h-[calc(100vh-64px)] w-full max-w-[560px] justify-center overflow-hidden pt-[112px] sm:pt-[104px] ${viewMode!=="map" ? "hidden" : ""}`} style={{ perspective: "800px", perspectiveOrigin: "50% 28%" }}>
           {/* depth gradients on sides — 3D vignette */}
           <div className="pointer-events-none absolute inset-y-0 left-0 w-[18%] z-[4]" style={{ background: "linear-gradient(to right, rgba(0,0,0,0.38) 0%, rgba(0,0,0,0.18) 42%, transparent 100%)" }} />
           <div className="pointer-events-none absolute inset-y-0 right-0 w-[18%] z-[4]" style={{ background: "linear-gradient(to left, rgba(0,0,0,0.38) 0%, rgba(0,0,0,0.18) 42%, transparent 100%)" }} />
@@ -1694,6 +1775,36 @@ function RoadmapInner() {
         {/* viewport-fixed infinite edge fades — ensures no hard start/end even without mask support — purple road never terminates */}
         <div className="pointer-events-none absolute left-1/2 top-[104px] z-[15] h-[96px] w-[96%] max-w-[560px] -translate-x-1/2 rounded-t-[28px]" style={{ background: "linear-gradient(to bottom, rgba(13,59,42,0.98) 0%, rgba(13,59,42,0.84) 34%, rgba(13,59,42,0.42) 68%, transparent 100%)" }} />
         <div className="pointer-events-none absolute bottom-0 left-1/2 z-[15] h-[140px] w-[96%] max-w-[560px] -translate-x-1/2 rounded-b-[28px]" style={{ background: "linear-gradient(to top, rgba(13,59,42,0.98) 0%, rgba(13,59,42,0.72) 36%, transparent 100%)" }} />
+        <div className={`relative mx-auto flex h-[calc(100vh-64px)] w-full max-w-[560px] flex-col overflow-auto pt-[132px] sm:pt-[124px] pb-[320px] px-3 sm:px-4 gap-3 ${viewMode!=="list" ? "hidden" : ""}`}>
+            <div className="rounded-2xl border border-white/10 bg-black/60 backdrop-blur px-4 py-3 flex items-center justify-between">
+              <p className="font-mono text-[11px] font-bold text-white">List — same filteredRoadItems as Map</p>
+              <span className="font-mono text-[10px] text-slate-400">{filteredRoadItems.length} items · {filter} · WAT</span>
+            </div>
+            {filteredRoadItems.length===0 ? <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-8 text-center text-sm text-slate-400">No items for this filter — try All</div> : filteredRoadItems.map((item)=>{
+              const baseId = String(item.id).split("__tile")[0];
+              const isPersonal = (item as any).kind==="personal";
+              const isDemo = (item as any).kind==="demo";
+              const ev = !isPersonal && !isDemo ? (item as any).ev as any : null;
+              const verified = ev ? (ev.status==="verified" || (Number(ev.required_points)>0 && Number(ev.authority_points)>=Number(ev.required_points))) : false;
+              const title = isPersonal ? (item as any).p.title : isDemo ? (item as any).title : ev.title;
+              const venue = isPersonal ? (item as any).p.venue : isDemo ? (item as any).venue : ev.venue;
+              const date = isPersonal ? (item as any).p.event_date : isDemo ? (item as any).event_date : ev.event_date;
+              const time = isPersonal ? (item as any).p.event_time : isDemo ? (item as any).event_time : ev.event_time;
+              const active = selectedId===baseId || selectedId===item.id;
+              return (
+                <button key={item.id} onClick={()=>{ setSelectedId(baseId); setSheetOpen(true); if(isDemo) setToast((item as any).hint); }}
+                  className={`text-left rounded-[18px] border p-4 backdrop-blur transition ${active ? "border-white bg-white text-black shadow" : verified ? "border-emerald-400/25 bg-emerald-500/[0.08] text-white" : "border-white/[0.06] bg-white/[0.03] text-white hover:bg-white/[0.05]"}`}>
+                  <div className="flex items-center gap-2">
+                    <span className={`flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-black ${verified? "bg-emerald-500 text-white" : isPersonal? "bg-zinc-600 text-white" : isDemo? "bg-[#8b5cf6] text-white border-2 border-dashed border-white/60" : "bg-amber-500 text-white"}`}>{verified?"✓": isPersonal?"◐": isDemo?"✦":"●"}</span>
+                    <span className={`text-[13px] font-bold leading-tight ${active?"text-black":"text-white"}`}>{title}</span>
+                    <span className={`ml-auto rounded-full px-2 py-0.5 font-mono text-[10px] font-bold ${verified?"bg-emerald-500 text-white":"bg-white/10 text-slate-300"}`}>{verified?"green":"advisory"}</span>
+                  </div>
+                  <p className={`mt-1 font-mono text-[11px] ${active?"text-slate-600":"text-slate-400"}`}>{venue} · {fmtDate(date)} {fmtTime(time)} · {isPersonal?(item as any).p.scope_type: isDemo?"demo": ev.scope_type}{!isPersonal && !isDemo && ev.scope_value ? ` · ${ev.scope_value}`:""}</p>
+                  <p className={`mt-1 font-mono text-[10px] ${active?"text-slate-500":"text-slate-500"}`}>{fmtDate(date)} {fmtTime(time)} WAT · tap to open sheet →</p>
+                </button>
+              );
+            })}
+          </div>
 
         {/* create modal */}
         {showCreate && (
@@ -1917,6 +2028,7 @@ function RoadmapInner() {
                           <button onClick={() => vote(ev.id, "YES")} disabled={!!voteBusy} className="rounded-full border border-emerald-500/30 bg-emerald-500/15 px-5 py-2.5 text-[13.5px] font-semibold text-emerald-300 hover:bg-emerald-500 hover:text-white transition disabled:opacity-50">{voteBusy === ev.id + "YES" ? "…" : "Yes ✓"}</button>
                           <button onClick={() => vote(ev.id, "NO")} disabled={!!voteBusy} className="rounded-full border border-white/10 bg-white/[0.05] px-5 py-2.5 text-[13.5px] font-medium text-slate-200 hover:bg-white hover:text-black transition disabled:opacity-50">{voteBusy === ev.id + "NO" ? "…" : "No ✕"}</button>
                           <button onClick={() => vote(ev.id, "CANCEL")} disabled={!!voteBusy} className="rounded-full border border-white/10 bg-white/[0.02] px-5 py-2.5 text-[13.5px] font-medium text-slate-400 hover:bg-white/[0.08] hover:text-white transition disabled:opacity-50">{voteBusy === ev.id + "CANCEL" ? "…" : "Skip"}</button>
+                          <button onClick={() => vote(ev.id, "CANCEL", true)} disabled={!!voteBusy} className="rounded-full border border-amber-400/25 bg-amber-500/12 px-5 py-2.5 text-[13.5px] font-semibold text-amber-300 hover:bg-amber-500 hover:text-white transition disabled:opacity-50">{voteBusy === ev.id + "CANCEL" ? "…" : "Flag ⚑"}</button>
                           <span className="font-mono text-[11px] text-slate-600">uses physi_profile</span>
                         </div>
                         {hint && <p className="mt-2 font-mono text-[12px] font-bold" style={{ color: drag.x > 40 ? "#10b981" : drag.x < -40 ? "#f87171" : drag.y < -40 ? "#94a3b8" : "#a1a1aa" }}>{hint}</p>}
@@ -1955,6 +2067,34 @@ function RoadmapInner() {
             </div>
           </div>
         </div>
+        {/* inline handle picker modal */}
+        {pickerOpen && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm" onClick={()=> !pickerBusy && setPickerOpen(false)}>
+            <form onSubmit={handlePickerConfirm} onClick={e=>e.stopPropagation()} className="w-full max-w-[380px] rounded-[22px] border border-white/10 bg-[#0b0f1e] p-5 shadow-2xl">
+              <h3 className="text-[16px] font-black text-white">Pick a handle</h3>
+              <p className="mt-1 text-[12.5px] leading-4 text-slate-400">Choose your candy color + handle. We&apos;ll create your profile via <span className="font-mono text-violet-300">POST /api/profile</span> + localStorage, then retry your action.</p>
+              <div className="mt-4">
+                <label className="font-mono text-[11px] font-bold tracking-wide text-slate-400">HANDLE</label>
+                <input value={pickerHandle} onChange={e=>setPickerHandle(e.target.value)} placeholder="e.g. alex_02" autoFocus maxLength={16} className="mt-1 w-full rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5 text-[14px] font-semibold text-white placeholder:text-slate-500 outline-none focus:border-violet-500" />
+                <p className="mt-1 font-mono text-[10px] text-slate-500">2-16 chars · letters, numbers, _ · lowercased</p>
+              </div>
+              <div className="mt-3">
+                <label className="font-mono text-[11px] font-bold tracking-wide text-slate-400">CANDY COLOR</label>
+                <div className="mt-1.5 flex gap-2">
+                  {PICKER_COLORS.map(c=> (
+                    <button key={c} type="button" onClick={()=>setPickerColor(c)} className={`h-9 w-9 rounded-full border-2 transition ${pickerColor===c ? "border-white scale-110 shadow-[0_0_0_4px_rgba(255,255,255,0.18)]" : "border-white/20 hover:border-white/40"}`} style={{ background: c }} aria-label={c} />
+                  ))}
+                </div>
+              </div>
+              {pickerErr && <p className="mt-3 rounded-xl bg-red-500/10 px-3 py-2 text-[12px] font-medium text-red-300">{pickerErr}</p>}
+              <div className="mt-4 flex gap-2">
+                <button type="submit" disabled={pickerBusy || !pickerHandle.trim()} className="flex-1 rounded-full bg-white py-2.5 text-[14px] font-black text-black hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed">{pickerBusy ? "creating…" : "Create & continue →"}</button>
+                <button type="button" onClick={()=>setPickerOpen(false)} disabled={pickerBusy} className="rounded-full border border-white/15 bg-white/5 px-5 py-2.5 text-[13px] font-semibold text-white disabled:opacity-50">Cancel</button>
+              </div>
+              <p className="mt-2 text-center font-mono text-[10px] text-slate-500">POST /api/profile → localStorage physi_profile</p>
+            </form>
+          </div>
+        )}
         {/* Share Rep card modal — canvas-generated forest bg + candy avatar */}
         {shareOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm" onClick={()=> setShareOpen(false)}>

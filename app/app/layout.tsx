@@ -69,6 +69,7 @@ function Breadcrumb({ pathname }: { pathname: string | null }) {
 }
 
 function BottomGameNav({ pathname }: { pathname: string | null }) {
+  const isRoadmap = pathname==="/app/roadmap" || pathname?.startsWith("/app/roadmap/");
   const [mineDot, setMineDot] = useState(false);
   useEffect(() => {
     let iv: any;
@@ -110,7 +111,7 @@ function BottomGameNav({ pathname }: { pathname: string | null }) {
   return (
     <nav className="fixed bottom-0 inset-x-0 z-40 border-t border-white/[0.08] bg-[#070a12]/92 backdrop-blur-[20px] supports-[backdrop-filter]:bg-[#070a12]/85 shadow-[0_-8px_32px_rgba(0,0,0,0.5),0_-1px_0_rgba(255,255,255,0.05)_inset]">
       <div className="mx-auto flex max-w-[560px] items-center gap-2 px-3 py-2.5 sm:px-4 sm:py-3">
-        {BOTTOM_TABS.map((t) => {
+        {(isRoadmap ? BOTTOM_TABS.filter(t=> t.href==="/app/roadmap") : BOTTOM_TABS).map((t) => {
           const active = pathname === t.href || pathname?.startsWith(t.href + "/");
           const label = GAME_LABELS[t.href] ?? t.label;
           const icon = GAME_ICONS[t.href] ?? "●";
@@ -132,6 +133,7 @@ function BottomGameNav({ pathname }: { pathname: string | null }) {
           );
         })}
       </div>
+      {isRoadmap && <p className="pb-1 text-center font-mono text-[10px] text-slate-500">Road · Map ▦ List toggle inside — Timetable feed lives in List</p>}
       <div className="h-[env(safe-area-inset-bottom)] bg-[#070a12]" />
     </nav>
   );
