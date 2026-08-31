@@ -12,6 +12,18 @@ const config: Config = {
         sans: ['Inter', 'system-ui', 'sans-serif'],
         fredoka: ['var(--font-fredoka)', 'Fredoka', 'system-ui', 'sans-serif'],
       },
+      spacing: {
+        '18': '4.5rem',
+        '22': '5.5rem',
+      },
+      borderRadius: {
+        '2xl': '1rem',
+        '3xl': '1.25rem',
+      },
+      boxShadow: {
+        'candy': '0 8px 32px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.06)',
+        'glow-purple': '0 8px 24px rgba(139,92,246,0.35)',
+      },
     },
   },
   plugins: [],

@@ -4,7 +4,9 @@
 import { Fredoka } from "next/font/google";
 const fredoka = Fredoka({ subsets: ["latin"], weight: ["400","500","600","700"], display: "swap", variable: "--font-fredoka" });
 import { useEffect, useState } from 'react';
-import { Megaphone, BadgeCheck, Coins, Users, ArrowRight, ShieldCheck, Clock3, MapPin, Sparkles, CheckCircle2, Quote } from 'lucide-react';
+import { Megaphone, BadgeCheck, Coins, Users, ArrowRight, ShieldCheck, Clock3, MapPin, Sparkles, CheckCircle2, Quote, HeartPulse } from 'lucide-react';
+import dynamic from 'next/dynamic';
+const EarthPulse = dynamic(() => import('@/components/EarthPulse'), { ssr: false, loading: () => <div className="h-28 animate-pulse rounded-[24px] border border-white/10 bg-white/5" /> });
 
 function MiniRoadPeek(){
   // cropped SVG preview: forest bg, purple winding road, 3 nodes, NOW pulse, Fredoka label
@@ -425,7 +427,10 @@ export default function LandingPage() {
         </section>
 
         {/* live proof strip — fetched from /api/stats + ticker — anchor for See live */}
-        <section id="live-proof" className="mt-6 scroll-mt-20 flex flex-col gap-3 rounded-[20px] border border-white/[0.08] bg-white/[0.05] px-5 py-4 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+        <section className="mt-6">
+          <EarthPulse />
+        </section>
+        <section id="live-proof" className="mt-4 scroll-mt-20 flex flex-col gap-3 rounded-[20px] border border-white/[0.08] bg-white/[0.05] px-5 py-4 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-3">
             <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/15 px-3 py-1.5 font-mono text-[11px] font-bold text-emerald-100"><span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" /> Live proof</span>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.06] px-3 py-1.5 font-mono text-[11px] text-white"><span className="h-1.5 w-1.5 rounded-full bg-white/60" /> {displayEvents} events</span>

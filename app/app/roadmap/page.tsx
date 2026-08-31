@@ -8,6 +8,7 @@ import { logError, getErrorMessage } from "@/lib/adapters/error";
 import { checkPresenceAward, requestGeolocation, persistPresence, getPresenceScore } from "@/lib/adapters/presence";
 import SearchBar from "@/components/road/SearchBar";
 import QuorumBar from "@/components/road/QuorumBar";
+import VoiceGossipFab from "@/components/VoiceGossipFab";
 import { getSquad, isSquadFormed, setSquad as saveSquad, clearSquad, shouldApplySquadBoost, SQUAD_MULTIPLIER, SQUAD_KEY } from "@/lib/squad";
 import { getLecturer, isLecturerVerified, isEmeraldPinVerified, hasEmeraldBypass, verifyLecturerEmail, verifyLecturerPin, lecturerBadgeLabel, LECTURER_KEY, OFFICIAL_PIN } from "@/lib/lecturer";
 import { generateICS, downloadICS } from "@/lib/calendar";
@@ -2881,9 +2882,36 @@ function RoadmapInner() {
           </div>
         )}
 
-        {/* FAB — 1 FAB only, bonus moved to profile/hidden after first gist */}
-        <div className="fixed bottom-[88px] right-4 z-40 flex flex-col items-end gap-2 sm:bottom-[92px] sm:right-6">
-          <button onClick={()=>setFabOpen(true)} aria-label="Create event" className="flex h-14 w-14 items-center justify-center rounded-full bg-[#8b5cf6] text-2xl font-black text-white shadow-[0_8px_24px_rgba(139,92,246,0.5),0_4px_12px_rgba(0,0,0,0.3)] hover:bg-[#7c3aed] hover:scale-105 active:scale-95 transition">
+        {/* FAB — Voice gossip primary (hold 1.5s → 3s whisper STT) + fallback create */}
+        <VoiceGossipFab
+          anonId={fabGhostId}
+          genAnonId={genAnonId}
+          onCreate={async ({ title, venue, event_date, event_time, severity }) => {
+            setFabTitle(title); setFabVenue(venue); setFabDate(event_date); setFabTime(event_time); setFabSeverity(severity as any);
+            // auto-create like fab
+            try {
+              setFabBusy(true);
+              const ghostId = fabGhost ? (fabGhostId || genAnonId()) : null;
+              const body: any = { title, venue, event_date, event_time, scope_type: "whole_school", scope_value: null, status: "pending", authority_points: 0, required_points: 5, severity };
+              // anon rep credits to real id if ghost?
+              const raw = localStorage.getItem("physi_profile");
+              let uid: string | null = null;
+              try { uid = raw ? JSON.parse(raw)?.id ?? null : null; } catch {}
+              if (uid) body.created_by = uid;
+              // whisper anon marker
+              if (ghostId) body.anon_ghost_id = ghostId;
+              const r = await fetch("/api/timetable", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+              const j = await r.json().catch(() => ({}));
+              if (!r.ok || j.ok === false) throw new Error(j?.error || "create failed");
+              setToast(`whisper “${title}” ✓ · ${severity} · anon`);
+              playPop(); vibrate(20);
+              fetchFeed();
+            } catch (e: any) { setToast(e?.message || "whisper failed"); } finally { setFabBusy(false); }
+          }}
+        />
+        {/* Secondary FAB — tap to open classic create (kept for non-voice, still decluttered) */}
+        <div className="fixed bottom-[88px] right-20 z-40 flex flex-col items-end gap-2 sm:bottom-[92px] sm:right-20">
+          <button onClick={()=>setFabOpen(true)} aria-label="Create event" title="Create event (tap) · hold right FAB for voice whisper" className="flex h-[46px] w-[46px] items-center justify-center rounded-full border border-white/20 bg-white/[0.08] backdrop-blur text-lg font-bold text-white shadow-[0_4px_16px_rgba(0,0,0,0.3)] hover:bg-white hover:text-black transition">
             +
           </button>
         </div>
