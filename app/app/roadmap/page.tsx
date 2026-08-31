@@ -325,7 +325,8 @@ function RoadmapInner() {
   const [filter, setFilter] = useState<"all"|"my_level"|"today"|"verified"|"advisory"|"mine">("all");
   const [viewMode, setViewMode] = useState<"map"|"list">("map");
   const [searchQuery, setSearchQuery] = useState("");
-  const [filtersOpen, setFiltersOpen] = useState(false); // mobile drawer — frees 80px when closed
+  const [filtersOpen, setFiltersOpen] = useState(false); // unified Filters ▾ drawer at 126px — hides Filters+Search
+  const [moreOpen, setMoreOpen] = useState(false); // ⋯ More drawer: Squad/Lecturer/Bazaar/Oracle collapsed
   const [searchPulseId, setSearchPulseId] = useState<string | null>(null);
   const [myLevel, setMyLevel] = useState<string|null>(null);
   const [myRep, setMyRep] = useState<number>(0);
@@ -413,6 +414,15 @@ function RoadmapInner() {
   const [lectEmail, setLectEmail] = useState("");
   const [lectPin, setLectPin] = useState("");
   const [lectOpen, setLectOpen] = useState(false);
+  // --- Pre-gossip: predicted ghost nodes 7 days early dotted 0.35 with Pre-verify bet ---
+  const [preBets, setPreBets] = useState<{ eventId:string; amt:number; ts:number }[]>([]);
+  const [preToast, setPreToast] = useState<string|null>(null);
+  // --- Rep lend: localStorage phys_lend ---
+  const [lendOpen, setLendOpen] = useState(false);
+  const [lendTo, setLendTo] = useState("");
+  const [lendAmt, setLendAmt] = useState("5");
+  const [lendRate, setLendRate] = useState("10");
+  const [lendHist, setLendHist] = useState<{ id:string; to:string; amt:number; rate:number; due:number; created:number; repaid:boolean }[]>([]);
 
   const fetchFeed = useCallback(async () => {
     const ctrl = new AbortController();
@@ -1091,11 +1101,30 @@ function RoadmapInner() {
   // combined road items chronologically sorted
   type DemoItem = { kind: "demo"; localId: string; id: string; ms: number; title: string; venue: string; event_date: string; event_time: string; hint: string };
   type ForkItem = { kind: "fork"; id: string; ms: number; events: EventRow[]; ids: string[] };
-  type RoadItem = { kind: "personal"; p: PersonalBubble; id: string; ms: number } | { kind: "event"; ev: EventRow; id: string; ms: number } | DemoItem | ForkItem;
+  type PredictedItem = { kind: "predicted"; id: string; ms: number; ev: EventRow; predDate: string; predTime: string };
+  type RoadItem = { kind: "personal"; p: PersonalBubble; id: string; ms: number } | { kind: "event"; ev: EventRow; id: string; ms: number } | DemoItem | ForkItem | PredictedItem;
   const roadItems: RoadItem[] = useMemo(() => {
     const pers: RoadItem[] = personal.map((p) => ({ kind: "personal", p, id: p.localId, ms: eventInstant(p.event_date, p.event_time) } as RoadItem));
     const evs: RoadItem[] = events.map((ev) => ({ kind: "event", ev, id: ev.id, ms: eventInstant(ev.event_date, ev.event_time) } as RoadItem));
-    let all: RoadItem[] = [...pers, ...evs];
+    // Pre-gossip predicted ghosts 7 days early — dotted 0.35
+    const preds: RoadItem[] = events.slice(0,8).map((ev)=> {
+      const realMs = eventInstant(ev.event_date, ev.event_time);
+      const predMs = realMs - 7*86400000;
+      const d = new Date(predMs);
+      // compute WAT date for display (use same trick as eventInstant but reverse)
+      // derive predDate/predTime by subtracting 7 days in WAT
+      const predDate = new Date(predMs - 60*60*1000).toISOString().slice(0,10); // approximate; we render from ms directly
+      // more accurate: use Date with +01 then format
+      const tmp = new Date(predMs);
+      // WAT iso: shift +1h
+      const wat = new Date(tmp.getTime() + 60*60*1000);
+      const isoDate = wat.toISOString().slice(0,10);
+      const isoTime = String(wat.getUTCHours()).padStart(2,"0")+":"+String(wat.getUTCMinutes()).padStart(2,"0");
+      const predDate2 = isoDate;
+      const predTime2 = isoTime;
+      return { kind:"predicted", id: String(ev.id)+"__pred", ms: predMs, ev, predDate: predDate2, predTime: predTime2 } as PredictedItem;
+    });
+    let all: RoadItem[] = [...pers, ...evs, ...preds];
     // 3 local-only demo nodes when empty (hidden once real events exist, no DB)
     if (events.length === 0) {
       const nowMs = Date.now();
@@ -1130,6 +1159,7 @@ function RoadmapInner() {
       base = roadItems.filter(it=>{
         if((it as any).kind==="fork") return true;
         if(it.kind==="demo") return true;
+        if((it as any).kind==="predicted") return filter!=="verified" && filter!=="today" && filter!=="mine";
         if(it.kind==="personal") return filter!=="verified";
         const ev = (it as any).ev as EventRow;
         if(filter==="mine") return myUserId ? String(ev.created_by||"")===String(myUserId) : false;
@@ -1152,6 +1182,10 @@ function RoadmapInner() {
       if (it.kind==="demo") {
         const d = it as DemoItem;
         return `${d.title} ${d.venue} ${d.event_date}`.toLowerCase().includes(searchQ);
+      }
+      if ((it as any).kind==="predicted") {
+        const pr = it as PredictedItem;
+        return `${pr.ev.title} ${pr.ev.venue} ${pr.predDate}`.toLowerCase().includes(searchQ);
       }
       if (it.kind==="personal") {
         const p = it.p;
@@ -1398,6 +1432,9 @@ function RoadmapInner() {
       const pct = rp > 0 ? Math.min(100, Math.round((ap / rp) * 100)) : isVerified(ev0) ? 100 : 0;
       if (isVerified(ev0)) return { key: "canonical", label: "FORK ✓", color: "#10b981", outline: "#8b5cf6", pct } as const;
       return { key: "advisory", label: "FORK ●", color: "#8b5cf6", outline: "#8b5cf6", pct } as const;
+    }
+    if ((item as any).kind === "predicted") {
+      return { key: "predicted", label: "predicted ghost · 7d early", color: "#a78bfa", outline: "#8b5cf6", pct: 35, predicted:true, opacity:0.35, dashed:true } as const;
     }
     if (item.kind === "personal") {
       return { key: "personal", label: "light off", color: "#a1a1aa", outline: "#52525b", dimmed: true } as const;
@@ -1877,6 +1914,44 @@ function RoadmapInner() {
   }
   function buyPin(){ if(!deductRep(3)) return; try{ localStorage.setItem("physi_bazaar_pin", String(Date.now()+24*3600*1000)); }catch{} setCandy("-3 Rep pin 24h"); setTimeout(()=> setCandy(null), 1200); setToast("Pinned 24h 📌 -3 Rep"); setBazaarOpen(false); }
   function buyBlast(){ if(!deductRep(5)) return; try{ localStorage.setItem("physi_bazaar_blast", String(Date.now()+24*3600*1000)); }catch{} setCandy("-5 Rep blast"); setTimeout(()=> setCandy(null), 1200); setToast("Blast sent 🚀 -5 Rep"); setBazaarOpen(false); }
+  // --- Pre-gossip: predicted ghost 7 days early dotted 0.35 ---
+  function preVerifyBet(evId:string){
+    const baseId=String(evId).split("__pred")[0].split("__tile")[0];
+    if(preBets.some(b=> b.eventId===baseId)) { setToast("already Pre-verified this ghost"); return; }
+    if(!deductRep(0.5)) return;
+    const bet={ eventId: baseId, amt:0.5, ts: Date.now() };
+    const next=[...preBets, bet]; setPreBets(next);
+    setCandy("-0.5 Pre-verify"); setTimeout(()=> setCandy(null), 900);
+    setToast("Pre-verify 0.5 Rep — 1.5x if ghost becomes real ✓");
+  }
+  // --- Rep lend helpers ---
+  function doLend(){
+    const to=lendTo.trim().toLowerCase().replace(/[^a-z0-9_]/g,"").slice(0,16);
+    const amt=Number(lendAmt); const rate=Number(lendRate);
+    if(!to || to.length<2){ setToast("enter handle 2-16 chars"); return; }
+    if(!isFinite(amt) || amt <1){ setToast("amount >=1 Rep"); return; }
+    if(!isFinite(rate) || rate<1 || rate>50){ setToast("rate 1-50%"); return; }
+    if(myRep < amt){ setToast(`need ${amt} Rep — have ${myRep.toFixed(1)}`); return; }
+    if(!deductRep(amt)) return;
+    const due=Date.now()+7*86400000;
+    const entry={ id: Math.random().toString(36).slice(2,9), to, amt, rate, due, created: Date.now(), repaid:false };
+    setLendHist(prev=> [...prev, entry]);
+    setCandy(`lent ${amt} → @${to}`); setTimeout(()=> setCandy(null),1200);
+    setToast(`Lent ${amt} Rep to @${to} @ ${rate}% — due in 7 days`);
+    setLendTo(""); setLendAmt("5");
+  }
+  function claimLend(id:string){
+    const entry=lendHist.find(x=> x.id===id);
+    if(!entry || entry.repaid) return;
+    if(Date.now() < entry.due){ setToast("not due yet — wait 7 days (demo: you can still claim early at reduced interest)"); }
+    const repay = Number((entry.amt * (1 + entry.rate/100)).toFixed(2));
+    const nextRep = Number((myRep + repay).toFixed(2));
+    setMyRep(nextRep);
+    try{ const raw=localStorage.getItem("physi_profile"); if(raw){ const p=JSON.parse(raw); p.mining_balance=nextRep; localStorage.setItem("physi_profile", JSON.stringify(p)); } }catch{}
+    setLendHist(prev=> prev.map(x=> x.id===id ? {...x, repaid:true}: x));
+    setCandy(`+${repay} repaid`); setTimeout(()=> setCandy(null),1400);
+    setToast(`Claimed ${repay} Rep from @${entry.to} (principal ${entry.amt} + ${entry.rate}%)`);
+  }
   // --- Oracle helpers: bet 0.5 Rep on fork branch before quorum, payout 1.5x if win ---
   function oracleBet(forkKey:string, branchIx:number){
     const ap0 = conflictGroups.find((g)=> g.map((e)=> String(e.id)).join("__fork__")==forkKey)?.[branchIx] ? Number(conflictGroups.find((g)=> g.map((e)=> String(e.id)).join("__fork__")==forkKey)![branchIx].authority_points||0) : 0;
@@ -1893,6 +1968,10 @@ function RoadmapInner() {
   useEffect(()=>{ try{ const r=localStorage.getItem("physi_oracle_bets"); if(r) setOracleBets(JSON.parse(r)); const c=localStorage.getItem("physi_road_chat"); if(c){ const a=JSON.parse(c); if(Array.isArray(a)){ const f=a.filter((m:any)=> Date.now()-Number(m.ts) < 24*3600*1000); if(f.length!==a.length) localStorage.setItem("physi_road_chat", JSON.stringify(f)); if(f.length) setChatMsgs(f); } } }catch{} },[]);
   useEffect(()=>{ try{ localStorage.setItem("physi_oracle_bets", JSON.stringify(oracleBets)); }catch{} },[oracleBets]);
   useEffect(()=>{ try{ localStorage.setItem("physi_road_chat", JSON.stringify(chatMsgs)); }catch{} },[chatMsgs]);
+  // hydrate pre-gossip + lend
+  useEffect(()=>{ try{ const r=localStorage.getItem("phys_lend"); if(r){ const a=JSON.parse(r); if(Array.isArray(a)) setLendHist(a); } const pb=localStorage.getItem("physi_pre_bets"); if(pb){ const a=JSON.parse(pb); if(Array.isArray(a)) setPreBets(a); } }catch{} },[]);
+  useEffect(()=>{ try{ localStorage.setItem("phys_lend", JSON.stringify(lendHist)); }catch{} },[lendHist]);
+  useEffect(()=>{ try{ localStorage.setItem("physi_pre_bets", JSON.stringify(preBets)); }catch{} },[preBets]);
   // oracle payout watcher: when fork resolves (>=8), pay 1.5x
   useEffect(()=>{
     if(oracleBets.length===0 || conflictGroups.length===0) return;
@@ -1954,35 +2033,28 @@ function RoadmapInner() {
             {schoolMeta.badge} · <a href="?school=FUTO" className="pointer-events-auto underline decoration-white/30 hover:text-amber-200">FUTO</a> · <a href="?school=UNIPORT" className="pointer-events-auto underline decoration-white/30">UNIPORT</a> · {schoolMeta.name}
           </div>
         )}
-        {/* top bar */}
+        {/* top bar — decluttered: PHYSI · WAT · bell only */}
         <div className="pointer-events-none absolute left-0 right-0 top-0 z-20 flex justify-center px-3 pt-3 sm:px-6">
           <div className="pointer-events-auto flex w-full max-w-[900px] items-center justify-between gap-2">
-            <div className="flex items-center gap-2 rounded-full border border-white/[0.09] bg-black/70 px-3 py-2 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.6)] sm:px-4">
-              <button onClick={()=> setShareOpen(true)} className={`hidden h-7 w-7 items-center justify-center rounded-full text-[11px] font-black sm:flex hover:scale-110 transition ${levelInfo.lvl===5 ? "bg-amber-400 text-black ring-2 ring-amber-300" : "bg-white text-black"}`}>◉</button>
-              <div>
-                <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400 sm:text-[11px]">endless time road · WAT</p>
-                <p className="hidden text-[12px] font-semibold leading-none text-white sm:block">
-                  {loading ? "Loading live road…" : roadItems.length ? `${pastCount} past · NOW · ${upcomingCount} ahead · tap a node` : "tap a node · create your gist"}
-                </p>
-                <div className="hidden sm:flex items-center gap-2 mt-1">
-                  <button onClick={()=> setShareOpen(true)} className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-mono text-[10px] font-black hover:scale-105 transition ${levelInfo.lvl===5 ? "bg-gradient-to-r from-amber-400 to-yellow-300 text-black ring-1 ring-amber-400" : "bg-white/10 text-white"}`}>Lvl {levelInfo.lvl} · {levelInfo.name}</button>
-                  <span className="font-mono text-[10px] text-slate-400">{myRep.toFixed(1)} Rep</span>
-                  <div className="h-1.5 w-16 overflow-hidden rounded-full bg-white/10"><div className={`h-full ${levelInfo.lvl===5 ? "bg-gradient-to-r from-amber-400 to-yellow-300" : "bg-emerald-400"}`} style={{ width: `${levelInfo.progress*100}%` }} /></div>
-                  <RepSparkline rep={myRep} />
-                  <span className="font-mono text-[9px] text-slate-500">{levelInfo.nextAt ? `${(levelInfo.nextAt - myRep).toFixed(1)} to L${levelInfo.lvl+1}` : "MAX"}</span>
-                  <button onClick={()=> setRepExplainerOpen(true)} aria-label="What is Rep?" className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-white/20 bg-white/10 text-[11px] font-black text-white hover:bg-white hover:text-black transition" title="What is Rep?">ⓘ</button>
-                </div>
-              </div>
+            <div className="flex items-center gap-2 rounded-full border border-white/[0.09] bg-black/70 px-4 py-2 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.6)]">
+              <span className={`${fredoka.className} text-[13px] font-black tracking-[0.12em] text-white`}>PHYSI</span>
+              <span className="h-3 w-px bg-white/15" />
+              <span className="flex items-center gap-1.5 font-mono text-[11px] font-bold text-white" style={{ fontVariantNumeric:"tabular-nums" }}>
+                <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
+                {wat.timePart} WAT
+              </span>
+              <span className="hidden font-mono text-[10px] text-slate-400 sm:inline">· {wat.wday} {wat.datePart}</span>
+              <button onClick={()=> setMoreOpen(v=>!v)} aria-label="More" className="ml-1 rounded-full border border-white/10 bg-white/10 px-2.5 py-1 font-mono text-[11px] font-black text-white hover:bg-white hover:text-black transition">⋯ More</button>
             </div>
-            <div className="flex items-center gap-1.5 sm:gap-2">
+            <div className="flex items-center gap-2">
               <div className="relative">
-                <button onClick={()=>{ setBellOpen(v=>!v); if(!bellOpen){ bellSeenRef.current=Date.now(); setBellCount(0); try{ localStorage.setItem(`physi_bell_seen_${myUserId||'anon'}`, String(Date.now())); }catch{} } }} aria-label="Notifications" className={`relative flex items-center justify-center rounded-full border backdrop-blur transition ${panicInfo ? "h-16 w-16 text-[28px] border-red-500 bg-gradient-to-br from-amber-500 to-red-600 text-white shadow-[0_0_22px_rgba(239,68,68,0.7)] animate-[panicGlow_1s_ease-in-out_infinite]" : "h-8 w-8 text-[14px] border-white/10 bg-black/60 text-white hover:bg-white hover:text-black"}`}>
-                  <span className={panicInfo ? "text-[28px]" : "text-[14px]"}>🔔</span>
+                <button onClick={()=>{ setBellOpen(v=>!v); if(!bellOpen){ bellSeenRef.current=Date.now(); setBellCount(0); try{ localStorage.setItem(`physi_bell_seen_${myUserId||'anon'}`, String(Date.now())); }catch{} } }} aria-label="Notifications" className={`relative flex items-center justify-center rounded-full border backdrop-blur transition ${panicInfo ? "h-10 w-10 text-[18px] border-red-500 bg-gradient-to-br from-amber-500 to-red-600 text-white shadow-[0_0_14px_rgba(239,68,68,0.7)]" : "h-8 w-8 text-[14px] border-white/10 bg-black/60 text-white hover:bg-white hover:text-black"}`}>
+                  <span className={panicInfo ? "text-[18px]" : "text-[14px]"}>🔔</span>
                   {(bellCount>0 || mineHasNew) && <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-black text-white ring-2 ring-black">{bellCount>0 ? bellCount : 1}</span>}
                 </button>
                 {panicInfo && panicDeltaFmt && (
-                  <div className="absolute left-1/2 top-[68px] -translate-x-1/2 whitespace-nowrap rounded-full bg-gradient-to-r from-amber-400 to-red-500 px-3 py-1.5 text-center shadow-xl ring-2 ring-white/20">
-                    <p className="font-mono text-[12px] font-black leading-none text-white">in {panicDeltaFmt} — act now</p>
+                  <div className="absolute left-1/2 top-[44px] -translate-x-1/2 whitespace-nowrap rounded-full bg-gradient-to-r from-amber-400 to-red-500 px-3 py-1.5 text-center shadow-xl ring-2 ring-white/20">
+                    <p className="font-mono text-[11px] font-black leading-none text-white">in {panicDeltaFmt}</p>
                   </div>
                 )}
                 {bellOpen && (
@@ -2009,49 +2081,42 @@ function RoadmapInner() {
                   </div>
                 )}
               </div>
-              <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold sm:px-3 sm:py-1.5 sm:text-xs ${verifiedCount > 0 ? "bg-emerald-500 text-white" : "bg-white/10 text-slate-300"}`}>
-                <span className="h-1.5 w-1.5 rounded-full bg-white/80" /> {verifiedCount} ✓
-              </span>
-              <span className="inline-flex items-center rounded-full bg-amber-500 px-2.5 py-1 text-[11px] font-bold text-white sm:px-3 sm:py-1.5 sm:text-xs">{advisoryCount} ●</span>
-              <span className="hidden items-center gap-1 rounded-full border border-orange-400/20 bg-orange-500/15 px-2.5 py-1 text-[11px] font-black text-orange-200 sm:inline-flex" title="streak"><span>🔥</span>{streak}</span>
-              <span className={`hidden sm:inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-black ${presence?.isWitness ? "border-amber-400/30 bg-gradient-to-r from-amber-400 to-yellow-300 text-black" : "border-white/10 bg-black/40 text-slate-300"}`} title="presence score"><span className={`h-2 w-2 rounded-full ${presence?.isWitness ? "bg-amber-600" : "bg-slate-500"}`} /> {presenceScore.toFixed(1)} {presence?.isWitness ? "gold Witness" : "Remote"}</span>
-              <button onClick={() => setShowCreate(true)} className="rounded-full bg-white px-3.5 py-1.5 text-[12px] font-black text-black hover:bg-slate-100 transition sm:px-4 sm:py-2 sm:text-[13px]">
-                ＋ New gist
-              </button>
-              <button onClick={() => fetchFeed()} className="hidden rounded-full border border-white/15 bg-white/[0.08] px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-white hover:text-black transition sm:inline-flex">
-                ↻ refresh
-              </button>
             </div>
           </div>
         </div>
-
-        {/* second row: share/save + live WAT clock */}
-        <div className="pointer-events-none absolute left-1/2 top-[58px] z-20 flex w-full max-w-[900px] -translate-x-1/2 items-center justify-between gap-2 px-3 sm:px-6">
-          <div className="pointer-events-auto flex items-center gap-2">
-            <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/70 px-3 py-1.5 backdrop-blur">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
-              <span className="font-mono text-[11px] font-bold tracking-wide text-white" style={{ fontVariantNumeric: "tabular-nums" }}>{wat.timePart} WAT</span>
-              <span className="hidden font-mono text-[10px] text-slate-400 sm:inline">· {wat.wday} {wat.datePart} · Africa/Lagos GMT+1</span>
-              <span className="font-mono text-[10px] text-slate-500 sm:hidden">{wat.datePart}</span>
+        {/* ⋯ More drawer — collapses Squad/Lecturer/Bazaar/Oracle + Rep/Streak */}
+        {moreOpen && (
+          <div className="pointer-events-none absolute left-1/2 top-[54px] z-30 flex w-full max-w-[900px] -translate-x-1/2 justify-center px-3 sm:px-6">
+            <div className="pointer-events-auto w-full max-w-[560px] rounded-2xl border border-white/10 bg-black/85 p-3 backdrop-blur-xl shadow-[0_16px_40px_rgba(0,0,0,0.6)]">
+              <div className="flex items-center justify-between">
+                <p className="font-mono text-[11px] font-bold tracking-wide text-white">More</p>
+                <button onClick={()=> setMoreOpen(false)} className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-bold text-white">✕</button>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button onClick={()=>{ setMoreOpen(false); setSquadOpen(true); }} className={`rounded-full border px-3 py-1.5 text-[11px] font-black ${squad && isSquadFormed(squad as any) ? "border-emerald-400/40 bg-emerald-500 text-white" : "border-white/15 bg-white/10 text-white"}`}>👥 Squad {squad && isSquadFormed(squad as any) ? "✓ 1.5x" : `${squad?.members?.filter(Boolean).length||0}/3`}</button>
+                <button onClick={()=>{ setMoreOpen(false); setLectOpen(true); }} className={`rounded-full border px-3 py-1.5 text-[11px] font-black ${lecturer?.pinVerified ? "border-emerald-400/40 bg-emerald-500 text-white" : lecturer?.verified ? "border-amber-400/30 bg-amber-500/20 text-amber-200" : "border-white/15 bg-white/10 text-white"}`}>🎓 {lecturer?.pinVerified ? "Lecturer Emerald ✓" : lecturer?.verified ? "Lecturer verified" : "Lecturer oracle"}</button>
+                <button onClick={()=>{ setMoreOpen(false); setBazaarOpen(true); }} className="rounded-full border border-emerald-400/30 bg-emerald-500/20 px-3 py-1.5 text-[11px] font-black text-emerald-200">🛒 Bazaar</button>
+                <button onClick={()=>{ setMoreOpen(false); setShareOpen(true); }} className="rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[11px] font-bold text-white">◉ Rep {myRep.toFixed(1)} · Lvl {levelInfo.lvl} {levelInfo.name}</button>
+                <span className="inline-flex items-center gap-1 rounded-full border border-orange-400/20 bg-orange-500/15 px-3 py-1.5 text-[11px] font-black text-orange-200">🔥 {streak} streak</span>
+                <span className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-[11px] font-black ${presence?.isWitness ? "border-amber-400/30 bg-amber-400 text-black" : "border-white/10 bg-white/5 text-slate-300"}`}>{presenceScore.toFixed(1)} {presence?.isWitness ? "Witness" : "Remote"}</span>
+                <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-bold ${verifiedCount>0?"bg-emerald-500 text-white":"bg-white/10 text-slate-300"}`}>{verifiedCount} ✓</span>
+                <span className="inline-flex items-center rounded-full bg-amber-500 px-3 py-1.5 text-[11px] font-bold text-white">{advisoryCount} ●</span>
+                <button onClick={()=>{ navigator.clipboard?.writeText(window.location.href); setToast("link copied"); }} className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white">↗ Share</button>
+                <button onClick={()=> setShowCreate(true)} className="rounded-full bg-white px-3 py-1.5 text-[11px] font-black text-black">＋ New gist</button>
+              </div>
+              <div className="mt-2 flex items-center gap-2">
+                <div className="h-1.5 w-16 overflow-hidden rounded-full bg-white/10"><div className="h-full bg-emerald-400" style={{ width: `${levelInfo.progress*100}%` }} /></div>
+                <RepSparkline rep={myRep} />
+                <span className="font-mono text-[10px] text-slate-400">{levelInfo.nextAt ? `${(levelInfo.nextAt-myRep).toFixed(1)} to L${levelInfo.lvl+1}` : "MAX"}</span>
+                <button onClick={()=> setRepExplainerOpen(true)} className="ml-auto rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-[10px] font-bold text-slate-300">ⓘ Rep</button>
+              </div>
             </div>
-            <button onClick={() => scrollToNow(true)} className="hidden rounded-full border border-violet-400/30 bg-violet-500/20 px-3 py-1.5 text-[11px] font-bold text-violet-200 backdrop-blur hover:bg-violet-500 hover:text-white transition sm:inline-flex">◎ NOW</button>
           </div>
-          <div className="pointer-events-auto hidden gap-2 sm:flex">
-            <button onClick={() => setBazaarOpen(true)} className="rounded-full border border-emerald-400/30 bg-emerald-500/20 px-3.5 py-1.5 text-xs font-black text-emerald-200 backdrop-blur hover:bg-emerald-500 hover:text-white">🛒 Bazaar</button>
-            <button onClick={() => { navigator.clipboard?.writeText(window.location.href); setToast("link copied — share the road"); }} className="rounded-full border border-white/10 bg-black/70 px-3.5 py-1.5 text-xs font-semibold text-white backdrop-blur">↗ Share</button>
-            <button onClick={() => setToast("saved to your map")} className="rounded-full border border-white/10 bg-black/70 px-3.5 py-1.5 text-xs font-semibold text-white backdrop-blur">♡ Save</button>
-            <button onClick={() => scrollToNow(true)} className="rounded-full border border-white/10 bg-black/70 px-3.5 py-1.5 text-xs font-semibold text-white backdrop-blur sm:hidden">◎ NOW</button>
-            <label className="flex items-center gap-1.5 rounded-full border border-amber-400/30 bg-black/70 px-3 py-1.5 cursor-pointer backdrop-blur">
-              <input type="checkbox" checked={stakeOn} onChange={e=> setStakeOn(e.target.checked)} className="h-3.5 w-3.5 accent-amber-500" />
-              <span className="font-mono text-[11px] font-bold text-amber-200">stake 0.5 Rep</span>
-            </label>
-          </div>
-          <button onClick={() => scrollToNow(true)} className="pointer-events-auto rounded-full border border-violet-400/30 bg-violet-500 px-3 py-1.5 text-[11px] font-black text-white sm:hidden">◎ NOW</button>
-          <button onClick={()=> setBazaarOpen(true)} className="pointer-events-auto flex sm:hidden rounded-full border border-emerald-400/30 bg-emerald-500/20 px-2.5 py-1.5 text-[10px] font-black text-emerald-200 backdrop-blur">🛒 Bazaar</button>
-          <label className="pointer-events-auto flex sm:hidden items-center gap-1 rounded-full border border-amber-400/30 bg-black/70 px-2.5 py-1.5 cursor-pointer backdrop-blur">
-            <input type="checkbox" checked={stakeOn} onChange={e=> setStakeOn(e.target.checked)} className="h-3 w-3 accent-amber-500" />
-            <span className="font-mono text-[10px] font-bold text-amber-200">0.5 stake</span>
-          </label>
+        )}
+
+        {/* second row — decluttered: centered NOW only (share/bazaar/stake moved to ⋯ More) */}
+        <div className="pointer-events-none absolute left-1/2 top-[54px] z-20 flex w-full max-w-[560px] -translate-x-1/2 justify-center px-3 sm:px-6">
+          <button onClick={() => scrollToNow(true)} className="pointer-events-auto rounded-full border border-violet-400/30 bg-violet-500/20 px-3 py-1.5 text-[11px] font-bold text-violet-200 backdrop-blur hover:bg-violet-500 hover:text-white transition">◎ NOW</button>
         </div>
 
         <p className="absolute left-1/2 top-[92px] z-10 -translate-x-1/2 whitespace-nowrap rounded-full border border-white/10 bg-black/70 px-3 py-1 font-mono text-[10px] tracking-wide text-slate-400 backdrop-blur sm:hidden">
@@ -2104,46 +2169,12 @@ function RoadmapInner() {
         <div className="pointer-events-none absolute left-1/2 top-[162px] z-20 flex w-full max-w-[560px] -translate-x-1/2 justify-center px-3 sm:hidden">
           <span className={`rounded-full border border-amber-400/20 bg-black/75 px-3 py-1 ${fredoka.className} text-[14px] font-black tracking-tight text-amber-200 backdrop-blur`}>Verify 3 today → +5 bonus · {dailyCount}/3 {dailyBonusDone ? "✓ done" : ""}</span>
         </div>
-        {/* mobile Filters drawer toggle — frees 80px when collapsed (mobile only) */}
-        <div className="pointer-events-none absolute left-1/2 top-[126px] z-20 flex w-full max-w-[560px] -translate-x-1/2 justify-center px-3 sm:hidden">
+        {/* unified Filters ▾ drawer at 126px — hides Filters+Search behind single toggle */}
+        <div className="pointer-events-none absolute left-1/2 top-[126px] z-20 flex w-full max-w-[560px] -translate-x-1/2 justify-center px-3">
           <button onClick={()=> setFiltersOpen(o=>!o)} className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-black/75 px-4 py-2 font-mono text-[11px] font-bold text-white backdrop-blur-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)]">Filters {filtersOpen ? '▴' : '▾'} <span className="rounded-full bg-white/15 px-1.5 py-0.5 text-[10px]">{filter} · {viewMode}</span></button>
         </div>
-        {/* desktop View+Filter+Search row — always visible */}
-        <div className="pointer-events-none absolute left-1/2 top-[116px] z-20 hidden w-full max-w-[560px] -translate-x-1/2 justify-center gap-2 px-6 sm:flex">
-          <div className="pointer-events-auto flex items-center gap-1 rounded-full border border-white/10 bg-black/70 px-1.5 py-1 backdrop-blur-xl">
-            <button onClick={()=> setViewMode("map")} className={`rounded-full px-3 py-1.5 font-mono text-[11px] font-bold transition ${viewMode==="map" ? "bg-white text-black shadow" : "bg-white/10 text-slate-300 hover:bg-white/15"}`}>⬢ Map</button>
-            <button onClick={()=> setViewMode("list")} className={`rounded-full px-3 py-1.5 font-mono text-[11px] font-bold transition ${viewMode==="list" ? "bg-white text-black shadow" : "bg-white/10 text-slate-300 hover:bg-white/15"}`}>▦ List</button>
-          </div>
-          <div className="pointer-events-auto flex items-center gap-1 rounded-full border border-white/10 bg-black/70 px-1.5 py-1 backdrop-blur-xl overflow-x-auto scrollbar-none">
-            {([
-              { k: "all", label: "All" },
-              { k: "mine", label: "Mine" },
-              { k: "my_level", label: myLevel ? myLevel : "My Level" },
-              { k: "today", label: "Today" },
-              { k: "verified", label: "Verified" },
-              { k: "advisory", label: "Advisory" },
-            ] as const).map(ch=> {
-              const active = filter===ch.k;
-              const isMine = ch.k==="mine";
-              return (
-                <button
-                  key={ch.k}
-                  onClick={()=> setFilter(ch.k as any)}
-                  className={`relative shrink-0 rounded-full px-3 py-1.5 font-mono text-[11px] font-bold transition ${active ? "bg-white text-black shadow" : "bg-white/10 text-slate-300 hover:bg-white/15 hover:text-white"}`}
-                >
-                  {ch.label}
-                  {isMine && mineHasNew && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-black animate-pulse" />}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-        <div className="pointer-events-none absolute left-1/2 top-[148px] z-20 hidden w-full max-w-[560px] -translate-x-1/2 justify-center px-6 sm:flex">
-          <div className="pointer-events-auto w-full"><SearchBar searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchMatchCount={searchMatchCount} onJump={handleJump} /></div>
-        </div>
-        {/* mobile collapsible drawer — Filters+Search+View */}
         {filtersOpen && (
-          <div className="pointer-events-none absolute left-1/2 top-[162px] z-20 flex w-full max-w-[560px] -translate-x-1/2 flex-col gap-2 px-3 sm:hidden">
+          <div className="pointer-events-none absolute left-1/2 top-[162px] z-20 flex w-full max-w-[560px] -translate-x-1/2 flex-col gap-2 px-3">
             <div className="pointer-events-auto flex items-center justify-center gap-1 rounded-full border border-white/10 bg-black/70 px-1.5 py-1 backdrop-blur-xl">
               <button onClick={()=> setViewMode("map")} className={`rounded-full px-3 py-1.5 font-mono text-[11px] font-bold transition ${viewMode==="map" ? "bg-white text-black shadow" : "bg-white/10 text-slate-300"}`}>⬢ Map</button>
               <button onClick={()=> setViewMode("list")} className={`rounded-full px-3 py-1.5 font-mono text-[11px] font-bold transition ${viewMode==="list" ? "bg-white text-black shadow" : "bg-white/10 text-slate-300"}`}>▦ List</button>
@@ -2175,15 +2206,15 @@ function RoadmapInner() {
             <div className="pointer-events-auto w-full"><SearchBar searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchMatchCount={searchMatchCount} onJump={handleJump} /></div>
           </div>
         )}
-        {/* Live pulse toasts - top center sliding in/out pure UI ghosts */}
-        <div className={`pointer-events-none absolute left-1/2 z-30 -translate-x-1/2 ${filtersOpen ? 'top-[268px] sm:top-[222px]' : 'top-[166px] sm:top-[222px]'}`}>
+        {/* Live pulse toasts - top center */}
+        <div className={`pointer-events-none absolute left-1/2 z-30 -translate-x-1/2 ${filtersOpen ? 'top-[268px]' : 'top-[166px]'}`}>
           {pulseMsg && (
             <div className={`rounded-full border border-emerald-400/20 bg-black/80 px-4 py-2 font-mono text-[11px] font-semibold text-white backdrop-blur-xl shadow-[0_8px_24px_rgba(0,0,0,0.5)] transition-all duration-500 ${pulseShow ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-3"}`} style={{ animation: pulseShow ? "pulseSlideIn 3s ease" : undefined }}>
               <span className="mr-1.5 inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400" />{pulseMsg}
             </div>
           )}
         </div>
-        {/* Invite nudge after verify swipe */}
+        {/* Squad/Lecturer/Bazaar collapsed into ⋯ More — hide inline quick bar; Rep/Streak moved to More/profile */}
         {inviteNudge && (
           <div className="pointer-events-auto absolute left-1/2 top-[188px] z-30 w-full max-w-[560px] -translate-x-1/2 px-3 sm:top-[184px] sm:px-6">
             <div className="flex items-center justify-between gap-3 rounded-2xl border border-violet-400/20 bg-[#0b0f1e]/95 px-4 py-3 backdrop-blur-xl shadow-[0_8px_24px_rgba(0,0,0,0.5)]">
@@ -2210,22 +2241,8 @@ function RoadmapInner() {
             </div>
           </div>
         )}
-        {/* Squad + Lecturer oracle quick bar */}
-        <div className="pointer-events-auto absolute left-1/2 top-[192px] z-20 flex w-full max-w-[560px] -translate-x-1/2 justify-center gap-2 px-3 sm:top-[188px] sm:px-6" style={{ marginTop: inviteNudge ? "56px" : "0" }}>
-          <button onClick={()=> setSquadOpen(true)} className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-black backdrop-blur transition ${squad && isSquadFormed(squad as any) ? "border-emerald-400/40 bg-emerald-500 text-white shadow" : "border-white/15 bg-black/60 text-white hover:bg-white hover:text-black"}`}>
-            <span>👥</span> {squad && isSquadFormed(squad as any) ? `Squad ${squad.members.length}/3 ✓ 1.5x` : `Squad ${squad?.members?.filter(Boolean).length||0}/3`}
-          </button>
-          <button onClick={()=> setLectOpen(true)} className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-black backdrop-blur transition ${lecturer?.pinVerified ? "border-emerald-400/40 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow" : lecturer?.verified ? "border-amber-400/30 bg-amber-500/20 text-amber-200" : "border-white/15 bg-black/60 text-white hover:bg-white hover:text-black"}`}>
-            <span>🎓</span> {lecturer?.pinVerified ? "Lecturer Emerald 8/8 ✓" : lecturer?.verified ? "Lecturer verified" : "Lecturer oracle"}
-          </button>
-          {verifiedCount>0 && (
-            <span className="hidden sm:inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-black/60 px-3 py-1.5 text-[11px] font-bold text-emerald-200 backdrop-blur">📅 {verifiedCount} verified · calendar ready</span>
-          )}
-        </div>
-        {/* Mobile + Desktop Rep board — extracted to components/road/RepBoard */}
-        <div className="pointer-events-auto absolute left-1/2 top-[148px] z-20 flex w-full max-w-[560px] -translate-x-1/2 justify-center px-3 xl:hidden" style={{ marginTop: inviteNudge ? "64px" : "0" }}>
-          <RepBoard repBoard={repBoard} youHandle={youHandle} streak={streak} myRep={myRep} levelInfo={levelInfo} onShare={()=> setShareOpen(true)} repSheetOpen={repSheetOpen} setRepSheetOpen={setRepSheetOpen} />
-        </div>
+        {/* Squad/Lecturer hidden — now in ⋯ More drawer */}
+        {/* Rep/Streak hidden from road — now in ⋯ More + profile sheet */}
         {/* Confetti on quest complete */}
         {showConfetti && (
           <div className="pointer-events-none absolute inset-0 z-40 overflow-hidden" aria-hidden>
@@ -2242,8 +2259,8 @@ function RoadmapInner() {
 
         {toast && <div className="fixed bottom-28 left-1/2 z-50 -translate-x-1/2 rounded-full bg-white px-5 py-2.5 text-[13px] font-medium text-black shadow-xl">{toast}</div>}
 
-        {/* Desktop Rep board — extracted */}
-        <div className="hidden xl:block">
+        {/* Desktop Rep board hidden — moved to ⋯ More/profile for clean road; keep hidden for xl if needed */}
+        <div className="hidden">
           <RepBoard repBoard={repBoard} youHandle={youHandle} streak={streak} myRep={myRep} levelInfo={levelInfo} onShare={()=> setShareOpen(true)} repSheetOpen={repSheetOpen} setRepSheetOpen={setRepSheetOpen} />
         </div>
         {/* SCROLLABLE ROAD CONTAINER — endless winding purple road — subtle 3D emboss */}
@@ -2526,6 +2543,45 @@ function RoadmapInner() {
                       </g>
                     );
                   }
+                  // --- Predicted ghost 7 days early dotted 0.35 ---
+                  if((item as any).kind === "predicted"){
+                    const pr = item as PredictedItem;
+                    const p = nodes[i];
+                    const isVisiblePred = (()=>{ const y=p.y; return y >= scrollPos - 400 && y <= scrollPos + viewH + 400; })();
+                    if(!isVisiblePred){ return <g key={item.id} id={`node-${String(pr.id).split("__pred")[0]}`} style={{display:"none"}} />; }
+                    const basePredId = String(pr.id).split("__pred")[0].split("__tile")[0];
+                    const isActivePred = selectedId===basePredId || selectedId===item.id;
+                    const hasBet = preBets.some(b=> b.eventId===basePredId);
+                    const title = pr.ev.title.length>16 ? pr.ev.title.slice(0,16)+"…" : pr.ev.title;
+                    const pillW = Math.max(132, Math.min(180, title.length*7+32));
+                    const pillX = p.x <260 ? p.x+42 : p.x - pillW -12;
+                    return (
+                      <g key={item.id} id={`node-${basePredId}`} opacity={0.35} style={{ cursor:"pointer" }} onClick={()=>{ setSelectedId(basePredId); setSheetOpen(true); setToast("predicted ghost — 7 days early dotted 0.35"); }}>
+                        <circle cx={p.x} cy={p.y+6} r={30} fill="black" opacity={0.22} />
+                        <g style={{ transformOrigin:`${p.x}px ${p.y}px`, transform:"translateZ(8px)" } as any}>
+                          <circle cx={p.x} cy={p.y} r={28} fill="rgba(255,255,255,0.92)" stroke="#8b5cf6" strokeWidth={2.8} strokeDasharray="6 4" opacity={0.95} />
+                          <circle cx={p.x} cy={p.y} r={16} fill="rgba(245,243,255,0.9)" strokeDasharray="4 3" />
+                          <text x={p.x} y={p.y+5} textAnchor="middle" fontSize={11} fontWeight={800} fill="#6d28d9" style={{ fontFamily: fredoka.style.fontFamily }}>👁</text>
+                        </g>
+                        <g opacity={1}>
+                          <rect x={pillX} y={p.y-38} width={pillW} height={22} rx={11} fill={isActivePred ? "white" : "rgba(139,92,246,0.85)"} stroke="#a78bfa" strokeDasharray="6 4" />
+                          <text x={pillX+pillW/2} y={p.y-23} textAnchor="middle" fontSize={10} fontWeight={900} fill={isActivePred ? "#000" : "white"} style={{ fontFamily: fredoka.style.fontFamily }}>{title}</text>
+                        </g>
+                        <g opacity={0.9}>
+                          <rect x={pillX} y={p.y+22} width={pillW} height={14} rx={7} fill="rgba(0,0,0,0.6)" />
+                          <text x={pillX+pillW/2} y={p.y+32} textAnchor="middle" fontSize={7} fontWeight={600} fill="#cbd5e1" style={{ fontFamily:"ui-monospace,monospace" }}>👁 predicted · 7d early · {fmtDate(pr.predDate)} {fmtTime(pr.predTime)}</text>
+                        </g>
+                        <foreignObject x={p.x-46} y={p.y+40} width={92} height={22}>
+                          <div style={{display:"flex", justifyContent:"center"}}>
+                            <button onClick={(e)=>{ e.stopPropagation(); preVerifyBet(item.id); }} disabled={hasBet} style={{fontSize:"8px", fontWeight:900, padding:"3px 8px", borderRadius:"999px", background: hasBet ? "#334155" : "#a78bfa", color: hasBet ? "#94a3b8" : "white", border:"1px solid rgba(255,255,255,0.4)", cursor: hasBet? "not-allowed":"pointer", opacity:0.95}}>
+                              {hasBet ? "Pre-verified ✓" : "Pre-verify 0.5"}
+                            </button>
+                          </div>
+                        </foreignObject>
+                        <text x={p.x} y={p.y+64} textAnchor="middle" fontSize={6} fontWeight={700} fill="rgba(255,255,255,0.6)" style={{fontFamily:"ui-monospace,monospace"}}>GHOST · 0.35 dotted</text>
+                      </g>
+                    );
+                  }
                   const p = nodes[i];
                   // virtualize: cull distant nodes outside viewport + 400px buffer
                   const isVisible = (()=>{ const y=p.y; return y >= scrollPos - 400 && y <= scrollPos + viewH + 400; })();
@@ -2757,23 +2813,12 @@ function RoadmapInner() {
           </div>
         )}
 
-        {/* FAB — first-gist funnel: pulses when mine count 0 */}
-        {(() => {
-          const mineCount = myUserId ? events.filter(e=> String(e.created_by||"")===String(myUserId)).length : 0;
-          const isFirstGist = mineCount === 0;
-          return (
-            <div className="fixed bottom-[88px] right-4 z-40 flex flex-col items-end gap-2 sm:bottom-[92px] sm:right-6">
-              {isFirstGist && (
-                <div className="animate-bounce rounded-full bg-white px-3 py-1.5 text-[12px] font-black text-black shadow-lg flex items-center gap-1">
-                  <span>←</span> Create first gist → +5 bonus
-                </div>
-              )}
-              <button onClick={()=>setFabOpen(true)} aria-label="Create event" className={`flex h-14 w-14 items-center justify-center rounded-full bg-[#8b5cf6] text-2xl font-black text-white shadow-[0_8px_24px_rgba(139,92,246,0.5),0_4px_12px_rgba(0,0,0,0.3)] hover:bg-[#7c3aed] hover:scale-105 active:scale-95 transition ${isFirstGist ? "animate-[fabPulse_1.6s_ease-in-out_infinite] ring-4 ring-white/30" : ""}`}>
-                +
-              </button>
-            </div>
-          );
-        })()}
+        {/* FAB — 1 FAB only, bonus moved to profile/hidden after first gist */}
+        <div className="fixed bottom-[88px] right-4 z-40 flex flex-col items-end gap-2 sm:bottom-[92px] sm:right-6">
+          <button onClick={()=>setFabOpen(true)} aria-label="Create event" className="flex h-14 w-14 items-center justify-center rounded-full bg-[#8b5cf6] text-2xl font-black text-white shadow-[0_8px_24px_rgba(139,92,246,0.5),0_4px_12px_rgba(0,0,0,0.3)] hover:bg-[#7c3aed] hover:scale-105 active:scale-95 transition">
+            +
+          </button>
+        </div>
         {/* FAB create modal - POST /api/timetable */}
         {fabOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
