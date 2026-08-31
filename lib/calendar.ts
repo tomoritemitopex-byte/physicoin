@@ -97,3 +97,13 @@ export function icsDataUri(ev: CalendarEvent): string {
   const ics = generateICS(ev);
   return `data:text/calendar;charset=utf-8,${encodeURIComponent(ics)}`;
 }
+
+// Calendar Streak: 3/week badge canonical only 14d half reset
+export const CAL_STREAK_WEEK=3; export const CAL_HALF_DAYS=14;
+export function calStreakBadge(canonicalLogs:number[], streak:number, lastIso:string|null):{ badge:boolean; decayed:number }{
+  const canonicalOnly = canonicalLogs.length>=1;
+  let decayed=streak;
+  if(lastIso){ const gap=Math.floor((Date.now()-Date.parse(lastIso))/86400000); if(gap>CAL_HALF_DAYS) decayed=Math.max(0, Math.floor(streak*Math.pow(0.5, Math.floor(gap/CAL_HALF_DAYS)))); }
+  const badge = canonicalOnly && decayed>=CAL_STREAK_WEEK;
+  return { badge, decayed };
+}

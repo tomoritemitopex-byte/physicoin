@@ -147,9 +147,12 @@ export async function POST(req: Request) {
     }
     try { await ensureAllTables(); } catch {}
 
+    // Idempotent Snap Receipt: pipe PHYSI|BIO|LT2|2026-09-01|08:00 try INSERT lower(title,venue,date) uid dup->fused x2 else venue_time_collision guard time<5m
     const created: unknown[] = [];
     const errors: unknown[] = [];
+    const timeToMin2=(t:string):number=>{ const pp=String(t).slice(0,5).split(":"); return (parseInt(pp[0]||"0")||0)*60+(parseInt(pp[1]||"0")||0); };
     for (const ev of parsed) {
+      try{ const sameVenue=await sql`SELECT * FROM physi_events WHERE lower(venue)=lower(${ev.venue}) AND event_date=${ev.date} LIMIT 20`; const coll=(sameVenue as any[]).find((r:any)=> Math.abs(timeToMin2(String(r.event_time).slice(0,5))-timeToMin2(String(ev.time).slice(0,5)))<5 && String(r.title).toLowerCase().trim()!==String(ev.title).toLowerCase().trim()); if(coll){ errors.push({ event: ev, error: "venue_time_collision guard time<5m" }); continue; } }catch{}
       try {
         const r = await sql`
           INSERT INTO physi_events (title, venue, event_date, event_time, scope_type, scope_value, status, authority_points, required_points)
@@ -158,9 +161,8 @@ export async function POST(req: Request) {
           RETURNING *`;
         if (r?.[0]) created.push(r[0]);
         else {
-          // already exists — fetch existing
           const ex = await sql`SELECT * FROM physi_events WHERE lower(title)=lower(${ev.title}) AND lower(venue)=lower(${ev.venue}) AND event_date=${ev.date} LIMIT 1`;
-          if (ex?.[0]) created.push({ ...ex[0], _existing: true });
+          if (ex?.[0]) created.push({ ...(ex[0] as any), _fused:true, required_points: Number((ex[0] as any).required_points||10)*2, _x2:true });
         }
       } catch (e) {
         errors.push({ event: ev, error: (e as Error).message });

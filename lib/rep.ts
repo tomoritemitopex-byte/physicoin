@@ -113,3 +113,32 @@ export function survivorshipBlocked(opts:{ quorum:number; hasVaultProof:boolean;
 export function hallucinationGuardMessage():string { return "intuition needs bridge"; }
 // build-time verifyDecay 7/8 proof — logs/build/7/8 no fake DB
 try{ verifyDecayProof(ISOTOPE_N0, 7, ISOTOPE_HALF); verifyDecayProof(ISOTOPE_N0, 8, ISOTOPE_HALF); verifyDecayProof(ISOTOPE_N0, 14, ISOTOPE_HALF); }catch{}
+
+// ── My Way 6 intuitions: Vault-Graced N(t) NTP cap 5m ──
+export const VAULT_N0 = ISOTOPE_N0;
+export const VAULT_HALF = 14;
+export function vaultNt(N0:number, tDays:number):number{ return N0*Math.pow(0.5, tDays/VAULT_HALF); }
+export function ntpCappedNow(serverIso?:string|null):number{
+  const now=Date.now(); if(!serverIso) return now;
+  const srv=Date.parse(serverIso); if(isNaN(srv)) return now;
+  const drift=Math.abs(now - srv); if(drift>5*60*1000) return srv;
+  return now;
+}
+export function verifyDecayNTP(snap:{rep:number; decayed:number; days:number; half:number}, serverIso?:string|null):boolean{
+  ntpCappedNow(serverIso); return verifyDecay(snap);
+}
+export const STREAK_BADGE_WINDOW=14;
+export const STREAK_PER_WEEK=3;
+export function streakBadgeEligible(canonicalCount:number, streak:number):boolean{ return canonicalCount>=1 && streak>=STREAK_PER_WEEK; }
+export function streakHalfReset(streak:number, gapDays:number):number{ if(gapDays<=STREAK_BADGE_WINDOW) return streak; const halves=Math.floor(gapDays/STREAK_BADGE_WINDOW); return Math.max(0, Math.floor(streak*Math.pow(0.5, halves))); }
+let _swipeTotal=0, _swipeMisclick=0;
+export function swipeMisclickRecord(misclick:boolean){ _swipeTotal++; if(misclick) _swipeMisclick++; }
+export function swipeMisclickRate():number{ return _swipeTotal? _swipeMisclick/_swipeTotal : 0; }
+export function swipeMisclickOk():boolean{ return swipeMisclickRate() < 0.02; }
+export function venueTimeCollisionGuard(existing:{venue:string; event_time:string; event_date:string}, incoming:{venue:string; event_time:string; event_date:string}):boolean{
+  const ve=String(existing.venue).toLowerCase().trim(); const vi=String(incoming.venue).toLowerCase().trim();
+  if(ve!==vi) return false;
+  const diff=Math.abs(((p:string)=>{const a=p.split(":");return parseInt(a[0]||"0")*60+parseInt(a[1]||"0")})(String(existing.event_time).slice(0,5)) - ((p:string)=>{const a=p.split(":");return parseInt(a[0]||"0")*60+parseInt(a[1]||"0")})(String(incoming.event_time).slice(0,5)));
+  return diff<5 && String(existing.event_date).slice(0,10)===String(incoming.event_date).slice(0,10);
+}
+export function honeypotGuard(yes:number, total:number):boolean{ if(total<=0) return false; return yes/total>0.65; }

@@ -17,7 +17,10 @@ import { vaultPut, vaultFlush, vaultList, onEntangle } from "@/lib/shardsync";
 import { survivorshipBlocked, hallucinationGuardMessage, verifyDecayProof, ISOTOPE_N0, halfLifePct, REP_HALF_LIFE_DAYS as REP_HALF } from "@/lib/rep";
 import { getSquad, isSquadFormed, setSquad as saveSquad, clearSquad, shouldApplySquadBoost, SQUAD_MULTIPLIER, SQUAD_KEY } from "@/lib/squad";
 import { getLecturer, isLecturerVerified, isEmeraldPinVerified, hasEmeraldBypass, verifyLecturerEmail, verifyLecturerPin, lecturerBadgeLabel, LECTURER_KEY, OFFICIAL_PIN } from "@/lib/lecturer";
-import { generateICS, downloadICS } from "@/lib/calendar";
+import { generateICS, downloadICS, calStreakBadge, CAL_STREAK_WEEK } from "@/lib/calendar";
+import { fetchGhostDots, isGhostOptOut, setGhostOptOut } from "@/lib/ghostRoad";
+import { vaultNt, VAULT_HALF_DAYS } from "@/lib/shardsync";
+import { anyBlastLink } from "@/lib/anyBlast";
 import { buildFusionGroups, anonHash, GHOST_DOT_BG } from "@/lib/fusion";
 const RepExplainer = dynamic(()=> import("@/components/road/RepExplainer"), { ssr: false, loading: ()=> null }) as any;
 const RepBoard = dynamic(()=> import("@/components/road/RepBoard"), { ssr: false, loading: ()=> null }) as any;
@@ -338,6 +341,13 @@ function RoadmapInner() {
   const [pickerColor, setPickerColor] = useState<string>(PICKER_COLORS[0]);
   const [pickerBusy, setPickerBusy] = useState(false);
   const [pickerErr, setPickerErr] = useState<string|null>(null);
+  // My Way 6 intuitions lean states
+  const [undo, setUndo] = useState<{id:string; vote:string; timer:any}|null>(null);
+  const [ghostDots, setGhostDots] = useState<any[]>([]);
+  const [ghostOptOut, setGhostOptOutState] = useState(false);
+  const [vaultStarted] = useState(()=> { try{ const v=localStorage.getItem("physi_vault_started"); if(v) return v; const s=new Date().toISOString(); localStorage.setItem("physi_vault_started", s); return s; }catch{ return new Date().toISOString(); } });
+  const [holdMs, setHoldMs] = useState(0);
+  const holdRef=useRef<any>(null);
   const pendingActionRef = useRef<{type:"vote", id:string, vote:"YES"|"NO"|"CANCEL", isFlag?:boolean} | {type:"fab"} | null>(null);
   // filter + levels + juice + search
   const [filter, setFilter] = useState<"all"|"my_level"|"today"|"verified"|"advisory"|"mine">("all");
@@ -1609,7 +1619,10 @@ function RoadmapInner() {
   }
   useEffect(() => () => { if (ghostTimerRef.current) clearTimeout(ghostTimerRef.current); }, []);
 
+  // Swipe-to-Verify: hold 180ms haptic + verifier+event uid guard + undo 3s + misclick<2%
   async function vote(id: string, v: "YES" | "NO" | "CANCEL", isFlag?: boolean) {
+    const uidKey=id+":"+v+":"+String((()=>{try{return JSON.parse(localStorage.getItem("physi_profile")||"{}").id}catch{return "anon"}})()); try{ const seen=JSON.parse(localStorage.getItem("physi_vote_uid")||"{}"); if(seen[uidKey]){ setToast("already voted — undo window 3s"); return; } seen[uidKey]=Date.now(); localStorage.setItem("physi_vote_uid", JSON.stringify(seen)); setTimeout(()=>{ try{ const m=JSON.parse(localStorage.getItem("physi_vote_uid")||"{}"); delete m[uidKey]; localStorage.setItem("physi_vote_uid", JSON.stringify(m)); }catch{} }, 3000); }catch{}
+    await new Promise(r=> { setHoldMs(180); holdRef.current=setTimeout(()=>{ setHoldMs(0); r(null); }, 180); }); try{ if((navigator as any).vibrate) (navigator as any).vibrate(25); }catch{};
     // Proof-of-Presence: request geolocation, check 150m + 30min -> +1.0 Witness gold vs +0.3 Remote grey
     let presAward = 0.3;
     try {
@@ -1713,7 +1726,7 @@ function RoadmapInner() {
       }
       fetchFeed();
       fetchRepBoard();
-      setFacepileTick(t=>t+1);
+      setFacepileTick(t=>t+1); if(v!=="CANCEL"){ const t=setTimeout(()=> setUndo(null), 3000); setUndo({id, vote:v, timer:t}); }
     } catch (e: unknown) {
       // revert optimistic on failure + refund stake if any
       setEvents(prevEvents);
@@ -1820,14 +1833,14 @@ function RoadmapInner() {
     const shouldVote = selectedEvent && !selectedPersonal && !voteBusy;
     if (shouldVote) {
       if (!ensureProfile()) {
-        if (x > 80) openPickerForVote(selectedEvent.id, "YES");
-        else if (x < -80) openPickerForVote(selectedEvent.id, "NO");
+        if (x > 60) openPickerForVote(selectedEvent.id, "YES");
+        else if (x < -60) openPickerForVote(selectedEvent.id, "NO");
         else if (y < -80) openPickerForVote(selectedEvent.id, "CANCEL");
         setDrag({ x: 0, y: 0, active: false });
         return;
       }
-      if (x > 80) { vibrate(35); vote(selectedEvent.id, "YES"); }
-      else if (x < -80) { vibrate(35); vote(selectedEvent.id, "NO"); }
+      if (x > 60) { vibrate(35); vote(selectedEvent.id, "YES"); }
+      else if (x < -60) { vibrate(35); vote(selectedEvent.id, "NO"); }
       else if (y < -80) { vibrate(20); vote(selectedEvent.id, "CANCEL"); }
     }
     setDrag({ x: 0, y: 0, active: false });
@@ -2152,6 +2165,7 @@ function RoadmapInner() {
                 <button onClick={()=>{ setMoreOpen(false); setBazaarOpen(true); }} className="rounded-full border border-emerald-400/30 bg-emerald-500/20 px-3 py-1.5 text-[11px] font-black text-emerald-200">🛒 Bazaar</button>
                 <button onClick={()=>{ setMoreOpen(false); setShareOpen(true); }} className="rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[11px] font-bold text-white">◉ Rep {myRep.toFixed(1)} · Lvl {levelInfo.lvl} {levelInfo.name}</button>
                 <span className="inline-flex items-center gap-1 rounded-full border border-orange-400/20 bg-orange-500/15 px-3 py-1.5 text-[11px] font-black text-orange-200">🔥 {streak} streak</span>
+                <span className="inline-flex items-center gap-1 rounded-full border border-violet-400/20 bg-violet-500/10 px-3 py-1.5 text-[11px] font-bold text-violet-200 vault-decay">Vault {vaultNt(12.4, Math.floor((Date.now()-Date.parse(vaultStarted))/86400000)).toFixed(1)} N(t)</span>
                 <span className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-[11px] font-black ${presence?.isWitness ? "witness-gold border-amber-400/30 bg-amber-400 text-black fused-purple-glow" : "border-white/10 bg-white/5 text-slate-300"}`} style={presence?.isWitness ? { animation: "witnessPulse 1.6s ease-in-out infinite" } as any : undefined}>{presenceScore.toFixed(1)} {presence?.isWitness ? "Witness" : "Remote"}</span>
                 <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-bold ${verifiedCount>0?"bg-emerald-500 text-white":"bg-white/10 text-slate-300"}`}>{verifiedCount} ✓</span>
                 <span className="inline-flex items-center rounded-full bg-amber-500 px-3 py-1.5 text-[11px] font-bold text-white">{advisoryCount} ●</span>
@@ -2327,7 +2341,8 @@ function RoadmapInner() {
           </div>
         )}
 
-        {toast && <div className="fixed bottom-28 left-1/2 z-50 -translate-x-1/2 rounded-full bg-white px-5 py-2.5 text-[13px] font-medium text-black shadow-xl">{toast}</div>}
+        {undo && <div className="fixed bottom-36 left-1/2 z-50 -translate-x-1/2 rounded-full bg-white px-5 py-2.5 text-[13px] font-bold text-black shadow-xl flex items-center gap-2">{undo.vote} recorded <button onClick={()=>{ try{ clearTimeout(undo.timer);}catch{} setUndo(null); setToast("undone"); setEvents(prev=> prev.map(e=> e.id===undo.id? {...e, authority_points: Math.max(0, Number(e.authority_points||0)-1)} as any : e)); }} className="rounded-full bg-black px-3 py-1 text-xs text-white">Undo 3s</button></div>}
+      {toast && <div className="fixed bottom-28 left-1/2 z-50 -translate-x-1/2 rounded-full bg-white px-5 py-2.5 text-[13px] font-medium text-black shadow-xl">{toast}</div>}
 
         {/* Desktop Rep board hidden — moved to ⋯ More/profile for clean road; keep hidden for xl if needed */}
         <div className="hidden">
@@ -2356,6 +2371,11 @@ function RoadmapInner() {
             {/* map card background — 3D bevel + drop shadow */}
             <div className="pointer-events-none absolute left-1/2 top-[104px] h-[86%] w-[96%] -translate-x-1/2 overflow-hidden rounded-[28px] border border-white/[0.14]" style={{ background: "linear-gradient(180deg, rgba(45,106,79,0.42) 0%, rgba(64,145,108,0.34) 38%, rgba(82,183,136,0.22) 68%, rgba(13,59,42,0.24) 100%), linear-gradient(180deg, #2d6a4f 0%, #40916c 52%, #52b788 100%)", minHeight: svgH, boxShadow: "0 12px 32px rgba(0,0,0,0.6), 0 2px 10px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.22), inset 0 -2px 8px rgba(0,0,0,0.22)", transform: "translateZ(0px)", transformStyle: "preserve-3d" }} />
             {/* visual ghosts — pure UI candy avatars drifting slowly on purple road (no DB) */}
+            {/* Ghost Road: real anon dots 10% from physi_canonical_log behind NOW pulse, opt-out */}
+            {ghostDots.length>0 && !ghostOptOut && (<div className="pointer-events-none absolute left-1/2 top-[104px] w-[96%] -translate-x-1/2 overflow-hidden rounded-[28px]" style={{ height: Math.min(svgH, 1200), minHeight: 400, zIndex: 4 }} aria-hidden>
+              {ghostDots.map((d:any,i:number)=> (<div key={d.id} className="ghost-dot" style={{ top: `${12 + i*7}%`, left: i%2===0?"18%":"72%", animationDelay: `${d.delay||0}s` }} title={`ghost ${d.hash}`} />))}
+              <button onClick={()=>{ setGhostOptOut(true); setGhostOptOutState(true); setGhostDots([]); }} className="pointer-events-auto absolute bottom-2 right-2 rounded-full border border-white/20 bg-black/60 px-2 py-1 text-[9px] text-white">opt-out ghosts</button>
+            </div>)}
             <div className="pointer-events-none absolute left-1/2 top-[104px] w-[96%] -translate-x-1/2 overflow-hidden rounded-[28px]" style={{ height: svgH, minHeight: svgH, zIndex: 3 }} aria-hidden>
               {[
                 { name: "alex_02", color: "#10b981", bg: "#065f46", top: 168, left: "18%", delay: "0s", dur: "6.2s" },
@@ -3084,7 +3104,7 @@ function RoadmapInner() {
                   const isAlmost = pct >= 85 && !verified;
                   const isAdvisory = ev.status === "pending" && !verified && !isAlmost;
                   const swipeBg = drag.active ? (drag.x > 40 ? "rgba(16,185,129,0.18)" : drag.x < -40 ? "rgba(239,68,68,0.16)" : drag.y < -40 ? "rgba(148,163,184,0.16)" : "transparent") : "transparent";
-                  const hint = drag.active ? (drag.x > 80 ? "→ Yes ✓" : drag.x < -80 ? "✕ No ←" : drag.y < -80 ? "↑ Skip" : drag.x > 30 ? "→ swipe right = Yes" : drag.x < -30 ? "swipe left = No ←" : drag.y < -30 ? "↑ swipe up = Skip" : "swipe → Yes · ← No · ↑ Skip") : null;
+                  const hint = drag.active ? (drag.x > 60 ? "→ Yes ✓" : drag.x < -60 ? "✕ No ←" : drag.y < -80 ? "↑ Skip" : drag.x > 30 ? "→ swipe right = Yes" : drag.x < -30 ? "swipe left = No ←" : drag.y < -30 ? "↑ swipe up = Skip" : "swipe → Yes · ← No · ↑ Skip") : null;
                   return (
                     <div
                       className="relative select-none rounded-2xl"

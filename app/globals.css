@@ -285,3 +285,15 @@ p { hanging-punctuation: first; }
   animation: guardPulse 2s ease-in-out infinite;
 }
 @keyframes guardPulse { 0%,100%{ box-shadow:0 0 0 rgba(251,191,36,0)} 50%{ box-shadow:0 0 18px rgba(251,191,36,0.28)}}
+
+/* ── My Way 6 intuitions: swipe 280ms spring 60px rail glass haptic hold 180ms undo 3s + ghost + vault + streak */
+.swipe-spring{transition:transform 280ms cubic-bezier(.34,1.56,.64,1), opacity 280ms ease}
+.glass-rail-60{backdrop-filter:blur(16px) saturate(1.22); -webkit-backdrop-filter:blur(16px) saturate(1.22); background:rgba(13,59,42,0.70); border:1px solid rgba(255,255,255,0.10)}
+.hold-180:active{transition:background 180ms ease}
+.swipe-undo{animation: swipeUndo 3s linear forwards}
+@keyframes swipeUndo{0%{opacity:1}85%{opacity:1}100%{opacity:0}}
+.ghost-dot{position:absolute;width:10px;height:10px;border-radius:9999px;background:#7F3A;border:1px solid rgba(255,255,255,0.35);opacity:0.52;animation:ghostGlide 3.2s ease-in-out infinite}
+@keyframes ghostGlide{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+.vault-decay{font-variant-numeric:tabular-nums}
+.calendar-streak-badge{animation: streakPulse 1.6s ease-in-out infinite}
+@keyframes streakPulse{0%,100%{box-shadow:0 0 0 rgba(16,185,129,0)}50%{box-shadow:0 0 12px rgba(16,185,129,0.55)}}
