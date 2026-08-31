@@ -513,12 +513,13 @@ function RoadmapInner() {
     return () => { clearTimeout(fallback); clearInterval(iv); };
   }, [fetchFeed, fetchStats, fetchRepBoard]);
 
-  // parallax on scroll + keep myRep synced with repBoard you entry
+  // infinite parallax 3 layers: back mountains 0.3x mid lollipops 0.6x front road 1.0x translateY scroll
   const levelInfo = getLevelInfo(myRep);
   useEffect(()=>{
     const el = scrollRef.current;
     if(!el) return;
-    function onScroll(){ setParallaxY(el!.scrollTop * 0.08); }
+    function onScroll(){ setParallaxY(el!.scrollTop); setScrollPos(el!.scrollTop); }
+    onScroll();
     el.addEventListener("scroll", onScroll, { passive:true });
     return ()=> el.removeEventListener("scroll", onScroll);
   }, [scrollRef]);
@@ -1088,21 +1089,14 @@ function RoadmapInner() {
     return ()=>{ cancel=true; clearInterval(iv); if(typeof window!=="undefined") window.removeEventListener("physi-mine-seen", onSeen as any); };
   }, [myUserId, mineHasNew]);
 
-  // --- Virtualize: track scrollTop + viewport height (400px buffer)
+  // Virtualize: viewport height (scrollTop tracked by parallax handler above)
   useEffect(()=>{
-    const el = scrollRef.current;
-    if(!el) return;
-    function onScroll(){
-      setScrollPos(el!.scrollTop);
-    }
     function onResize(){
       setViewH(typeof window!=="undefined" ? window.innerHeight : 800);
-      if(el) setScrollPos(el.scrollTop);
     }
     onResize();
-    el.addEventListener("scroll", onScroll, {passive:true});
     window.addEventListener("resize", onResize);
-    return ()=>{ el.removeEventListener("scroll", onScroll); window.removeEventListener("resize", onResize); };
+    return ()=>{ window.removeEventListener("resize", onResize); };
   }, [scrollRef]);
 
   // combined road items chronologically sorted
@@ -1485,7 +1479,7 @@ function RoadmapInner() {
       const rp = Number(f.required_points ?? 0);
       const pct = rp>0 ? Math.min(100, Math.round((ap/rp)*100)) : 0;
       if (ap >= rp) return { key: "canonical", label: `FUSED ✓ x2 ${f.events.length}`, color: "#10b981", outline: "#10b981", pct } as const;
-      return { key: "fused", label: `FUSED x2 · ${f.events.length}→1 · double quorum ${ap}/${rp}`, color: "#8b5cf6", outline: "#a78bfa", pct } as const;
+      return { key: "fused", label: `FUSED x2 · ${f.events.length}→1 · double quorum ${ap}/${rp}`, color: "#8b5cf6", outline: "#a78bfa", pct, glow: true } as const;
     }
     if ((item as any).kind === "fork") {
       // fork state derived from first event winner etc.
@@ -2081,13 +2075,23 @@ function RoadmapInner() {
     <div className={`${fredoka.className} ${fredoka.variable} relative -mx-4 -mt-5 w-[100vw] max-w-[100vw] sm:-mx-6 lg:-mx-8`}>
       <style>{`@keyframes canonicalPop{0%{transform:scale(0.72)}50%{transform:scale(1.22)}100%{transform:scale(1)}} @keyframes sevPulse{0%,100%{transform:scale(1);filter:brightness(1)}50%{transform:scale(1.08);filter:brightness(1.25)}} @keyframes tickPulse{0%,100%{opacity:1}50%{opacity:.55}} @keyframes roadShimmer{0%{stroke-dashoffset:0}100%{stroke-dashoffset:28}} @keyframes scaleIn{0%{transform:scale(0.35);opacity:0}60%{transform:scale(1.14);opacity:1}100%{transform:scale(1);opacity:1}} @keyframes nowPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.06);opacity:.94}} @keyframes ghostDrift{0%{transform:translateY(0) translateX(0)}25%{transform:translateY(-10px) translateX(7px)}50%{transform:translateY(-16px) translateX(-5px)}75%{transform:translateY(-8px) translateX(4px)}100%{transform:translateY(0) translateX(0)}} @keyframes ghostPulse{0%,100%{opacity:.92}50%{opacity:.56}} @keyframes candyPop{0%{transform:translate(-50%,-10px) scale(0.5);opacity:0}18%{transform:translate(-50%,-18px) scale(1.18);opacity:1}72%{transform:translate(-50%,-42px) scale(1);opacity:1}100%{transform:translate(-50%,-64px) scale(0.9);opacity:0}} @keyframes pulseSlideIn{0%{transform:translate(-50%,-18px);opacity:0}12%{transform:translate(-50%,0);opacity:1}88%{transform:translate(-50%,0);opacity:1}100%{transform:translate(-50%,-18px);opacity:0}} @keyframes confettiFall{0%{transform:translateY(-10vh) rotate(0deg);opacity:1}100%{transform:translateY(110vh) rotate(720deg);opacity:0}} @keyframes skeletonPulse{0%,100%{opacity:0.55}50%{opacity:1}} @keyframes questFill{0%{width:0}100%{width:var(--fill)}} @keyframes forkMerge{0%{transform:translateX(0)}100%{transform:translateX(0)}} @keyframes forkWinnerPulse{0%,100%{filter:drop-shadow(0 0 0 rgba(16,185,129,0))}50%{filter:drop-shadow(0 0 8px rgba(16,185,129,0.9))}} @keyframes fabPulse{0%{transform:scale(1);box-shadow:0 8px 24px rgba(139,92,246,0.5),0 4px 12px rgba(0,0,0,0.3)}50%{transform:scale(1.08);box-shadow:0 12px 36px rgba(139,92,246,0.75),0 6px 18px rgba(0,0,0,0.4)}100%{transform:scale(1);box-shadow:0 8px 24px rgba(139,92,246,0.5),0 4px 12px rgba(0,0,0,0.3)}} @keyframes pulseRing{0%{transform:scale(0.8);opacity:0.9}70%{transform:scale(1.55);opacity:0}100%{transform:scale(1.7);opacity:0}} @keyframes panicDoublePulse{0%{transform:scale(0.85);opacity:0.95}25%{transform:scale(1.35);opacity:0.7}50%{transform:scale(0.9);opacity:0.95}75%{transform:scale(1.45);opacity:0}100%{transform:scale(1.6);opacity:0}} @keyframes panicGlow{0%,100%{filter:drop-shadow(0 0 0 rgba(239,68,68,0))}50%{filter:drop-shadow(0 0 14px rgba(239,68,68,0.9))}} .road-3d-wrap{perspective:800px;perspective-origin:50% 28%} .road-3d-inner{transform-style:preserve-3d;transform:perspective(800px) rotateX(4deg);transform-origin:center top;will-change:transform;clip-path:ellipse(96% 88% at 50% 46%);border-radius:28px} .road-3d-inner::before{content:\"\";position:absolute;inset:0;pointer-events:none;border-radius:28px;box-shadow:inset 0 10px 22px rgba(0,0,0,0.16),inset 0 -8px 16px rgba(0,0,0,0.12)} .node-3d{transform:translateZ(6px);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.55),inset 0 -2px 4px rgba(0,0,0,0.14),0 8px 20px rgba(0,0,0,0.42),0 1px 6px rgba(0,0,0,0.32);transition:transform 220ms cubic-bezier(.2,.8,.3,1),box-shadow 220ms ease} .node-3d:hover{transform:translateZ(12px) scale(1.02);box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.65),inset 0 -3px 6px rgba(0,0,0,0.16),0 12px 28px rgba(0,0,0,0.5),0 4px 12px rgba(0,0,0,0.36)}`}</style>
       <div className="relative min-h-[calc(100vh-64px)] w-full overflow-hidden xl:pr-[276px]" style={{ background: "linear-gradient(180deg, #0d3b2a 0%, #143d2e 42%, #1a5c3a 100%)" }}>
-        {/* ambient - parallax */}
-        <div className="pointer-events-none absolute inset-0" style={{ transform: `translateY(${parallaxY}px)`, willChange:"transform" }}>
-          <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(13,59,42,0.85) 0%, rgba(26,92,58,0.55) 55%, rgba(45,106,79,0.72) 100%)" }} />
-          <div className="absolute -top-[8vh] left-1/2 h-[58vh] w-[120vw] -translate-x-1/2 rounded-[100%] opacity-[0.22]" style={{ background: "radial-gradient(ellipse at center, rgba(82,183,136,0.28) 0%, rgba(64,145,108,0.20) 42%, rgba(45,106,79,0.16) 72%, transparent 75%)" }} />
-          <div className="absolute top-[18vh] left-[-6%] h-[46vh] w-[46vh] rounded-full opacity-[0.16] blur-[40px]" style={{ background: "radial-gradient(circle, rgba(82,183,136,0.95), transparent 70%)" }} />
-          <div className="absolute top-[52vh] right-[-8%] h-[50vh] w-[50vh] rounded-full opacity-[0.18] blur-[42px]" style={{ background: "radial-gradient(circle, rgba(45,106,79,0.9), transparent 70%)" }} />
-          <div className="absolute bottom-[18vh] left-1/2 h-[38vh] w-[90vw] -translate-x-1/2 opacity-[0.12] blur-[30px]" style={{ background: "radial-gradient(ellipse, rgba(64,145,108,0.55), transparent 72%)" }} />
+        {/* infinite parallax 3 layers: back mountains 0.3x mid lollipops 0.6x front road 1.0x translateY scroll */}
+        <div className="pointer-events-none absolute inset-0 overflow-hidden">
+          {/* back mountains 0.3x */}
+          <div className="parallax-layer absolute inset-0" style={{ transform: `translateY(${parallaxY * 0.3}px)` }}>
+            <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(13,59,42,0.85) 0%, rgba(26,92,58,0.55) 55%, rgba(45,106,79,0.72) 100%)" }} />
+            <div className="absolute -top-[8vh] left-1/2 h-[58vh] w-[120vw] -translate-x-1/2 rounded-[100%] opacity-[0.22]" style={{ background: "radial-gradient(ellipse at center, rgba(82,183,136,0.28) 0%, rgba(64,145,108,0.20) 42%, rgba(45,106,79,0.16) 72%, transparent 75%)" }} />
+            <div className="absolute top-[18vh] left-[-6%] h-[46vh] w-[46vh] rounded-full opacity-[0.16] blur-[40px]" style={{ background: "radial-gradient(circle, rgba(82,183,136,0.95), transparent 70%)" }} />
+            <div className="absolute top-[52vh] right-[-8%] h-[50vh] w-[50vh] rounded-full opacity-[0.18] blur-[42px]" style={{ background: "radial-gradient(circle, rgba(45,106,79,0.9), transparent 70%)" }} />
+          </div>
+          {/* mid lollipops glow 0.6x */}
+          <div className="parallax-layer absolute inset-0" style={{ transform: `translateY(${parallaxY * 0.6}px)` }}>
+            <div className="absolute bottom-[18vh] left-1/2 h-[38vh] w-[90vw] -translate-x-1/2 opacity-[0.12] blur-[30px]" style={{ background: "radial-gradient(ellipse, rgba(64,145,108,0.55), transparent 72%)" }} />
+          </div>
+          {/* front road depth 1.0x - subtle road-tint veil that scrolls with content */}
+          <div className="parallax-layer absolute inset-0" style={{ transform: `translateY(${parallaxY * 1.0}px)`, opacity: 0.06 }}>
+            <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, transparent 30%, rgba(139,92,246,0.08) 70%, transparent 100%)" }} />
+          </div>
         </div>
 
         {/* cross-school mirror badge — ?school=FUTO loads school.json / DATABASE_URLS shard */}
@@ -2099,7 +2103,7 @@ function RoadmapInner() {
         {/* top bar — decluttered: PHYSI · WAT · bell only */}
         <div className="pointer-events-none absolute left-0 right-0 top-0 z-20 flex justify-center px-3 pt-3 sm:px-6">
           <div className="pointer-events-auto flex w-full max-w-[900px] items-center justify-between gap-2">
-            <div className="flex items-center gap-2 rounded-full border border-white/[0.09] bg-black/70 px-4 py-2 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.6)]">
+            <div className="liquid-glass glass-bevel flex items-center gap-2 rounded-full border border-white/[0.14] px-4 py-2 backdrop-blur-[16px] shadow-[0_8px_32px_rgba(0,0,0,0.28),0_0_16px_rgba(139,92,246,0.14),inset_0_1px_0_rgba(255,255,255,0.18)] backdrop-blur-[16px]" style={{ background: "rgba(255,255,255,0.08)", backdropFilter: "blur(16px) saturate(1.22)" } as any} >
               <span className={`${fredoka.className} text-[13px] font-black tracking-[0.12em] text-white`}>PHYSI</span>
               <span className="h-3 w-px bg-white/15" />
               <span className="flex items-center gap-1.5 font-mono text-[11px] font-bold text-white" style={{ fontVariantNumeric:"tabular-nums" }}>
@@ -2150,7 +2154,7 @@ function RoadmapInner() {
         {/* ⋯ More drawer — collapses Squad/Lecturer/Bazaar/Oracle + Rep/Streak */}
         {moreOpen && (
           <div className="pointer-events-none absolute left-1/2 top-[54px] z-30 flex w-full max-w-[900px] -translate-x-1/2 justify-center px-3 sm:px-6">
-            <div className="pointer-events-auto w-full max-w-[560px] rounded-2xl border border-white/10 bg-black/85 p-3 backdrop-blur-xl shadow-[0_16px_40px_rgba(0,0,0,0.6)]">
+            <div className="pointer-events-auto w-full max-w-[560px] rounded-2xl border border-white/10 bg-white/[0.08] 85 p-3 backdrop-blur-[16px] shadow-[0_16px_40px_rgba(0,0,0,0.6)]">
               <div className="flex items-center justify-between">
                 <p className="font-mono text-[11px] font-bold tracking-wide text-white">More</p>
                 <button onClick={()=> setMoreOpen(false)} className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-bold text-white">✕</button>
@@ -2161,7 +2165,7 @@ function RoadmapInner() {
                 <button onClick={()=>{ setMoreOpen(false); setBazaarOpen(true); }} className="rounded-full border border-emerald-400/30 bg-emerald-500/20 px-3 py-1.5 text-[11px] font-black text-emerald-200">🛒 Bazaar</button>
                 <button onClick={()=>{ setMoreOpen(false); setShareOpen(true); }} className="rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[11px] font-bold text-white">◉ Rep {myRep.toFixed(1)} · Lvl {levelInfo.lvl} {levelInfo.name}</button>
                 <span className="inline-flex items-center gap-1 rounded-full border border-orange-400/20 bg-orange-500/15 px-3 py-1.5 text-[11px] font-black text-orange-200">🔥 {streak} streak</span>
-                <span className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-[11px] font-black ${presence?.isWitness ? "border-amber-400/30 bg-amber-400 text-black" : "border-white/10 bg-white/5 text-slate-300"}`}>{presenceScore.toFixed(1)} {presence?.isWitness ? "Witness" : "Remote"}</span>
+                <span className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-[11px] font-black ${presence?.isWitness ? "witness-gold border-amber-400/30 bg-amber-400 text-black fused-purple-glow" : "border-white/10 bg-white/5 text-slate-300"}`} style={presence?.isWitness ? { animation: "witnessPulse 1.6s ease-in-out infinite" } as any : undefined}>{presenceScore.toFixed(1)} {presence?.isWitness ? "Witness" : "Remote"}</span>
                 <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-bold ${verifiedCount>0?"bg-emerald-500 text-white":"bg-white/10 text-slate-300"}`}>{verifiedCount} ✓</span>
                 <span className="inline-flex items-center rounded-full bg-amber-500 px-3 py-1.5 text-[11px] font-bold text-white">{advisoryCount} ●</span>
                 <button onClick={()=>{ navigator.clipboard?.writeText(window.location.href); setToast("link copied"); }} className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white">↗ Share</button>
@@ -2193,7 +2197,7 @@ function RoadmapInner() {
         </p>
         {/* Quest bar - 3 dots with progress fill + daily quest ring */}
         <div className="pointer-events-none absolute left-1/2 top-[116px] z-20 flex w-full max-w-[560px] -translate-x-1/2 justify-center px-3 sm:top-[108px] sm:px-6">
-          <div className="pointer-events-auto flex w-full items-center gap-2 rounded-full border border-white/10 bg-black/75 px-3 py-2 backdrop-blur-xl shadow-[0_8px_24px_rgba(0,0,0,0.5)] sm:px-4">
+          <div className="pointer-events-auto flex w-full items-center gap-2 rounded-full border border-white/10 bg-white/[0.08] 75 px-3 py-2 backdrop-blur-[16px] shadow-[0_8px_24px_rgba(0,0,0,0.5)] sm:px-4">
             <span className={`hidden ${fredoka.className} text-[14px] font-black tracking-tight text-amber-300 sm:inline`}>QUEST</span>
             <div className="relative flex flex-1 items-center justify-between gap-1">
               <div className="absolute left-[14px] right-[14px] top-1/2 h-[4px] -translate-y-1/2 rounded-full bg-white/10" />
@@ -2236,7 +2240,7 @@ function RoadmapInner() {
         </div>
         {/* mobile daily quest label below quest bar */}
         <div className="pointer-events-none absolute left-1/2 top-[162px] z-20 flex w-full max-w-[560px] -translate-x-1/2 justify-center px-3 sm:hidden">
-          <span className={`rounded-full border border-amber-400/20 bg-black/75 px-3 py-1 ${fredoka.className} text-[14px] font-black tracking-tight text-amber-200 backdrop-blur`}>Verify 3 today → +5 bonus · {dailyCount}/3 {dailyBonusDone ? "✓ done" : ""}</span>
+          <span className={`rounded-full border border-amber-400/20 bg-white/[0.08] px-3 py-1 ${fredoka.className} text-[14px] font-black tracking-tight text-amber-200 backdrop-blur`}>Verify 3 today → +5 bonus · {dailyCount}/3 {dailyBonusDone ? "✓ done" : ""}</span>
         </div>
         {/* unified Filters ▾ drawer at 126px — hides Filters+Search behind single toggle */}
         <div className="pointer-events-none absolute left-1/2 top-[126px] z-20 flex w-full max-w-[560px] -translate-x-1/2 justify-center px-3">
@@ -2244,12 +2248,12 @@ function RoadmapInner() {
         </div>
         {filtersOpen && (
           <div className="pointer-events-none absolute left-1/2 top-[162px] z-20 flex w-full max-w-[560px] -translate-x-1/2 flex-col gap-2 px-3">
-            <div className="pointer-events-auto flex items-center justify-center gap-1 rounded-full border border-white/10 bg-black/70 px-1.5 py-1 backdrop-blur-xl">
+            <div className="pointer-events-auto flex items-center justify-center gap-1 rounded-full liquid-glass glass-bevel border border-white/10 bg-white/[0.08] px-1.5 py-1 backdrop-blur-[16px]">
               <button onClick={()=> setViewMode("map")} className={`rounded-full px-3 py-1.5 font-mono text-[11px] font-bold transition ${viewMode==="map" ? "bg-white text-black shadow" : "bg-white/10 text-slate-300"}`}>⬢ Map</button>
               <button onClick={()=> setViewMode("list")} className={`rounded-full px-3 py-1.5 font-mono text-[11px] font-bold transition ${viewMode==="list" ? "bg-white text-black shadow" : "bg-white/10 text-slate-300"}`}>▦ List</button>
               <span className="ml-1 font-mono text-[10px] text-slate-400">{filteredRoadItems.length} items</span>
             </div>
-            <div className="pointer-events-auto flex items-center gap-1.5 overflow-x-auto rounded-full border border-white/10 bg-black/70 px-2 py-1.5 backdrop-blur-xl scrollbar-none">
+            <div className="pointer-events-auto flex items-center gap-1.5 overflow-x-auto rounded-full liquid-glass glass-bevel border border-white/10 bg-white/[0.08] px-2 py-1.5 backdrop-blur-[16px] scrollbar-none">
               {([
                 { k: "all", label: "All" },
                 { k: "mine", label: "Mine" },
@@ -2398,27 +2402,33 @@ function RoadmapInner() {
                 </div>
               ))}
             </div>
-          {/* trees/mountains */}
-          <svg viewBox={`0 0 520 ${svgH}`} className="pointer-events-none absolute left-1/2 top-[104px] h-[86%] w-[96%] -translate-x-1/2 rounded-[28px] overflow-hidden" style={{ height: svgH, minHeight: svgH }}>
-            <path d="M -10 210 L 90 78 L 170 175 L 250 54 L 340 168 L 430 92 L 560 210 Z" fill="rgba(13,59,42,0.32)" stroke="rgba(255,255,255,0.10)" strokeWidth={1} />
-            <path d="M -10 240 L 70 150 L 145 210 L 250 120 L 370 210 L 470 155 L 560 240 Z" fill="rgba(26,92,58,0.28)" />
-            {[42, 92, 410, 462].map((x, i) => (
-              <g key={i} opacity={0.38}>
-                <rect x={x - 3.5} y={460} width={7} height={18} rx={3} fill="#5a3e1b" />
-                <circle cx={x} cy={436} r={20} fill="#52b788" stroke="rgba(255,255,255,0.16)" strokeWidth={1.4} />
-                <circle cx={x} cy={436} r={13} fill="rgba(255,255,255,0.08)" />
-                <circle cx={x + 6} cy={428} r={3.4} fill="#fbbf24" stroke="rgba(255,255,255,0.9)" strokeWidth={0.8} />
+          {/* infinite parallax inner layers inside scroll: back mountains 0.3x / mid lollipops 0.6x */}
+          <div className="parallax-layer pointer-events-none absolute left-1/2 top-[104px] w-[96%] -translate-x-1/2 overflow-hidden rounded-[28px]" style={{ height: svgH, minHeight: svgH, transform: `translateY(${parallaxY * 0.3}px)` }} aria-hidden>
+            <svg viewBox={`0 0 520 ${svgH}`} className="absolute inset-0 h-full w-full">
+              <path d="M -10 210 L 90 78 L 170 175 L 250 54 L 340 168 L 430 92 L 560 210 Z" fill="rgba(13,59,42,0.32)" stroke="rgba(255,255,255,0.10)" strokeWidth={1} />
+              <path d="M -10 240 L 70 150 L 145 210 L 250 120 L 370 210 L 470 155 L 560 240 Z" fill="rgba(26,92,58,0.28)" />
+              <g opacity={0.32}>
+                <ellipse cx={86} cy={310} rx={22} ry={13} fill="#6b8f71" />
+                <ellipse cx={92} cy={306} rx={10} ry={6} fill="#a7c4a0" opacity={0.7} />
+                <ellipse cx={438} cy={520} rx={20} ry={12} fill="#7a9e7e" />
+                <ellipse cx={430} cy={516} rx={8} ry={5} fill="#d8f3dc" opacity={0.85} />
+                <ellipse cx={78} cy={680} rx={18} ry={10} fill="#5a7a5a" />
+                <path d="M 430 710 L 452 728 L 418 735 Z" fill="#b7e4c7" opacity={0.9} />
               </g>
-            ))}
-            <g opacity={0.32}>
-              <ellipse cx={86} cy={310} rx={22} ry={13} fill="#6b8f71" />
-              <ellipse cx={92} cy={306} rx={10} ry={6} fill="#a7c4a0" opacity={0.7} />
-              <ellipse cx={438} cy={520} rx={20} ry={12} fill="#7a9e7e" />
-              <ellipse cx={430} cy={516} rx={8} ry={5} fill="#d8f3dc" opacity={0.85} />
-              <ellipse cx={78} cy={680} rx={18} ry={10} fill="#5a7a5a" />
-              <path d="M 430 710 L 452 728 L 418 735 Z" fill="#b7e4c7" opacity={0.9} />
-            </g>
-          </svg>
+            </svg>
+          </div>
+          <div className="parallax-layer pointer-events-none absolute left-1/2 top-[104px] w-[96%] -translate-x-1/2 overflow-hidden rounded-[28px]" style={{ height: svgH, minHeight: svgH, transform: `translateY(${parallaxY * 0.6}px)` }} aria-hidden>
+            <svg viewBox={`0 0 520 ${svgH}`} className="absolute inset-0 h-full w-full">
+              {[42, 92, 410, 462].map((x, i) => (
+                <g key={i} opacity={0.38}>
+                  <rect x={x - 3.5} y={460} width={7} height={18} rx={3} fill="#5a3e1b" />
+                  <circle cx={x} cy={436} r={20} fill="#52b788" stroke="rgba(255,255,255,0.16)" strokeWidth={1.4} />
+                  <circle cx={x} cy={436} r={13} fill="rgba(255,255,255,0.08)" />
+                  <circle cx={x + 6} cy={428} r={3.4} fill="#fbbf24" stroke="rgba(255,255,255,0.9)" strokeWidth={0.8} />
+                </g>
+              ))}
+            </svg>
+          </div>
 
           <svg viewBox={`0 0 520 ${svgH}`} className="relative h-auto w-full shrink-0" style={{ minHeight: Math.min(880, svgH), height: svgH }} role="img" aria-label="endless time road">
             <defs>
@@ -2628,7 +2638,8 @@ function RoadmapInner() {
                       <g key={item.id} id={`node-${basePredId}`} opacity={0.35} style={{ cursor:"pointer" }} onClick={()=>{ setSelectedId(basePredId); setSheetOpen(true); setToast("predicted ghost — 7 days early dotted 0.35"); }}>
                         <circle cx={p.x} cy={p.y+6} r={30} fill="black" opacity={0.22} />
                         <g style={{ transformOrigin:`${p.x}px ${p.y}px`, transform:"translateZ(8px)" } as any}>
-                          <circle cx={p.x} cy={p.y} r={28} fill="rgba(255,255,255,0.92)" stroke="#8b5cf6" strokeWidth={2.8} strokeDasharray="6 4" opacity={0.95} />
+                          <circle cx={p.x} cy={p.y} r={28} fill="rgba(255,255,255,0.92)" stroke="#8b5cf6" strokeWidth={2.8} strokeDasharray="6 4" opacity={0.95} style={{ filter: "drop-shadow(0 0 12px rgba(139,92,246,0.55))" } as any} />
+                          <circle cx={p.x} cy={p.y} r={24} fill="none" stroke="rgba(255,255,255,0.0)" strokeWidth={6} className="quantum-shimmer" style={{ clipPath: `circle(28px at ${p.x}px ${p.y}px)` } as any} opacity={0.9} />
                           <circle cx={p.x} cy={p.y} r={16} fill="rgba(245,243,255,0.9)" strokeDasharray="4 3" />
                           <text x={p.x} y={p.y+5} textAnchor="middle" fontSize={11} fontWeight={800} fill="#6d28d9" style={{ fontFamily: fredoka.style.fontFamily }}>👁</text>
                         </g>
@@ -2741,6 +2752,7 @@ function RoadmapInner() {
                           <circle cx={p.x} cy={p.y} r={nodeR+14} fill="none" stroke="#ef4444" strokeWidth={3.2} opacity={0.95} style={{ animation:"panicDoublePulse 1.1s ease-out infinite" }} />
                           <circle cx={p.x} cy={p.y} r={nodeR+24} fill="none" stroke="#f59e0b" strokeWidth={2.4} opacity={0.85} style={{ animation:"panicDoublePulse 1.1s ease-out infinite 0.22s" }} />
                           <circle cx={p.x} cy={p.y} r={nodeR+6} fill="none" stroke="#ef4444" strokeWidth={2} opacity={0.7} style={{ animation:"panicGlow 0.9s ease-in-out infinite" }} />
+                          <circle cx={p.x} cy={p.y} r={nodeR+2} fill="none" stroke="rgba(255,255,255,0.0)" strokeWidth={8} className="quantum-shimmer-overlay" opacity={0.55} style={{ filter: "drop-shadow(0 0 8px rgba(239,68,68,0.45))" } as any} />
                         </>
                       )}
                       {((deepPulseId && (deepPulseId===baseId || deepPulseId===item.id)) || (searchPulseId && (searchPulseId===baseId || searchPulseId===item.id))) && (
@@ -2759,7 +2771,7 @@ function RoadmapInner() {
                           filter: "drop-shadow(0 12px 18px rgba(0,0,0,0.45))",
                         } as any}
                       >
-                        <circle cx={p.x} cy={p.y} r={nodeR} fill={isPersonal ? "#e7e5e4" : "white"} stroke={outline} strokeWidth={isPersonal ? 3 : isDemo ? 3 : (sev==="cancelled" ? 4.2 : sev==="shift" ? 3.4 : 2.8) + (isActive ? 0.8 : 0)} strokeDasharray={isDemo ? "8 6" : undefined} filter="url(#nodeGlow)" opacity={isPersonal ? 0.72 : isDemo ? 0.96 : 1} style={{ transform: isActive ? "translateZ(18px)" : "translateZ(12px)" } as any} />
+                        <circle cx={p.x} cy={p.y} r={nodeR} fill={isPersonal ? "#e7e5e4" : "white"} stroke={outline} strokeWidth={isPersonal ? 3 : isDemo ? 3 : (sev==="cancelled" ? 4.2 : sev==="shift" ? 3.4 : 2.8) + (isActive ? 0.8 : 0)} strokeDasharray={isDemo ? "8 6" : undefined} filter="url(#nodeGlow)" opacity={isPersonal ? 0.72 : isDemo ? 0.96 : 1} className={(st as any).key==="fused" ? "fused-purple-glow" : undefined} style={{ transform: isActive ? "translateZ(18px)" : "translateZ(12px)", ...( (st as any).key==="fused" ? { animation: "fusedGlow 2.2s ease-in-out infinite" } as any : {}) } as any} />
                         <circle cx={p.x} cy={p.y} r={nodeR - 10} fill={isDemo ? "#f5f3ff" : st.key === "canonical" ? "#ecfdf5" : st.key === "almost" ? "#f7fee7" : st.key === "advisory" ? "#fffbeb" : st.key === "waiting" ? "#eff6ff" : "#f4f4f5"} stroke={isDemo ? "#8b5cf6" : "rgba(0,0,0,0.06)"} strokeWidth={1} strokeDasharray={isDemo ? "4 3" : undefined} />
                         <text x={p.x} y={p.y + 6} textAnchor="middle" fontSize={isDemo ? 13 : isPersonal ? 10 : st.key === "canonical" ? 17 : 14} fontWeight={800} fill={isDemo ? "#6d28d9" : st.key === "canonical" ? "#065f46" : st.key === "almost" ? "#3f6212" : st.key === "advisory" ? "#92400e" : st.key === "waiting" ? "#1e40af" : "#52525b"} style={{ fontFamily: fredoka.style.fontFamily, letterSpacing: "-0.025em" }}>
                           {isDemo ? ( (item as DemoItem).localId==="demo_welcome" ? "✦" : (item as DemoItem).localId==="demo_swipe" ? "↔" : "+" ) : isPersonal ? "◐" : st.key === "canonical" ? "✓" : st.key === "advisory" ? "●" : st.key === "almost" ? "◉" : st.key === "waiting" ? "○" : "●"}
@@ -2829,7 +2841,7 @@ function RoadmapInner() {
               const active = selectedId===baseId || selectedId===item.id;
               return (
                 <button key={item.id} onClick={()=>{ setSelectedId(baseId); setSheetOpen(true); if(isDemo) setToast((item as any).hint); }}
-                  className={`text-left rounded-[18px] border p-4 backdrop-blur transition ${active ? "border-white bg-white text-black shadow" : verified ? "border-emerald-400/25 bg-emerald-500/[0.08] text-white" : "border-white/[0.06] bg-white/[0.03] text-white hover:bg-white/[0.05]"}`}>
+                  className={`text-left rounded-[18px] border p-4 backdrop-blur-[16px] transition ${active ? "border-white bg-white text-black shadow" : verified ? "border-emerald-400/25 bg-emerald-500/[0.08] backdrop-blur-[16px] text-white" : "border-white/[0.06] bg-white/[0.03] text-white hover:bg-white/[0.05]"}`}>
                   <div className="flex items-center gap-2">
                     <span className={`flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-black ${verified? "bg-emerald-500 text-white" : isPersonal? "bg-zinc-600 text-white" : isDemo? "bg-[#8b5cf6] text-white border-2 border-dashed border-white/60" : "bg-amber-500 text-white"}`}>{verified?"✓": isPersonal?"◐": isDemo?"✦":"●"}</span>
                     <span className={`text-[13px] font-bold leading-tight ${active?"text-black":"text-white"}`}>{title}</span>
@@ -2975,7 +2987,7 @@ function RoadmapInner() {
         )}
         {/* bottom sheet */}
         <div className={`absolute inset-x-0 bottom-0 z-30 flex justify-center px-3 pb-3 sm:px-6 sm:pb-4 transition-transform duration-300 ${sheetOpen ? "translate-y-0" : "translate-y-[calc(100%-44px)]"}`}>
-          <div className="w-full max-w-[680px] overflow-hidden rounded-[24px] border border-white/[0.09] bg-[#080c18]/95 shadow-[0_16px_64px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl">
+          <div className="liquid-glass glass-bevel w-full max-w-[680px] overflow-hidden rounded-[24px] border border-white/[0.14] shadow-[0_16px_64px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.18),0_0_24px_rgba(139,92,246,0.18)]" style={{ background: "rgba(255,255,255,0.08)", backdropFilter: "blur(16px) saturate(1.22)", WebkitBackdropFilter: "blur(16px) saturate(1.22)" }}>
             <button onClick={() => setSheetOpen((v) => !v)} className="flex w-full items-center justify-center gap-2 border-b border-white/[0.06] bg-white/[0.03] py-2.5">
               <span className="h-1.5 w-9 rounded-full bg-white/20" />
               <span className="font-mono text-[10.5px] tracking-wide text-slate-400">{sheetOpen ? "tap to collapse" : "tap to expand · details"}</span>
@@ -3203,7 +3215,7 @@ function RoadmapInner() {
                           )}
                         </div>
                         {presence && (
-                          <div className={`mt-3 flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-bold ${presence.isWitness ? "border-amber-400/40 bg-gradient-to-r from-amber-400 to-yellow-300 text-black" : "border-white/15 bg-white/10 text-slate-300"}`}>
+                          <div className={`mt-3 flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-bold ${presence.isWitness ? "witness-gold border-amber-400/40 bg-gradient-to-r from-amber-400 to-yellow-300 text-black fused-purple-glow" : "border-white/15 bg-white/10 text-slate-300"}`} style={presence.isWitness ? { animation: "witnessPulse 1.6s ease-in-out infinite", transformOrigin: "center" } as any : undefined}>
                             <span className={`h-2 w-2 rounded-full ${presence.isWitness ? "bg-amber-600 animate-pulse" : "bg-slate-400"}`} />
                             {presence.isWitness ? "Witness +1.0 gold" : "Remote +0.3 grey"} {presence.dist!==null ? `· ${Math.round(presence.dist)}m` : ""} {presenceBusy ? "· locating" : ""}
                             <span className="ml-1 font-mono text-[10px]">score {presenceScore.toFixed(1)}</span>
