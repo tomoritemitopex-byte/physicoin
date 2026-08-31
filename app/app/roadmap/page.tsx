@@ -12,7 +12,9 @@ import VoiceGossipFab from "@/components/VoiceGossipFab";
 import GlassRail from "@/components/road/GlassRail";
 import CandyWell from "@/components/road/CandyWell";
 import { IsotopePanel, StreakRescueCard, BazaarBlastCard } from "@/components/road/IsotopePanels";
-import { vaultPut, vaultFlush, onEntangle } from "@/lib/shardsync";
+import { rescueStreak, getStreak } from "@/lib/streak";
+import { vaultPut, vaultFlush, vaultList, onEntangle } from "@/lib/shardsync";
+import { survivorshipBlocked, hallucinationGuardMessage, verifyDecayProof, ISOTOPE_N0, halfLifePct, REP_HALF_LIFE_DAYS as REP_HALF } from "@/lib/rep";
 import { getSquad, isSquadFormed, setSquad as saveSquad, clearSquad, shouldApplySquadBoost, SQUAD_MULTIPLIER, SQUAD_KEY } from "@/lib/squad";
 import { getLecturer, isLecturerVerified, isEmeraldPinVerified, hasEmeraldBypass, verifyLecturerEmail, verifyLecturerPin, lecturerBadgeLabel, LECTURER_KEY, OFFICIAL_PIN } from "@/lib/lecturer";
 import { generateICS, downloadICS } from "@/lib/calendar";
@@ -342,6 +344,9 @@ function RoadmapInner() {
   const [viewMode, setViewMode] = useState<"map"|"list">("map");
   const [searchQuery, setSearchQuery] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false); // unified Filters ▾ drawer at 126px — hides Filters+Search
+  const [vaultProof, setVaultProof] = useState(false);
+  const [streakRescued, setStreakRescued] = useState(false);
+  const [guardDismissed, setGuardDismissed] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false); // ⋯ More drawer: Squad/Lecturer/Bazaar/Oracle collapsed
   const [searchPulseId, setSearchPulseId] = useState<string | null>(null);
   const [myLevel, setMyLevel] = useState<string|null>(null);
@@ -404,6 +409,7 @@ function RoadmapInner() {
   const [bellOpen, setBellOpen] = useState(false);
   const [bellCount, setBellCount] = useState(0);
   const [bellItems, setBellItems] = useState<{id:string; title:string; ts:number; sub:string}[]>([]);
+  useEffect(()=>{ let c=false; async function checkVault(){ try{ const list=await vaultList(); if(!c) setVaultProof(list.length>0);}catch{ if(!c) setVaultProof(false);} } checkVault(); const id=setInterval(checkVault, 3000); const off=onEntangle(()=>{ setVaultProof(true); setStreakRescued(true); }); return ()=>{ c=true; clearInterval(id); try{(off as any)?.();}catch{} }; },[]);
   const [scrollPos, setScrollPos] = useState(0);
   const [viewH, setViewH] = useState(800);
   const bellSeenRef = useRef<number>(0);
@@ -1982,7 +1988,9 @@ function RoadmapInner() {
     return true;
   }
   function buyPin(){ if(!deductRep(3)) return; try{ localStorage.setItem("physi_bazaar_pin", String(Date.now()+24*3600*1000)); }catch{} setCandy("-3 Rep pin 24h"); setTimeout(()=> setCandy(null), 1200); setToast("Pinned 24h 📌 -3 Rep"); setBazaarOpen(false); }
-  function buyBlast(){ if(!deductRep(5)) return; try{ localStorage.setItem("physi_bazaar_blast", String(Date.now()+24*3600*1000)); }catch{} setCandy("-5 Rep blast"); setTimeout(()=> setCandy(null), 1200); setToast("Blast sent 🚀 -5 Rep"); setBazaarOpen(false); }
+  function buyBlast(){
+    if(survivorshipBlocked({ quorum: quorumThreshold, hasVaultProof: vaultProof, halfLifePct: (()=>{ try{ const days=Math.floor((Date.now()-Date.parse(localStorage.getItem("physi_isotope_origin")||localStorage.getItem("physi_last_mine")||new Date().toISOString()))/86400000); return halfLifePct(ISOTOPE_N0, Math.max(0,days), REP_HALF);}catch{ return 0.52; }})(), streakRescued, isWitness: !!presence?.isWitness }) && !guardDismissed){ setToast("intuition needs bridge — blast blocked until streak rescue or Witness gold"); return; }
+    if(!deductRep(5)) return; try{ localStorage.setItem("physi_bazaar_blast", String(Date.now()+24*3600*1000)); }catch{} setCandy("-5 Rep blast"); setTimeout(()=> setCandy(null), 1200); setToast("Blast sent 🚀 -5 Rep"); setBazaarOpen(false); }
   // --- Pre-gossip: predicted ghost 7 days early dotted 0.35 ---
   function preVerifyBet(evId:string){
     const baseId=String(evId).split("__pred")[0].split("__tile")[0];
@@ -2112,67 +2120,21 @@ function RoadmapInner() {
             {schoolMeta.badge} · <a href="?school=FUTO" className="pointer-events-auto underline decoration-white/30 hover:text-amber-200">FUTO</a> · <a href="?school=UNIPORT" className="pointer-events-auto underline decoration-white/30">UNIPORT</a> · {schoolMeta.name}
           </div>
         )}
-        {/* top bar — decluttered: PHYSI · WAT · bell + entangled squad web */}
-        <div className="pointer-events-none absolute left-0 right-0 top-0 z-20 flex justify-center px-3 pt-3 sm:px-6">
+        {/* top — pure forest 0 chrome · no duplicate bars · forest only */}
+        <div className="pointer-events-none absolute left-0 right-0 top-0 z-10 flex justify-center px-3 pt-3 sm:px-6 top-pure-forest" style={{ background: "transparent", border: "0", boxShadow: "none" } as any}>
           <div className="pointer-events-auto flex w-full max-w-[900px] items-center justify-between gap-2">
-            <div className="liquid-glass glass-bevel flex items-center gap-2 rounded-full border border-white/[0.14] px-4 py-2 backdrop-blur-[16px] shadow-[0_8px_32px_rgba(0,0,0,0.28),0_0_16px_rgba(139,92,246,0.14),inset_0_1px_0_rgba(255,255,255,0.18)] backdrop-blur-[16px]" style={{ background: "rgba(255,255,255,0.08)", backdropFilter: "blur(16px) saturate(1.22)" } as any} >
-              <span className={`${fredoka.className} text-[13px] font-black tracking-[0.12em] text-white`}>PHYSI</span>
+            <div className="flex items-center gap-2 px-3 py-1.5">
+              <span className={`${fredoka.className} text-[13px] font-black tracking-[0.12em] text-white/90`}>PHYSI</span>
               <span className="h-3 w-px bg-white/15" />
-              <span className="flex items-center gap-1.5 font-mono text-[11px] font-bold text-white" style={{ fontVariantNumeric:"tabular-nums" }}>
+              <span className="flex items-center gap-1.5 font-mono text-[11px] font-bold text-white/80" style={{ fontVariantNumeric:"tabular-nums" } as any}>
                 <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
                 {wat.timePart} WAT
               </span>
-              <span className="hidden font-mono text-[10px] text-slate-400 sm:inline">· {wat.wday} {wat.datePart}</span>
-              {/* entangled squad: 3 dots linked violet lines to avatar */}
-              <span className="hidden sm:flex items-center gap-1 ml-1" aria-label="squad web">
-                <span className="relative flex items-center gap-1">
-                  <svg width="54" height="18" viewBox="0 0 54 18" className="absolute -left-1 top-1/2 -translate-y-1/2 pointer-events-none" style={{zIndex:0}}>
-                    <line x1="9" y1="9" x2="27" y2="9" stroke="#8b5cf6" strokeWidth="1.2" opacity="0.9" />
-                    <line x1="18" y1="9" x2="36" y2="9" stroke="#8b5cf6" strokeWidth="1.2" opacity="0.9" />
-                    <line x1="36" y1="9" x2="45" y2="9" stroke="#8b5cf6" strokeWidth="1.2" opacity="0.9" />
-                  </svg>
-                  {[0,1,2].map(i=> <span key={i} className={`relative h-2.5 w-2.5 rounded-full border border-white/60 ${squad && squad.members?.[i] ? "bg-violet-500" : "bg-white/25"}`} style={{zIndex:1}} />)}
-                  <span className={`ml-1 flex h-5 w-5 items-center justify-center rounded-full border-2 text-[9px] font-black text-white ${squad && isSquadFormed(squad as any) ? "squad-emerald-pulse border-emerald-300 bg-emerald-500" : "border-white/40 bg-white/10"}`} style={{zIndex:1}}>👤</span>
-                </span>
-                {squad && isSquadFormed(squad as any) && <span className="squad-emerald-pulse ml-1 rounded-full bg-emerald-500 px-2 py-0.5 font-mono text-[9px] font-black text-white">👥 3/3 1.5x</span>}
-              </span>
-              <button onClick={()=> setMoreOpen(v=>!v)} aria-label="More" className="ml-1 rounded-full border border-white/10 bg-white/10 px-2.5 py-1 font-mono text-[11px] font-black text-white hover:bg-white hover:text-black transition">⋯ More</button>
+              <span className="hidden font-mono text-[10px] text-white/40 sm:inline">· {wat.wday} {wat.datePart} · pure forest 0 chrome</span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="relative">
-                <button onClick={()=>{ setBellOpen(v=>!v); if(!bellOpen){ bellSeenRef.current=Date.now(); setBellCount(0); try{ localStorage.setItem(`physi_bell_seen_${myUserId||'anon'}`, String(Date.now())); }catch{} } }} aria-label="Notifications" className={`relative flex items-center justify-center rounded-full border backdrop-blur transition ${panicInfo ? "h-10 w-10 text-[18px] border-red-500 bg-gradient-to-br from-amber-500 to-red-600 text-white shadow-[0_0_14px_rgba(239,68,68,0.7)]" : "h-8 w-8 text-[14px] border-white/10 bg-black/60 text-white hover:bg-white hover:text-black"}`}>
-                  <span className={panicInfo ? "text-[18px]" : "text-[14px]"}>🔔</span>
-                  {(bellCount>0 || mineHasNew) && <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-black text-white ring-2 ring-black">{bellCount>0 ? bellCount : 1}</span>}
-                </button>
-                {panicInfo && panicDeltaFmt && (
-                  <div className="absolute left-1/2 top-[44px] -translate-x-1/2 whitespace-nowrap rounded-full bg-gradient-to-r from-amber-400 to-red-500 px-3 py-1.5 text-center shadow-xl ring-2 ring-white/20">
-                    <p className="font-mono text-[11px] font-black leading-none text-white">in {panicDeltaFmt}</p>
-                  </div>
-                )}
-                {bellOpen && (
-                  <div className="absolute right-0 top-9 z-40 w-[300px] overflow-hidden rounded-2xl border border-white/10 bg-[#0b0f1e] shadow-2xl">
-                    <div className="flex items-center justify-between border-b border-white/10 px-4 py-2.5">
-                      <p className="text-[13px] font-bold text-white">Inbox</p>
-                      <button onClick={()=>{ setBellOpen(false); bellSeenRef.current=Date.now(); setBellCount(0); }} className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-semibold text-white">Mark seen</button>
-                    </div>
-                    <div className="max-h-[320px] overflow-auto">
-                      {bellItems.length===0 ? (
-                        <p className="px-4 py-6 text-center text-[12px] text-slate-400">No new verifications yet</p>
-                      ) : bellItems.map(it=> (
-                        <button key={it.id} onClick={()=>{ setSelectedId(it.id); setSheetOpen(true); setBellOpen(false); setDeepPulseId(it.id); }} className="flex w-full gap-3 border-b border-white/[0.06] px-4 py-3 text-left hover:bg-white/[0.04] transition">
-                          <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-[12px] font-black text-white">✓</span>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-[12px] font-semibold text-white">{it.title}</p>
-                            <p className="text-[11px] text-emerald-300">{it.sub}</p>
-                            <p className="font-mono text-[10px] text-slate-500">{new Date(it.ts).toLocaleTimeString()}</p>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                    <button onClick={()=> setBellOpen(false)} className="w-full bg-white/5 py-2 text-[11px] font-semibold text-slate-300 hover:bg-white/10">Close</button>
-                  </div>
-                )}
-              </div>
+            <div className="pointer-events-auto flex items-center gap-1.5">
+              <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-black/20 px-2 py-1 font-mono text-[10px] font-bold text-white/50">top pure forest</span>
+              <span className="inline-flex h-2 w-2 rounded-full bg-emerald-400/70" title="entangle" />
             </div>
           </div>
         </div>
@@ -2267,6 +2229,16 @@ function RoadmapInner() {
         <div className="pointer-events-none absolute left-1/2 top-[162px] z-20 flex w-full max-w-[560px] -translate-x-1/2 justify-center px-3 sm:hidden">
           <span className={`rounded-full border border-amber-400/20 bg-white/[0.08] px-3 py-1 ${fredoka.className} text-[14px] font-black tracking-tight text-amber-200 backdrop-blur`}>Verify 3 today → +5 bonus · {dailyCount}/3 {dailyBonusDone ? "✓ done" : ""}</span>
         </div>
+        {/* Survivorship Guard — Hallucination Guard amber intuition needs bridge */}
+        {survivorshipBlocked({ quorum: quorumThreshold, hasVaultProof: vaultProof, halfLifePct: (()=>{ try{ const days=Math.floor((Date.now()-Date.parse(localStorage.getItem("physi_isotope_origin")||localStorage.getItem("physi_last_mine")||new Date().toISOString()))/86400000); return halfLifePct(ISOTOPE_N0, Math.max(0,days), REP_HALF);}catch{ return 0.52; }})(), streakRescued, isWitness: !!presence?.isWitness }) && !guardDismissed && (
+          <div className="pointer-events-auto absolute left-1/2 top-[126px] z-30 flex w-full max-w-[560px] -translate-x-1/2 justify-center px-3">
+            <div className="hallucination-guard flex w-full items-center justify-between gap-2 rounded-full px-4 py-2 shadow-[0_8px_24px_rgba(0,0,0,0.35)]">
+              <span className="font-mono text-[11px] font-black text-amber-200">intuition needs bridge</span>
+              <button onClick={()=>{ const v=rescueStreak(); setStreakRescued(true); setStreak(v); try{ const raw=localStorage.getItem("physi_profile"); if(raw){ const pr=JSON.parse(raw); pr.mining_balance=Number((Number(pr.mining_balance||0)+5).toFixed(1)); localStorage.setItem("physi_profile",JSON.stringify(pr)); setMyRep(pr.mining_balance);} }catch{} setToast("streak rescue +5 bridge proven"); verifyDecayProof(ISOTOPE_N0, 7, REP_HALF); verifyDecayProof(ISOTOPE_N0, 8, REP_HALF); }} className="shrink-0 rounded-full bg-amber-400 px-3 py-1 text-[11px] font-black text-black">Rescue +5</button>
+              <button onClick={()=> setToast("Witness gold needs Proof-of-Presence")} className="shrink-0 rounded-full border border-amber-400/30 bg-black/20 px-3 py-1 text-[11px] font-bold text-amber-200">Witness gold</button>
+            </div>
+          </div>
+        )}
         {/* unified Filters ▾ drawer at 126px — hides Filters+Search behind single toggle */}
         <div className="pointer-events-none absolute left-1/2 top-[126px] z-20 flex w-full max-w-[560px] -translate-x-1/2 justify-center px-3">
           <button onClick={()=> setFiltersOpen(o=>!o)} className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-black/75 px-4 py-2 font-mono text-[11px] font-bold text-white backdrop-blur-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)]">Filters {filtersOpen ? '▴' : '▾'} <span className="rounded-full bg-white/15 px-1.5 py-0.5 text-[10px]">{filter} · {viewMode}</span></button>
@@ -3535,7 +3507,7 @@ function RoadmapInner() {
           </div>
         </div>
         {/* Thumb-Gravity Glass Rail 60px single rail */}
-        <GlassRail viewMode={viewMode} setViewMode={setViewMode} onFab={()=>setFabOpen(true)} bellCount={bellCount} bellOpen={bellOpen} setBellOpen={setBellOpen as any} fabFlash={fabFlash} hasNew={mineHasNew} />
+        <GlassRail viewMode={viewMode} setViewMode={setViewMode} onFab={()=>{ if(survivorshipBlocked({ quorum: quorumThreshold, hasVaultProof: vaultProof, halfLifePct: (()=>{ try{ const days=Math.floor((Date.now()-Date.parse(localStorage.getItem("physi_isotope_origin")||localStorage.getItem("physi_last_mine")||new Date().toISOString()))/86400000); return halfLifePct(ISOTOPE_N0, Math.max(0,days), REP_HALF);}catch{ return 0.52; }})(), streakRescued, isWitness: !!presence?.isWitness }) && !guardDismissed){ setToast("intuition needs bridge — rescue +5 or Witness gold to blast"); return; } setFabOpen(true); verifyDecayProof(ISOTOPE_N0, 7, REP_HALF); verifyDecayProof(ISOTOPE_N0, 8, REP_HALF);} } bellCount={bellCount} bellOpen={bellOpen} setBellOpen={setBellOpen as any} fabFlash={fabFlash} hasNew={mineHasNew} onMore={()=> setMoreOpen(v=>!v)} />
       </div>
     </div>
   );
@@ -3548,4 +3520,3 @@ export default function RoadmapPage(){
     </Suspense>
   );
 }
-

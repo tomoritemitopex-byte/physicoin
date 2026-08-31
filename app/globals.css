@@ -241,3 +241,47 @@ p { hanging-punctuation: first; }
 .tape-chip-active { background:white; color:black; border-color:white; transform:scale(1.04); }
 .tape-scrub::-webkit-slider-thumb { appearance:none; width:14px; height:14px; border-radius:999px; background:#8b5cf6; border:2px solid white; }
 
+
+/* ── Akin One Rail — single floating glass rail bottom 60px #0d3b2a/70 blur16 ── */
+.one-rail {
+  position: fixed;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  width: min(560px, 96vw);
+  min-height: 60px;
+  background: rgba(13,59,42,0.70);
+  backdrop-filter: blur(16px) saturate(1.22);
+  -webkit-backdrop-filter: blur(16px) saturate(1.22);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 9999px;
+  box-shadow: 0 16px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.16);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 8px;
+}
+.one-rail-transition {
+  transition: transform 280ms cubic-bezier(.34,1.56,.64,1), opacity 280ms ease, background 280ms ease, box-shadow 280ms ease;
+}
+.top-pure-forest {
+  background: linear-gradient(180deg, #0d3b2a 0%, #143d2e 42%, #1a5c3a 100%);
+  border: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+.spring-280 { transition: transform 280ms cubic-bezier(.34,1.56,.64,1), opacity 280ms ease; }
+.roadmap-one-rail header.sticky { display: none !important; }
+.roadmap-one-rail nav.fixed.bottom-0 { display: none !important; }
+.roadmap-one-rail main { padding-bottom: 88px; }
+.hallucination-guard {
+  background: rgba(251,191,36,0.14);
+  border: 1px solid rgba(251,191,36,0.35);
+  color: #fde68a;
+  backdrop-filter: blur(12px);
+  animation: guardPulse 2s ease-in-out infinite;
+}
+@keyframes guardPulse { 0%,100%{ box-shadow:0 0 0 rgba(251,191,36,0)} 50%{ box-shadow:0 0 18px rgba(251,191,36,0.28)}}
