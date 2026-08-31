@@ -11,6 +11,7 @@ import QuorumBar from "@/components/road/QuorumBar";
 import { getSquad, isSquadFormed, setSquad as saveSquad, clearSquad, shouldApplySquadBoost, SQUAD_MULTIPLIER, SQUAD_KEY } from "@/lib/squad";
 import { getLecturer, isLecturerVerified, isEmeraldPinVerified, hasEmeraldBypass, verifyLecturerEmail, verifyLecturerPin, lecturerBadgeLabel, LECTURER_KEY, OFFICIAL_PIN } from "@/lib/lecturer";
 import { generateICS, downloadICS } from "@/lib/calendar";
+import { buildFusionGroups, anonHash, GHOST_DOT_BG } from "@/lib/fusion";
 const RepExplainer = dynamic(()=> import("@/components/road/RepExplainer"), { ssr: false, loading: ()=> null }) as any;
 const RepBoard = dynamic(()=> import("@/components/road/RepBoard"), { ssr: false, loading: ()=> null }) as any;
 const ShareCard = dynamic(()=> import("@/components/road/ShareCard"), { ssr: false, loading: ()=> null });
@@ -286,11 +287,16 @@ function RoadmapInner() {
   // pulse ghost toasts
   const [pulseMsg, setPulseMsg] = useState<string | null>(null);
   const [pulseShow, setPulseShow] = useState(false);
-  // FAB direct create + ghost toggle
+  // Pure ghost default: anon hash dots #7F3A no handles, handle opt-in toggle (Rep stays anonymized)
+  const [showHandles, setShowHandles] = useState(false);
+  useEffect(()=>{ try{ const v=localStorage.getItem("physi_show_handles"); if(v==="1") setShowHandles(true); }catch{} },[]);
+  useEffect(()=>{ try{ localStorage.setItem("physi_show_handles", showHandles? "1":"0"); }catch{} },[showHandles]);
+  const anonDot = (handleOrId: string)=> anonHash(String(handleOrId||"anon"));
+  // FAB direct create + ghost toggle — default ghost true (pure ghost)
   const [fabOpen, setFabOpen] = useState(false);
   const [fabBusy, setFabBusy] = useState(false);
   const [fabTitle, setFabTitle] = useState("");
-  const [fabGhost, setFabGhost] = useState(false);
+  const [fabGhost, setFabGhost] = useState(true);
   const [fabGhostId, setFabGhostId] = useState<string>("");
   // cross-school mirror (?school=FUTO)
   const schoolParam = (searchParams.get("school") || "").toUpperCase().trim();
@@ -1102,7 +1108,8 @@ function RoadmapInner() {
   type DemoItem = { kind: "demo"; localId: string; id: string; ms: number; title: string; venue: string; event_date: string; event_time: string; hint: string };
   type ForkItem = { kind: "fork"; id: string; ms: number; events: EventRow[]; ids: string[] };
   type PredictedItem = { kind: "predicted"; id: string; ms: number; ev: EventRow; predDate: string; predTime: string };
-  type RoadItem = { kind: "personal"; p: PersonalBubble; id: string; ms: number } | { kind: "event"; ev: EventRow; id: string; ms: number } | DemoItem | ForkItem | PredictedItem;
+  type FusedItemT = { kind: "fused"; id: string; ms: number; events: EventRow[]; ids: string[]; venue: string; title: string; event_date: string; event_time: string; authority_points: number; required_points: number };
+  type RoadItem = { kind: "personal"; p: PersonalBubble; id: string; ms: number } | { kind: "event"; ev: EventRow; id: string; ms: number } | DemoItem | ForkItem | PredictedItem | FusedItemT;
   const roadItems: RoadItem[] = useMemo(() => {
     const pers: RoadItem[] = personal.map((p) => ({ kind: "personal", p, id: p.localId, ms: eventInstant(p.event_date, p.event_time) } as RoadItem));
     const evs: RoadItem[] = events.map((ev) => ({ kind: "event", ev, id: ev.id, ms: eventInstant(ev.event_date, ev.event_time) } as RoadItem));
@@ -1224,35 +1231,82 @@ function RoadmapInner() {
     return m;
   }, [conflictGroups]);
 
+  // --- Fusion: auto-merge duplicate gists venue+time ±5m same course => fused node x2 strength double quorum
+  type FusedItem = { kind: "fused"; id: string; ms: number; events: EventRow[]; ids: string[]; venue: string; title: string; event_date: string; event_time: string; authority_points: number; required_points: number };
+  const fusionGroups = useMemo(()=> buildFusionGroups(events as any) as any as { ids:string[]; events: EventRow[]; fusedId:string; title:string; venue:string; event_date:string; event_time:string; authority_points:number; required_points:number; ms:number }[], [events]);
+  const fusionMap = useMemo(()=>{
+    const m=new Map<string,number>();
+    fusionGroups.forEach((g,gi)=> g.ids.forEach(id=> m.set(String(id), gi)));
+    return m;
+  }, [fusionGroups]);
+  const fusionGroupedRoadItems: RoadItem[] = useMemo(()=>{
+    if(fusionGroups.length===0) return filteredRoadItems as unknown as RoadItem[];
+    const filteredIds = new Set(filteredRoadItems.filter(it=> (it as any).kind==="event").map(it=> String((it as any).ev.id)));
+    const relevant = fusionGroups.map(g=> ({ g, members: g.events.filter(ev=> filteredIds.has(String(ev.id))) })).filter(x=> x.members.length>=2);
+    if(relevant.length===0) return filteredRoadItems as unknown as RoadItem[];
+    const groupById = new Map<string, number>();
+    relevant.forEach(({g},gi)=> g.ids.forEach(id=> { if(filteredIds.has(String(id))) groupById.set(String(id), gi); }));
+    const seen=new Set<number>();
+    const out: RoadItem[]=[];
+    for(const it of filteredRoadItems as any){
+      if(it.kind !== "event"){ out.push(it); continue; }
+      const evId=String(it.ev.id);
+      const gi=groupById.get(evId);
+      if(gi===undefined){ out.push(it); continue; }
+      if(seen.has(gi)) continue;
+      seen.add(gi);
+      const grp=relevant[gi].g;
+      const ms=grp.ms;
+      const fid=grp.fusedId;
+      const fused: FusedItem = { kind:"fused", id: fid, ms, events: grp.events as EventRow[], ids: grp.ids, venue: grp.venue, title: grp.title, event_date: grp.event_date, event_time: grp.event_time, authority_points: grp.authority_points, required_points: grp.required_points };
+      out.push(fused as unknown as RoadItem);
+    }
+    out.sort((a:any,b:any)=> a.ms - b.ms);
+    return out as RoadItem[];
+  }, [filteredRoadItems, fusionGroups]);
+
   // Fork-grouped view of filteredRoadItems: collapse conflict events into single fork node
   const forkGroupedRoadItems: RoadItem[] = useMemo(()=>{
-    if (conflictGroups.length===0) return filteredRoadItems;
+    const base = (fusionGroupedRoadItems as RoadItem[]);
+    // if no fork, return fused base
+    if (conflictGroups.length===0) return base;
     // Build groups relevant to filtered view: only groups where at least 2 members pass current filter
-    // Determine which filtered event ids are present
-    const filteredIds = new Set(filteredRoadItems.filter(it=> (it as any).kind==="event").map(it=> String((it as any).ev.id)));
-    // For each conflict group, collect members that are in filtered view
-    const relevant = conflictGroups.map(g=> g.filter(ev=> filteredIds.has(String(ev.id)))).filter(g=> g.length>=2);
-    if (relevant.length===0) return filteredRoadItems;
+    // Determine which filtered event ids are present (including fused ids)
+    const baseEventIds = new Set(base.filter(it=> (it as any).kind==="event" || (it as any).kind==="fused").flatMap(it=> (it as any).kind==="fused" ? (it as any).ids : [String((it as any).ev.id)]));
+    // For each conflict group, collect members that are in filtered view (note: fusion ids already collapsed)
+    const relevant = conflictGroups.map(g=> g.filter(ev=> baseEventIds.has(String(ev.id)))).filter(g=> g.length>=2);
+    if (relevant.length===0) return base;
     const groupById = new Map<string, number>();
     relevant.forEach((g, gi)=> g.forEach(ev=> groupById.set(String(ev.id), gi)));
     const seen = new Set<number>();
     const out: RoadItem[] = [];
-    for(const it of filteredRoadItems){
-      if((it as any).kind !== "event"){ out.push(it as any); continue; }
-      const evId = String((it as any).ev.id);
-      const gi = groupById.get(evId);
-      if(gi===undefined){ out.push(it as any); continue; }
-      if(seen.has(gi)) continue;
-      seen.add(gi);
-      const grp = relevant[gi];
-      const ms = Math.min(...grp.map(e=> eventInstant(e.event_date, e.event_time)));
-      const fid = grp.map(e=> String(e.id)).join("__fork__") + "__fork";
-      out.push({ kind: "fork", id: fid, ms, events: grp, ids: grp.map(e=> String(e.id)) } as ForkItem);
+    for(const it of base as any){
+      const idsForCheck: string[] = it.kind==="fused" ? it.ids : it.kind==="event" ? [String(it.ev.id)] : [];
+      if(idsForCheck.length===0){ out.push(it as any); continue; }
+      // if fused node contains a fork member, treat fused node as fork participant (skip separate fork)
+      // For now, if any id in fused node is in a fork group, keep fused node as-is (fusion takes precedence)
+      const hasFork = idsForCheck.some(id=> groupById.has(String(id)));
+      if(!hasFork){ out.push(it as any); continue; }
+      // single event fork case
+      if(it.kind==="event"){
+        const evId = String(it.ev.id);
+        const gi = groupById.get(evId);
+        if(gi===undefined){ out.push(it as any); continue; }
+        if(seen.has(gi)) continue;
+        seen.add(gi);
+        const grp = relevant[gi];
+        const ms = Math.min(...grp.map(e=> eventInstant(e.event_date, e.event_time)));
+        const fid = grp.map(e=> String(e.id)).join("__fork__") + "__fork";
+        out.push({ kind: "fork", id: fid, ms, events: grp, ids: grp.map(e=> String(e.id)) } as ForkItem);
+      } else {
+        // fused node that overlaps fork — keep fused (fusion wins), but mark as fused (no fork duplication)
+        out.push(it as any);
+      }
     }
     // Ensure chronological order after collapse
     out.sort((a,b)=> a.ms - b.ms);
     return out;
-  }, [filteredRoadItems, conflictGroups]);
+  }, [fusionGroupedRoadItems, conflictGroups]);
   const handleJump = useCallback(()=>{
     if (!searchQ || filteredRoadItems.length===0) { setToast("no match for search"); return; }
     const first = filteredRoadItems[0];
@@ -1332,7 +1386,7 @@ function RoadmapInner() {
     }
     return displayItems.map((it: any, i: number) => {
       const y = TOP_BUFFER + i * STEP_Y;
-      if (it.kind === "fork") return { x: 260, y };
+      if (it.kind === "fork" || it.kind === "fused") return { x: 260, y };
       let x: number;
       if (displayItems.length === 1) x = 260;
       else if (i % 2 === 0) x = 142 + (i % 4 === 0 ? 18 : 0);
@@ -1424,6 +1478,14 @@ function RoadmapInner() {
   }
 
   function stateFor(item: RoadItem) {
+    if ((item as any).kind === "fused") {
+      const f = item as FusedItemT;
+      const ap = Number(f.authority_points ?? 0);
+      const rp = Number(f.required_points ?? 0);
+      const pct = rp>0 ? Math.min(100, Math.round((ap/rp)*100)) : 0;
+      if (ap >= rp) return { key: "canonical", label: `FUSED ✓ x2 ${f.events.length}`, color: "#10b981", outline: "#10b981", pct } as const;
+      return { key: "fused", label: `FUSED x2 · ${f.events.length}→1 · double quorum ${ap}/${rp}`, color: "#8b5cf6", outline: "#a78bfa", pct } as const;
+    }
     if ((item as any).kind === "fork") {
       // fork state derived from first event winner etc.
       const ev0 = (item as ForkItem).events[0];
@@ -2109,6 +2171,12 @@ function RoadmapInner() {
                 <RepSparkline rep={myRep} />
                 <span className="font-mono text-[10px] text-slate-400">{levelInfo.nextAt ? `${(levelInfo.nextAt-myRep).toFixed(1)} to L${levelInfo.lvl+1}` : "MAX"}</span>
                 <button onClick={()=> setRepExplainerOpen(true)} className="ml-auto rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-[10px] font-bold text-slate-300">ⓘ Rep</button>
+              </div>
+              <div className="mt-2 flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-2.5 py-2">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full border text-[10px] font-black text-white" style={{ background: GHOST_DOT_BG, borderColor: "rgba(255,255,255,0.3)" }}>{anonDot(youHandle||"you").slice(0,2)}</span>
+                <span className="font-mono text-[11px] font-bold text-white">Pure ghost</span><span className="rounded-full px-1.5 py-0.5 font-mono text-[9px] font-bold text-white" style={{ background: GHOST_DOT_BG }}>#7F3A</span>
+                <span className="font-mono text-[10px] text-slate-500">anon hash dots default · Rep stays</span>
+                <button onClick={()=> setShowHandles(v=>!v)} className={`ml-auto rounded-full border px-2.5 py-1 text-[10px] font-black transition ${showHandles ? "bg-white text-black border-white" : "bg-white/10 text-white border-white/15"}`}>{showHandles ? "handles ON" : "handles OFF"}</button>
               </div>
             </div>
           </div>
@@ -3060,8 +3128,8 @@ function RoadmapInner() {
                           ) : facepile && facepile.yes.length > 0 ? (
                             <>
                               {facepile.yes.slice(0,5).map((u) => (
-                                <span key={u.id} title={u.handle} className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#080c18] text-[9px] font-black text-white shadow" style={{ background: u.color }}>
-                                  {String(u.handle).slice(0,2).toUpperCase()}
+                                <span key={u.id} title={showHandles ? u.handle : `#${anonDot(u.handle)}`} className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#080c18] text-[9px] font-black text-white shadow" style={{ background: showHandles ? u.color : GHOST_DOT_BG, borderColor: showHandles ? undefined : "rgba(255,255,255,0.35)" } as any}>
+                                  {showHandles ? String(u.handle).slice(0,2).toUpperCase() : anonDot(u.handle).slice(0,2)}
                                 </span>
                               ))}
                               {facepile.yes.length > 5 && (
@@ -3079,7 +3147,7 @@ function RoadmapInner() {
                         </span>
                         {facepile && facepile.yes.length > 0 && (
                           <span className="hidden sm:inline font-mono text-[10px] text-slate-500 truncate">
-                            {facepile.yes.slice(0,3).map(u=> `@${u.handle}`).join(" · ")}{facepile.yes.length>3 ? " …" : ""}
+                            {showHandles ? facepile.yes.slice(0,3).map(u=> `@${u.handle}`).join(" · ") : facepile.yes.slice(0,3).map(u=> `#${anonDot(u.handle)}`).join(" · ")}{facepile.yes.length>3 ? " …" : ""} <span className="ml-1 rounded-full bg-white/10 px-1.5 py-0.5 text-[9px] text-slate-400">anon {GHOST_DOT_BG}</span>
                           </span>
                         )}
                         {!facepileLoading && (!facepile || (facepile.yesCount===0 && facepile.noCount===0)) && (
@@ -3166,7 +3234,7 @@ function RoadmapInner() {
                 <p className="font-mono text-[10px] text-slate-500">localStorage · shows zara_11: msgs</p>
                 <div className="mt-2 max-h-[120px] overflow-auto space-y-1 rounded-xl bg-black/30 p-2">
                   {chatMsgs.filter(m=> Date.now()-m.ts < 24*3600*1000).slice(-20).map((m,i)=> (
-                    <p key={i} className="font-mono text-[11px] leading-4"><span className="font-bold text-violet-300">{m.user}:</span> <span className="text-slate-200">{m.text}</span></p>
+                    <p key={i} className="font-mono text-[11px] leading-4"><span className="font-bold" style={{ color: showHandles ? "#a78bfa" : GHOST_DOT_BG }}>{showHandles ? m.user : `#${anonDot(m.user)}`}:</span> <span className="text-slate-200">{m.text}</span></p>
                   ))}
                 </div>
                 <div className="mt-2 flex gap-2">

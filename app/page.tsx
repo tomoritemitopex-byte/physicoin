@@ -540,13 +540,20 @@ export default function LandingPage() {
           <SnapTimetable />
         </section>
 
-        {/* Deploy PHYSI for my school — Clone */}
+        {/* Deploy PHYSI for my school — Clone · Earth: ?school=ANY instant fork via school.json + DATABASE_URLS */}
         <section id="deploy" className="mt-6 scroll-mt-20 rounded-[20px] border border-white/[0.08] bg-gradient-to-br from-violet-500/[0.08] via-white/[0.03] to-emerald-500/[0.06] px-6 py-6 backdrop-blur">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-violet-200">Deploy PHYSI for my school</p>
-              <h3 className="mt-1 text-[18px] font-bold text-white" style={{fontFamily:"var(--font-fredoka), Fredoka, system-ui"}}>Clone to your campus in 2 minutes</h3>
-              <p className="mt-1 max-w-[560px] font-mono text-[11px] leading-4 text-emerald-100/60">One-click Vercel clone → set <code className="rounded bg-white/10 px-1 py-0.5 text-violet-200">DATABASE_URL</code> (Neon/Supabase) → timetable is yours. Config lives in <code className="rounded bg-white/10 px-1 py-0.5">public/school.json</code>.</p>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex-1 min-w-0">
+              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-violet-200">Deploy PHYSI for my school — Earth fork</p>
+              <h3 className="mt-1 text-[18px] font-bold text-white" style={{fontFamily:"var(--font-fredoka), Fredoka, system-ui"}}>Clone to your campus in 2 minutes · ?school=ANY</h3>
+              <p className="mt-1 max-w-[560px] font-mono text-[11px] leading-4 text-emerald-100/60">Instant fork: <code className="rounded bg-white/10 px-1 py-0.5 text-violet-200">?school=FUTO</code> loads <code className="rounded bg-white/10 px-1 py-0.5">public/school.json</code> mirror + <code className="rounded bg-white/10 px-1 py-0.5 text-emerald-200">DATABASE_URLS</code> shard (comma-separated). No code change — just set env and JSON. Try:</p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {["FUTO","UNIPORT","UNILAG","UI","UNN","FUTA"].map(s=> (
+                  <a key={s} href={`?school=${s}`} className={`rounded-full border px-3 py-1 font-mono text-[11px] font-bold transition ${school===s ? "bg-white text-black border-white" : "bg-white/10 text-white border-white/15 hover:bg-white hover:text-black"}`}>{s}</a>
+                ))}
+                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 font-mono text-[10px] text-emerald-200">current: {school||"default"} · {schoolMeta?.name || "PHYSI"}</span>
+              </div>
+              <p className="mt-2 font-mono text-[10px] leading-3 text-white/50">school.json = name/short/campus/theme/colors · DATABASE_URLS = shard per school (fallback DATABASE_URL) · ?school=ANY instant mirror without redeploy · see lib/db/framework sharding</p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <a href="https://vercel.com/new/clone?repository-url=https://github.com/tomoritemitopex-byte/physicoin&env=DATABASE_URL" target="_blank" rel="noopener" className="inline-flex items-center gap-1.5 rounded-full bg-white px-5 py-2.5 text-[13px] font-black text-black shadow hover:bg-slate-100 transition">▲ Deploy with Vercel <ArrowRight className="h-3.5 w-3.5" /></a>
                 <a href="/school.json" target="_blank" className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 font-mono text-[11px] text-white hover:bg-white hover:text-black transition">View school.json →</a>
@@ -555,10 +562,12 @@ export default function LandingPage() {
             </div>
             <div className="shrink-0 rounded-2xl border border-white/10 bg-black/30 p-3 font-mono text-[11px] leading-4 text-emerald-50/80">
               <p className="font-bold text-white">Env required</p>
-              <p>DATABASE_URL</p>
+              <p>DATABASE_URL <span className="text-white/50">or</span> DATABASE_URLS<span className="text-emerald-300"> (sharded)</span></p>
               <p className="mt-2 font-bold text-white">Optional</p>
               <p>NVIDIA_API_KEY · TELEGRAM_BOT_TOKEN</p>
-              <p className="mt-2 text-[10px] text-white/50">vercel.json → framework nextjs</p>
+              <p className="mt-2 text-[10px] text-white/50">?school=FUTO → school.json + shard 0</p>
+              <p className="text-[10px] text-white/50">?school=YOURS → school.json + shard N</p>
+              <p className="mt-2 text-[10px] text-emerald-200">vercel.json → framework nextjs</p>
             </div>
           </div>
         </section>

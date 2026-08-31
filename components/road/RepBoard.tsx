@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { anonHash, GHOST_DOT_BG } from "@/lib/fusion";
 
 const SEASON_DAYS = 30;
 const SEASON_KEY = "physicoin_season_start";
@@ -85,6 +86,10 @@ export default function RepBoard({ repBoard, youHandle, streak, myRep, levelInfo
   repSheetOpen: boolean;
   setRepSheetOpen: (v: boolean | ((p:boolean)=>boolean)) => void;
 }) {
+  const [showHandles, setShowHandles] = useState(false);
+  useEffect(()=>{ try{ const v=localStorage.getItem("physi_show_handles"); if(v==="1") setShowHandles(true); }catch{} },[]);
+  useEffect(()=>{ try{ localStorage.setItem("physi_show_handles", showHandles?"1":"0"); }catch{} },[showHandles]);
+  const dot = (h:string)=> anonHash(String(h||"anon"));
   const [seasonStart, setSeasonStart] = useState<number>(() => {
     try { const v = localStorage.getItem(SEASON_KEY); if (v) return Number(v)||Date.now(); } catch {}
     return Date.now();
@@ -124,11 +129,13 @@ export default function RepBoard({ repBoard, youHandle, streak, myRep, levelInfo
             <div className="grid gap-1.5 px-3 pb-3">
               {repBoard.slice(0,5).map((u, i) => {
                 const isYou = youHandle && String(u.handle).toLowerCase() === youHandle;
+                const label = showHandles ? u.handle : `#${dot(u.handle)}`;
+                const bg = showHandles ? u.color : GHOST_DOT_BG;
                 return (
                   <div key={u.handle+"_m_"+i} className={`flex items-center gap-3 rounded-xl px-3 py-2 ${isYou ? "bg-white text-black border border-violet-400/30" : "bg-white/[0.06] text-white"}`}>
                     <span className="font-mono text-[11px] font-bold text-slate-400 w-4">{i+1}</span>
-                    <span className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-black text-white shrink-0" style={{ background: u.color, boxShadow: `0 0 0 4px ${u.color}22` }}>{String(u.handle).slice(0,2).toUpperCase()}</span>
-                    <span className={`flex-1 font-mono text-[12px] font-bold truncate ${isYou ? "text-black" : "text-white"}`}>{u.handle} {isYou ? "· you" : ""}</span>
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-black text-white shrink-0 border" style={{ background: bg, borderColor: showHandles ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.35)", boxShadow: showHandles ? `0 0 0 4px ${u.color}22` : `0 0 0 4px ${GHOST_DOT_BG}33` }}>{showHandles ? String(u.handle).slice(0,2).toUpperCase() : dot(u.handle).slice(0,2)}</span>
+                    <span className={`flex-1 font-mono text-[12px] font-bold truncate ${isYou ? "text-black" : "text-white"}`}>{label} {isYou ? "· you" : ""}</span>
                     <span className={`font-mono text-[11px] font-black ${isYou ? "text-black" : "text-emerald-300"}`}>{Number(u.rep).toFixed(1)}</span>
                   </div>
                 );
@@ -153,13 +160,15 @@ export default function RepBoard({ repBoard, youHandle, streak, myRep, levelInfo
           <div className="mt-3 grid gap-2">
             {repBoard.slice(0,5).map((u,i)=> {
               const isYou = youHandle && String(u.handle).toLowerCase() === youHandle;
+              const label = showHandles ? u.handle : `#${dot(u.handle)}`;
+              const bg = showHandles ? u.color : GHOST_DOT_BG;
               return (
                 <div key={u.handle+"_d_"+i} className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 ${isYou ? "bg-white border-violet-400/30 text-black" : "bg-white/[0.06] border-white/10 text-white"}`}>
                   <span className="font-mono text-[11px] font-bold w-4 text-center" style={{ color: isYou ? "#000" : "#94a3b8" }}>{i+1}</span>
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full text-[11px] font-black text-white shrink-0 border border-white/20" style={{ background: u.color, boxShadow: `0 0 0 6px ${u.color}22` }}>{String(u.handle).slice(0,2).toUpperCase()}</span>
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full text-[11px] font-black text-white shrink-0 border border-white/20" style={{ background: bg, boxShadow: showHandles ? `0 0 0 6px ${u.color}22` : `0 0 0 6px ${GHOST_DOT_BG}33` }}>{showHandles ? String(u.handle).slice(0,2).toUpperCase() : dot(u.handle).slice(0,2)}</span>
                   <div className="flex-1 min-w-0">
-                    <p className={`font-mono text-[12px] font-bold leading-none truncate ${isYou ? "text-black" : "text-white"}`}>{u.handle} {isYou ? "· you" : ""}</p>
-                    <p className={`font-mono text-[10px] ${isYou ? "text-slate-600" : "text-slate-400"}`}>{isYou ? "you" : "ghost"} · {i===0?"🏆":""} </p>
+                    <p className={`font-mono text-[12px] font-bold leading-none truncate ${isYou ? "text-black" : "text-white"}`}>{label} {isYou ? "· you" : ""}</p>
+                    <p className={`font-mono text-[10px] ${isYou ? "text-slate-600" : "text-slate-400"}`}>{showHandles ? (isYou ? "you" : "ghost") : "anon #hash"} · {i===0?"🏆":""} </p>
                   </div>
                   <span className={`font-mono text-[13px] font-black ${isYou ? "text-black" : "text-emerald-300"}`}>{Number(u.rep).toFixed(1)}</span>
                 </div>
