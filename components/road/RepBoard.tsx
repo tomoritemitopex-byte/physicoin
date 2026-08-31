@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { anonHash, GHOST_DOT_BG } from "@/lib/fusion";
+import { decayedRep, decayCurve, REP_HALF_LIFE_DAYS, PROFILE_HALF_LIFE_DAYS } from "@/lib/rep";
 
 const SEASON_DAYS = 30;
 const SEASON_KEY = "physicoin_season_start";
@@ -141,6 +142,25 @@ export default function RepBoard({ repBoard, youHandle, streak, myRep, levelInfo
                 );
               })}
               <div className="flex items-center gap-2 px-1"><div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10"><div className={`h-full ${levelInfo.lvl===5 ? "bg-gradient-to-r from-amber-400 to-yellow-300" : "bg-emerald-400"}`} style={{ width: `${levelInfo.progress*100}%` }} /></div><MiniSparkline rep={myRep} /><span className="font-mono text-[10px] text-slate-500">{myRep.toFixed(1)} Rep · {levelInfo.nextAt ? `${(levelInfo.nextAt - myRep).toFixed(1)} to L${levelInfo.lvl+1}` : "MAX L5 Legend"}</span>{levelInfo.lvl===5 && <span className="h-2 w-2 rounded-full bg-amber-400 ring-2 ring-amber-300" />}</div>
+              {/* Living Isotope Rep — decay 14d half-life 0.5^(d/14) + 2%/day 0.98^d + 9d profile + 30pts amber SVG curve, Witness gold pauses, streak slash -2 revive +5 7d, bazaar spend */}
+              {(() => {
+                const daysInactive = (()=>{ try{ const raw=localStorage.getItem("physi_last_mine")||localStorage.getItem("physi_last_verify")||""; if(!raw) return 0; const d=Math.floor((Date.now()-new Date(raw).getTime())/86400000); return Math.max(0,isFinite(d)?d:0);}catch{return 0}})();
+                const isWitness = (()=>{ try{ const p=JSON.parse(localStorage.getItem("physi_presence")||"null"); return !!p?.isWitness;}catch{return false}})();
+                const eff = isWitness ? 0 : daysInactive;
+                const decayed = decayedRep(myRep, eff, REP_HALF_LIFE_DAYS);
+                const curve = decayCurve(myRep, 30, REP_HALF_LIFE_DAYS);
+                const max=Math.max(...curve,1); const min=Math.min(...curve); const range=max-min||1;
+                return (
+                  <div className="mt-2 rounded-xl border border-amber-400/15 bg-amber-500/5 p-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-[9px] font-bold uppercase text-amber-200/80">Isotope Rep · decay {REP_HALF_LIFE_DAYS}d · 2%/day</span>
+                      <span className={`rounded-full px-1.5 py-0.5 font-mono text-[9px] ${isWitness ? "bg-amber-400 text-black font-black" : "bg-black/30 text-amber-100/70"}`}>{isWitness ? "Witness gold · paused" : `${myRep.toFixed(1)}→${decayed.toFixed(1)} · ${daysInactive}d`}</span>
+                    </div>
+                    <svg width="100%" height="24" viewBox="0 0 140 24" className="mt-1"><path d={curve.map((v,i)=> `${i===0?"M":"L"} ${(i/(curve.length-1))*140} ${20 - ((v-min)/range)*16}`).join(" ")} fill="none" stroke="#f59e0b" strokeWidth="1.4" strokeLinecap="round" /><path d={`${curve.map((v,i)=> `${i===0?"M":"L"} ${(i/(curve.length-1))*140} ${20 - ((v-min)/range)*16}`).join(" ")} L 140 20 L 0 20 Z`} fill="#f59e0b" opacity={0.12} /></svg>
+                    <p className="mt-0.5 font-mono text-[9px] leading-3 text-amber-100/60">30pts amber · 0.5^(d/14) + 0.98^d · 9d profile · streak slash -2 revive +5 7d · bazaar spend</p>
+                  </div>
+                );
+              })()}
               <p className="font-mono text-[10px] text-slate-500 px-1 flex items-center gap-2">Live poll 30s · ghosts · 7-day <MiniSparkline rep={myRep} /></p>
             </div>
           )}

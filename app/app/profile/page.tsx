@@ -426,22 +426,25 @@ export default function ProfilePage(){
                       return Math.max(0, isFinite(d) ? d : 0);
                     } catch { return 0; }
                   })();
-                  const decayed = decayedRep(repN, daysInactive, REP_HALF_LIFE_DAYS);
-                  const profileDecayed = decayedRep(repN, daysInactive, PROFILE_HALF_LIFE_DAYS);
-                  const curve = decayCurve(repN, 14, REP_HALF_LIFE_DAYS);
+                  // Witness gold pauses decay: check presence isWitness -> daysInactive forced 0
+                  const isWitnessPause = (()=>{ try{ const p=JSON.parse(localStorage.getItem("physi_presence")||"null"); return !!p?.isWitness; } catch{ return false; } })();
+                  const effectiveDays = isWitnessPause ? 0 : daysInactive;
+                  const decayed = decayedRep(repN, effectiveDays, REP_HALF_LIFE_DAYS);
+                  const profileDecayed = decayedRep(repN, effectiveDays, PROFILE_HALF_LIFE_DAYS);
+                  const curve = decayCurve(repN, 30, REP_HALF_LIFE_DAYS);
                   const max = Math.max(...curve, 1);
                   const min = Math.min(...curve);
                   const range = max - min || 1;
                   return (
                     <div className="mt-3 rounded-xl border border-amber-400/15 bg-amber-500/5 p-3">
                       <div className="flex items-center justify-between">
-                        <span className="font-mono text-[10px] font-bold uppercase tracking-wide text-amber-200/80">Rep decay · {REP_HALF_LIFE_DAYS}d half-life · 2%/day inactive · profile {PROFILE_HALF_LIFE_DAYS}d</span>
-                        <span className="rounded-full bg-black/30 px-2 py-0.5 font-mono text-[10px] text-amber-100/70">{daysInactive}d inactive</span>
+                        <span className="font-mono text-[10px] font-bold uppercase tracking-wide text-amber-200/80">Rep decay · {REP_HALF_LIFE_DAYS}d half-life · 2%/day inactive · profile {PROFILE_HALF_LIFE_DAYS}d · 30pts amber</span>
+                        <span className={`rounded-full px-2 py-0.5 font-mono text-[10px] ${isWitnessPause ? "bg-amber-400 text-black font-black witness-gold" : "bg-black/30 text-amber-100/70"}`}>{isWitnessPause ? "Witness gold · decay paused" : `${daysInactive}d inactive`}</span>
                       </div>
                       <div className="mt-2 flex items-center gap-2">
                         <span className="font-mono text-[11px] font-bold text-white">{repN.toFixed(1)} → {decayed.toFixed(1)} Rep</span>
                         <span className="font-mono text-[10px] text-slate-400">· profile {profileDecayed.toFixed(1)} (9d)</span>
-                        <span className="ml-auto font-mono text-[10px] text-amber-200/60">14d curve</span>
+                        <span className="ml-auto font-mono text-[10px] text-amber-200/60">30pts curve</span>
                       </div>
                       <svg width="100%" height="32" viewBox="0 0 140 32" className="mt-1.5" aria-hidden>
                         {curve.map((v, i) => {
@@ -455,7 +458,7 @@ export default function ProfilePage(){
                           </>
                         )}
                       </svg>
-                      <p className="mt-1 font-mono text-[10px] leading-3 text-amber-100/60">Half-life {REP_HALF_LIFE_DAYS}d exponential · inactive &gt;1d adds 2%/day · stay active (verify/mine) to keep Rep warm.</p>
+                      <p className="mt-1 font-mono text-[10px] leading-3 text-amber-100/60">Half-life {REP_HALF_LIFE_DAYS}d · 0.5^(d/14) + 2%/day 0.98^d · profile 9d · 30pts amber SVG · Witness gold pauses decay · streak slash -2 revive +5 7d · bazaar spend</p>
                     </div>
                   );
                 })()}
