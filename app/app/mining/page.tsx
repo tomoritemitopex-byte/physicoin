@@ -24,7 +24,7 @@ type MiningLog = {
 };
 
 const COOLDOWN_MS = 24 * 60 * 60 * 1000;
-const BASE_REWARD = 10;
+const BASE_REWARD = 1;
 const LS_LAST = "physi_mining_last";
 
 function fmtMs(ms: number) {

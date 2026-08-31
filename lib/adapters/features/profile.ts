@@ -6,6 +6,7 @@ import { getSql, isDbConfigured, dbNotConfigured, ensureAllTables } from "@/lib/
 import { registerApiAdapter } from "../api";
 import { registerFeature } from "../features";
 import { logError, getErrorMessage } from "../error";
+import { computeAuthorityFinal } from "@/lib/authority";
 
 export const profileFeature = {
   id: "profile",
@@ -70,9 +71,14 @@ async function handleProfile(req: Request): Promise<Response> {
         return NextResponse.json({ ok: false, code: "BAD_INPUT", message: getErrorMessage("BAD_INPUT") }, { status: 400 });
       }
       try {
-        const r = await sql`
+        // Satoshi P0-1: compute authority server-side, never trust client-supplied values.
+        // authority_base is always 1.00; authority_final is capped at MAX_AUTHORITY_FINAL (1.10)
+        // until cryptographic attestations land. Statuses are informational only.
+        const authBase = 1.0;
+        const authFinal = computeAuthorityFinal(b.statuses ?? [], null);
+        const r = await sql`\
         INSERT INTO physi_users (full_name, nickname, programme, level, statuses, authority_base, authority_final)
-        VALUES (${b.full_name}, ${b.nickname}, ${b.programme}, ${b.level}, ${JSON.stringify(b.statuses ?? [])}::jsonb, ${b.authority_base ?? 1.0}, ${b.authority_final ?? 1.0})
+        VALUES (${b.full_name}, ${b.nickname}, ${b.programme}, ${b.level}, ${JSON.stringify(b.statuses ?? [])}::jsonb, ${authBase}, ${authFinal})
         RETURNING *`;
         return NextResponse.json({ ok: true, user: r[0] }, { status: 201 });
       } catch (e: unknown) {

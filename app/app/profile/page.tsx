@@ -603,10 +603,11 @@ export default function ProfilePage(){
                   </label>
                 </div>
                 <div>
-                  <span className="font-mono text-[10.5px] uppercase tracking-wide text-slate-500">Roles</span>
+                  <span className="font-mono text-[10.5px] uppercase tracking-wide text-slate-500">Roles (context only — not authority)</span>
                   <div className="mt-2 flex flex-wrap gap-1.5">{STATUS_OPTIONS.map(o=> (
                     <button key={o.v} type="button" onClick={()=>toggleStatus(o.v)} className={`rounded-full border px-3 py-1.5 text-[13px] font-medium ${statuses.includes(o.v) ? "border-white bg-white text-[#070a12]":"border-white/10 bg-white/[0.03] text-slate-300"}`}>{statuses.includes(o.v) ? "✓ ":" + "}{o.l}</button>
                   ))}</div>
+                  <p className="mt-1 font-mono text-[10px] text-slate-500/60">informational — weight stays 1.0 until attestations exist</p>
                 </div>
                 {/* candy picker in edit */}
                 <div>
@@ -728,11 +729,11 @@ export default function ProfilePage(){
             </label>
           </div>
           <div className="mt-4">
-            <span className="font-mono text-[10.5px] uppercase tracking-wide text-slate-500">Roles (optional — helps your Rep make sense)</span>
+            <span className="font-mono text-[10.5px] uppercase tracking-wide text-slate-500">Roles (optional — context only, not authority)</span>
             <div className="mt-2 flex flex-wrap gap-1.5">{STATUS_OPTIONS.map(o=> (
               <button key={o.v} type="button" onClick={()=>toggleStatus(o.v)} className={`rounded-full border px-3 py-1.5 text-[13px] font-medium transition ${statuses.includes(o.v) ? "border-white bg-white text-[#070a12]":"border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.07] hover:text-white"}`}>{statuses.includes(o.v) ? "✓ ":" + "}{o.l}</button>
             ))}</div>
-            <p className="mt-1.5 font-mono text-[11px] text-slate-500">you can leave blank — Rep starts at 1.0 either way</p>
+            <p className="mt-1.5 font-mono text-[11px] text-slate-500">informational labels — vote weight stays 1.0 until verified attestations land</p>
           </div>
           {err && <div className="mt-4 rounded-xl border border-red-400/20 bg-red-400/10 px-3 py-2.5 font-mono text-[12px] leading-4 text-red-200">{err}</div>}
           <div className="mt-5 flex items-center gap-3">

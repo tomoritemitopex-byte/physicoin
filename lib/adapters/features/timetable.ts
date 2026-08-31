@@ -89,10 +89,17 @@ async function handleTimetable(req: Request): Promise<Response> {
       const prevVenue = (b.prev_venue as string) ?? (b.from_venue as string) ?? null;
       const prevTime = (b.prev_event_time as string) ?? (b.from_time as string) ?? null;
       const prevDate = (b.prev_event_date as string) ?? null;
+      // Satoshi P0-2: KILL auto-canonical — events ALWAYS start as 'pending'.
+      // status, authority_points, required_points are server-controlled.
+      // No client can create a 'verified' event directly.
+      const status = "pending";
+      const authority_points = 0;
+      const scope = String(b.scope_type || "general").toLowerCase();
+      const required_points = (scope === "global" || scope === "university" || scope === "faculty" || scope === "department") ? 5.0 : 3.0;
       try {
-        const r = await sql`
+        const r = await sql`\
         INSERT INTO physi_events (title, venue, event_date, event_time, scope_type, scope_value, status, authority_points, required_points, created_by, severity, prev_venue, prev_event_time, prev_event_date)
-        VALUES (${String(b.title)}, ${String(b.venue)}, ${String(b.event_date)}, ${String(b.event_time)}, ${String(b.scope_type)}, ${(b.scope_value as string) ?? null}, ${String((b.status as string) ?? "pending")}, ${Number((b.authority_points as number) ?? 0)}, ${Number((b.required_points as number) ?? 0)}, ${(b.created_by as string) ?? null}, ${sev}, ${prevVenue}, ${prevTime}, ${prevDate})
+        VALUES (${String(b.title)}, ${String(b.venue)}, ${String(b.event_date)}, ${String(b.event_time)}, ${String(b.scope_type)}, ${(b.scope_value as string) ?? null}, ${status}, ${authority_points}, ${required_points}, ${(b.created_by as string) ?? null}, ${sev}, ${prevVenue}, ${prevTime}, ${prevDate})
         RETURNING *`;
         // also log history if prev exists
         if (prevVenue || prevTime) {
@@ -152,9 +159,9 @@ async function handleTimetable(req: Request): Promise<Response> {
           const mon = nextWeekday(1);
           const wed = nextWeekday(3);
           const seeds = [
-            { title: "BIO 101", venue: "LT2", event_date: toISO(fri), event_time: "08:00:00", scope_type: "level", scope_value: "100L", status: "pending", authority_points: 6, required_points: 12, severity:"move", prev_venue:"LT2", prev_event_time:"08:00" },
-            { title: "ANA 201", venue: "LT1", event_date: toISO(mon), event_time: "10:00:00", scope_type: "level", scope_value: "200L", status: "pending", authority_points: 9, required_points: 14, severity:"shift", prev_venue:null, prev_event_time:null },
-            { title: "CHM 101", venue: "Cancelled", event_date: toISO(wed), event_time: "14:00:00", scope_type: "general", scope_value: null, status: "pending", authority_points: 3, required_points: 10, severity:"cancelled", prev_venue:null, prev_event_time:null },
+            { title: "BIO 101", venue: "LT2", event_date: toISO(fri), event_time: "08:00:00", scope_type: "level", scope_value: "100L", status: "pending", authority_points: 0, required_points: 3.0, severity:"move", prev_venue:"LT2", prev_event_time:"08:00" },
+            { title: "ANA 201", venue: "LT1", event_date: toISO(mon), event_time: "10:00:00", scope_type: "level", scope_value: "200L", status: "pending", authority_points: 0, required_points: 3.0, severity:"shift", prev_venue:null, prev_event_time:null },
+            { title: "CHM 101", venue: "Cancelled", event_date: toISO(wed), event_time: "14:00:00", scope_type: "general", scope_value: null, status: "pending", authority_points: 0, required_points: 3.0, severity:"cancelled", prev_venue:null, prev_event_time:null },
           ];
           for (const s of seeds) {
             try {

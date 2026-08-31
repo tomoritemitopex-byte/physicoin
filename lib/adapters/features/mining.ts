@@ -1,5 +1,7 @@
 /**
  * lib/adapters/features/mining.ts — Mining Feature + Api Adapter
+ * Satoshi P1-5: This is a check-in faucet, not proof-of-work.
+ * base_reward = 1 (not 10). Rep only, no cash value.
  */
 import { NextResponse } from "next/server";
 import { getSql, isDbConfigured, dbNotConfigured, ensureAllTables } from "@/lib/db";
@@ -12,10 +14,13 @@ export const miningFeature = {
   label: "Check-in",
   nav: { href: "/app/mining", label: "Check-in", short: "In" },
   apiRoute: "/api/mining",
-  description: "Daily check-in — base_reward × authority_final → TEST-PHYSI",
+  description: "Daily check-in — base 1 × authority_final → Rep (TEST-PHIS, no value)",
 };
 
 registerFeature(miningFeature);
+
+// Satoshi P1-5: faucet not mining. base_reward is always 1.
+const BASE_REWARD = 1;
 
 async function handleMining(req: Request): Promise<Response> {
   try {
@@ -33,7 +38,9 @@ async function handleMining(req: Request): Promise<Response> {
         const u = await sql`SELECT mining_balance, authority_final FROM physi_users WHERE id = ${b.user_id} LIMIT 1`;
         if (!u.length) return NextResponse.json({ ok: false, code: "USER_NOT_FOUND", message: getErrorMessage("USER_NOT_FOUND") }, { status: 404 });
         const mult = Number((u[0] as { authority_final?: number }).authority_final ?? 1.0);
-        const base = Number(b.base_reward ?? 10);
+        // Satoshi P1-5: base_reward is always BASE_REWARD (1), never client-controlled.
+        // No $ coin icon anywhere. Rep only.
+        const base = BASE_REWARD;
         const earned = +(base * mult).toFixed(2);
         const r = await sql`
       INSERT INTO physi_mining_logs (user_id, base_reward, authority_multiplier, earned_amount)
