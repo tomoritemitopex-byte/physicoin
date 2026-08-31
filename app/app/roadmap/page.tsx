@@ -231,7 +231,8 @@ function playPop(){
     g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.14);
     o.connect(g); g.connect(ctx.destination);
     o.start(); o.stop(ctx.currentTime + 0.15);
-  }catch{}
+    vibrate(35);
+  }catch{ vibrate(35); }
 }
 
 const GHOST_REP: { handle: string; rep: number; color: string; bg: string }[] = [
@@ -273,6 +274,10 @@ function RoadmapInner() {
   // swipe verify state
   const [drag, setDrag] = useState({ x: 0, y: 0, active: false });
   const [candy, setCandy] = useState<string | null>(null);
+  const [candySpringId, setCandySpringId] = useState<string | null>(null);
+  const [roadWarp, setRoadWarp] = useState<"left"|"right"|null>(null);
+  const [fabFlash, setFabFlash] = useState(false);
+  const [tapeIdx, setTapeIdx] = useState(0);
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
   const dragPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const draggingRef = useRef(false);
@@ -1038,7 +1043,7 @@ function RoadmapInner() {
     // quick diff from inline prev fields
     const inlineDiff = (selectedEvent as any).prev_venue ? { venue: `${String((selectedEvent as any).prev_venue)}→${String(selectedEvent.venue)}`, time: `${String((selectedEvent as any).prev_event_time||"").slice(0,5)}→${String(selectedEvent.event_time).slice(0,5)}` } : null;
     // fetch server history for full timeline
-    setTimelineLoading(true);
+    setTimelineLoading(true); setTapeIdx(0);
     (async()=>{
       try{
         const r = await fetch(`/api/timetable?history=${encodeURIComponent(baseId)}`, { cache:"no-store" });
@@ -1666,6 +1671,8 @@ function RoadmapInner() {
     const prevRep = myRep;
     vibrate(v === "CANCEL" ? 20 : 35);
     playPop();
+    if(v==="YES"){ setCandySpringId(String(id).split("__tile")[0]); setTimeout(()=>setCandySpringId(null),320); }
+    if(v==="YES" && Math.abs(drag.x)>10){ setRoadWarp(drag.x>0?"right":"left"); setTimeout(()=>setRoadWarp(null),320); }
     const _award = presAward + (squadBoost ? 0.2 : 0) + (lecturerEmerald ? 0.5 : 0);
     setCandy(lecturerEmerald ? "emerald 8/8 ✓" : squadBoost ? "1.5x squad Yes!" : _award>=1 ? "+1.0 gold Witness" : "+0.3 grey Remote");
     setMyRep((prev)=> prev + _award);
@@ -1798,6 +1805,7 @@ function RoadmapInner() {
     const { x, y } = dragPosRef.current;
     draggingRef.current = false;
     dragStartRef.current = null;
+    if (Math.abs(x) > 80) { setRoadWarp(x>0? "right":"left"); setTimeout(()=>setRoadWarp(null),320); }
     if (Math.abs(x) > 30 || y < -30) setQSwipe(true);
     const shouldVote = selectedEvent && !selectedPersonal && !voteBusy;
     if (shouldVote) {
@@ -1889,7 +1897,7 @@ function RoadmapInner() {
       } else {
         setToast(`created “${fabTitle.trim()}” ✓ · ${fabSeverity}`);
       }
-      setFabOpen(false); setFabTitle(""); setFabVenue(""); setFabTime("10:00"); setFabSeverity(""); setFabDate(new Date().toISOString().slice(0,10));
+      setFabOpen(false); setFabFlash(true); setTimeout(()=>setFabFlash(false),600); setFabTitle(""); setFabVenue(""); setFabTime("10:00"); setFabSeverity(""); setFabDate(new Date().toISOString().slice(0,10));
       fetchFeed();
     } catch (err:any) { logError("TIMETABLE_CREATE_FAILED", err, { page: "roadmap" }); setToast(err?.message || getErrorMessage("TIMETABLE_CREATE_FAILED")); }
     finally { setFabBusy(false); }
@@ -2084,8 +2092,8 @@ function RoadmapInner() {
             <div className="absolute top-[18vh] left-[-6%] h-[46vh] w-[46vh] rounded-full opacity-[0.16] blur-[40px]" style={{ background: "radial-gradient(circle, rgba(82,183,136,0.95), transparent 70%)" }} />
             <div className="absolute top-[52vh] right-[-8%] h-[50vh] w-[50vh] rounded-full opacity-[0.18] blur-[42px]" style={{ background: "radial-gradient(circle, rgba(45,106,79,0.9), transparent 70%)" }} />
           </div>
-          {/* mid lollipops glow 0.6x */}
-          <div className="parallax-layer absolute inset-0" style={{ transform: `translateY(${parallaxY * 0.6}px)` }}>
+          {/* mid lollipops glow 0.6x + 2s bob */}
+          <div className="parallax-layer lollipop-bob absolute inset-0" style={{ transform: `translateY(${parallaxY * 0.6}px)` }}>
             <div className="absolute bottom-[18vh] left-1/2 h-[38vh] w-[90vw] -translate-x-1/2 opacity-[0.12] blur-[30px]" style={{ background: "radial-gradient(ellipse, rgba(64,145,108,0.55), transparent 72%)" }} />
           </div>
           {/* front road depth 1.0x - subtle road-tint veil that scrolls with content */}
@@ -2100,7 +2108,7 @@ function RoadmapInner() {
             {schoolMeta.badge} · <a href="?school=FUTO" className="pointer-events-auto underline decoration-white/30 hover:text-amber-200">FUTO</a> · <a href="?school=UNIPORT" className="pointer-events-auto underline decoration-white/30">UNIPORT</a> · {schoolMeta.name}
           </div>
         )}
-        {/* top bar — decluttered: PHYSI · WAT · bell only */}
+        {/* top bar — decluttered: PHYSI · WAT · bell + entangled squad web */}
         <div className="pointer-events-none absolute left-0 right-0 top-0 z-20 flex justify-center px-3 pt-3 sm:px-6">
           <div className="pointer-events-auto flex w-full max-w-[900px] items-center justify-between gap-2">
             <div className="liquid-glass glass-bevel flex items-center gap-2 rounded-full border border-white/[0.14] px-4 py-2 backdrop-blur-[16px] shadow-[0_8px_32px_rgba(0,0,0,0.28),0_0_16px_rgba(139,92,246,0.14),inset_0_1px_0_rgba(255,255,255,0.18)] backdrop-blur-[16px]" style={{ background: "rgba(255,255,255,0.08)", backdropFilter: "blur(16px) saturate(1.22)" } as any} >
@@ -2111,6 +2119,19 @@ function RoadmapInner() {
                 {wat.timePart} WAT
               </span>
               <span className="hidden font-mono text-[10px] text-slate-400 sm:inline">· {wat.wday} {wat.datePart}</span>
+              {/* entangled squad: 3 dots linked violet lines to avatar */}
+              <span className="hidden sm:flex items-center gap-1 ml-1" aria-label="squad web">
+                <span className="relative flex items-center gap-1">
+                  <svg width="54" height="18" viewBox="0 0 54 18" className="absolute -left-1 top-1/2 -translate-y-1/2 pointer-events-none" style={{zIndex:0}}>
+                    <line x1="9" y1="9" x2="27" y2="9" stroke="#8b5cf6" strokeWidth="1.2" opacity="0.9" />
+                    <line x1="18" y1="9" x2="36" y2="9" stroke="#8b5cf6" strokeWidth="1.2" opacity="0.9" />
+                    <line x1="36" y1="9" x2="45" y2="9" stroke="#8b5cf6" strokeWidth="1.2" opacity="0.9" />
+                  </svg>
+                  {[0,1,2].map(i=> <span key={i} className={`relative h-2.5 w-2.5 rounded-full border border-white/60 ${squad && squad.members?.[i] ? "bg-violet-500" : "bg-white/25"}`} style={{zIndex:1}} />)}
+                  <span className={`ml-1 flex h-5 w-5 items-center justify-center rounded-full border-2 text-[9px] font-black text-white ${squad && isSquadFormed(squad as any) ? "squad-emerald-pulse border-emerald-300 bg-emerald-500" : "border-white/40 bg-white/10"}`} style={{zIndex:1}}>👤</span>
+                </span>
+                {squad && isSquadFormed(squad as any) && <span className="squad-emerald-pulse ml-1 rounded-full bg-emerald-500 px-2 py-0.5 font-mono text-[9px] font-black text-white">👥 3/3 1.5x</span>}
+              </span>
               <button onClick={()=> setMoreOpen(v=>!v)} aria-label="More" className="ml-1 rounded-full border border-white/10 bg-white/10 px-2.5 py-1 font-mono text-[11px] font-black text-white hover:bg-white hover:text-black transition">⋯ More</button>
             </div>
             <div className="flex items-center gap-2">
@@ -2343,7 +2364,7 @@ function RoadmapInner() {
           <div className="pointer-events-none absolute inset-y-0 right-0 w-[18%] z-[4]" style={{ background: "linear-gradient(to left, rgba(0,0,0,0.38) 0%, rgba(0,0,0,0.18) 42%, transparent 100%)" }} />
           <div
             ref={scrollRef}
-            className="road-3d-inner relative flex h-full w-full justify-center overflow-auto pb-[320px] sm:pb-[340px]"
+            className={`road-3d-inner relative flex h-full w-full justify-center overflow-auto pb-[320px] sm:pb-[340px] ${roadWarp==="left" ? "road-warp-left" : roadWarp==="right" ? "road-warp-right" : ""}`}
             style={{
               scrollBehavior: "smooth",
               transformStyle: "preserve-3d",
@@ -2420,7 +2441,7 @@ function RoadmapInner() {
           <div className="parallax-layer pointer-events-none absolute left-1/2 top-[104px] w-[96%] -translate-x-1/2 overflow-hidden rounded-[28px]" style={{ height: svgH, minHeight: svgH, transform: `translateY(${parallaxY * 0.6}px)` }} aria-hidden>
             <svg viewBox={`0 0 520 ${svgH}`} className="absolute inset-0 h-full w-full">
               {[42, 92, 410, 462].map((x, i) => (
-                <g key={i} opacity={0.38}>
+                <g key={i} opacity={0.38} className="lollipop-bob" style={{ animationDelay: `${i*0.4}s`} as any}>
                   <rect x={x - 3.5} y={460} width={7} height={18} rx={3} fill="#5a3e1b" />
                   <circle cx={x} cy={436} r={20} fill="#52b788" stroke="rgba(255,255,255,0.16)" strokeWidth={1.4} />
                   <circle cx={x} cy={436} r={13} fill="rgba(255,255,255,0.08)" />
@@ -2746,6 +2767,12 @@ function RoadmapInner() {
                         opacity: isPersonal && !isActive ? 0.62 : opacity,
                       }}
                     >
+                      {/* entangled ghost #7F3A dots around node — violet lines */}
+                      <g opacity={0.92}>
+                        {[0,1,2].map(k=>{ const a=(k*120-30)*Math.PI/180; const r=nodeR+14; const gx=p.x+Math.cos(a)*r; const gy=p.y+Math.sin(a)*r; return <g key={k}><line x1={p.x} y1={p.y} x2={gx} y2={gy} stroke="#8b5cf6" strokeWidth="1" opacity="0.55" strokeDasharray="2 3" /><circle cx={gx} cy={gy} r={5.5} fill={GHOST_DOT_BG} stroke="rgba(255,255,255,0.7)" strokeWidth="1" opacity={0.92} /><circle cx={gx} cy={gy} r={2.2} fill="white" opacity={0.9} /></g>; })}
+                      </g>
+                      {/* lecturer emerald OFFICIAL star above */}
+                      {lecturer?.pinVerified && <g><circle cx={p.x} cy={p.y - nodeR - 12} r={8} fill="#10b981" stroke="white" strokeWidth="1.2" className="squad-emerald-pulse" /><text x={p.x} y={p.y - nodeR - 8} textAnchor="middle" fontSize={9} fontWeight={900} fill="white">★</text><text x={p.x} y={p.y - nodeR - 22} textAnchor="middle" fontSize={6} fontWeight={900} fill="#10b981" style={{fontFamily:"ui-monospace,monospace"}}>OFFICIAL</text></g>}
                       {isActive && <circle cx={p.x} cy={p.y} r={nodeR + 20} fill="white" opacity={0.09} />}
                       {panicId && (baseId===panicId || item.id===panicId) && (
                         <>
@@ -2763,11 +2790,11 @@ function RoadmapInner() {
                       )}
                       <circle cx={p.x} cy={p.y + 6} r={nodeR} fill="black" opacity={0.34} />
                       <g
-                        className="node-3d"
+                        className={`node-3d ${candySpringId===baseId ? "candy-spring" : ""}`}
                         style={{
                           transformOrigin: `${p.x}px ${p.y}px`,
                           transform: (st as any).key === "almost" ? `translateZ(14px) scale(${scale})` : "translateZ(10px)",
-                          animation: isNew ? "scaleIn 720ms cubic-bezier(.2,.8,.3,1.2)" : anim || undefined,
+                          animation: candySpringId===baseId ? undefined : (isNew ? "scaleIn 720ms cubic-bezier(.2,.8,.3,1.2)" : anim || undefined),
                           filter: "drop-shadow(0 12px 18px rgba(0,0,0,0.45))",
                         } as any}
                       >
@@ -2810,7 +2837,7 @@ function RoadmapInner() {
                         const barW=84; const barX = p.x - barW/2; const barY = p.y + 46; const fillW = Math.max(0, Math.min(barW, Math.round(barW * pctQ/100)));
                         return <g>
                           <rect x={barX} y={barY} width={barW} height={6} rx={3} fill="rgba(0,0,0,0.55)" stroke="rgba(255,255,255,0.12)" />
-                          <rect x={barX} y={barY} width={fillW} height={6} rx={3} fill={pctQ>=100 ? "#10b981" : "#10b981"} opacity={0.95} />
+                          <rect x={barX} y={barY} width={fillW} height={apQ>=7 && quorumThreshold===8 ? 8 : 6} rx={3} fill={pctQ>=100 ? "#10b981" : "#10b981"} opacity={0.95} style={apQ>=7 && quorumThreshold===8 ? { filter:"drop-shadow(0 0 6px rgba(16,185,129,0.7))" } as any : undefined} />
                           <text x={barX} y={barY-4} textAnchor="start" fontSize={6.5} fontWeight={800} fill={almostQ ? "#facc15" : "rgba(255,255,255,0.92)"} style={{fontFamily:"ui-monospace,monospace"}}>{apQ}/{quorumThreshold} {pctQ}%{almostQ ? " · 1 more!" : ""}</text>
                         </g>;
                       })()}
@@ -2915,7 +2942,7 @@ function RoadmapInner() {
               const r = await fetch("/api/timetable", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
               const j = await r.json().catch(() => ({}));
               if (!r.ok || j.ok === false) throw new Error(j?.error || "create failed");
-              setToast(`whisper “${title}” ✓ · ${severity} · anon`);
+              setFabFlash(true); setTimeout(()=>setFabFlash(false),600); setToast(`whisper “${title}” ✓ · ${severity} · anon`);
               playPop(); vibrate(20);
               fetchFeed();
             } catch (e: any) { setToast(e?.message || "whisper failed"); } finally { setFabBusy(false); }
@@ -2923,7 +2950,7 @@ function RoadmapInner() {
         />
         {/* Secondary FAB — tap to open classic create (kept for non-voice, still decluttered) */}
         <div className="fixed bottom-[88px] right-20 z-40 flex flex-col items-end gap-2 sm:bottom-[92px] sm:right-20">
-          <button onClick={()=>setFabOpen(true)} aria-label="Create event" title="Create event (tap) · hold right FAB for voice whisper" className="flex h-[46px] w-[46px] items-center justify-center rounded-full border border-white/20 bg-white/[0.08] backdrop-blur text-lg font-bold text-white shadow-[0_4px_16px_rgba(0,0,0,0.3)] hover:bg-white hover:text-black transition">
+          <button onClick={()=>setFabOpen(true)} aria-label="Create event" title="Create event (tap) · hold right FAB for voice whisper" className={`flex h-[46px] w-[46px] items-center justify-center rounded-full border border-white/20 backdrop-blur text-lg font-bold shadow-[0_4px_16px_rgba(0,0,0,0.3)] transition ${fabFlash ? "fab-gold-flash bg-amber-400 text-black border-amber-300" : "bg-white/[0.08] text-white hover:bg-white hover:text-black"}`}>
             +
           </button>
         </div>
@@ -3117,13 +3144,41 @@ function RoadmapInner() {
                                 {timelineHist?.history && timelineHist.history.length>0 && <span className="rounded-full bg-white/10 px-2 py-1 font-mono text-[10px] text-slate-400">{timelineHist.history.length} edits in history</span>}
                               </div>
                             )}
-                            {/* timeline diff history table */}
+                            {/* Time tape — scrollable LT2→LT5 diff chips severity blue/yellow/red + scrub rewind + quorum 7/8 + VOD on loser 0.35 */}
                             {timelineHist && (timelineHist.history?.length>0 || timelineHist.diff) && (
-                              <div className="mt-2 overflow-hidden rounded-xl border border-white/10 bg-black/40">
+                              <div className="mt-2 overflow-hidden rounded-xl border border-white/10 bg-black/50">
                                 <div className="flex items-center justify-between bg-white/[0.04] px-3 py-2">
-                                  <span className="font-mono text-[10px] font-bold tracking-wide text-slate-300">Timeline diff history</span>
-                                  <span className="font-mono text-[10px] text-slate-500">{timelineHist.history?.length ?? 0} versions</span>
+                                  <span className="font-mono text-[10px] font-bold tracking-wide text-white">⏳ Time tape · scrub rewind per version</span>
+                                  <span className="font-mono text-[10px] text-slate-500">{timelineHist.history?.length ? timelineHist.history.length+1 : 1} versions · tapeIdx {tapeIdx}</span>
                                 </div>
+                                {/* scrollable chips */}
+                                <div className="flex gap-1.5 overflow-x-auto px-2 py-2 scrollbar-none" style={{scrollbarWidth:"none"}}>
+                                  {(() => {
+                                    const versions:any[] = timelineHist.history?.length ? [...timelineHist.history].reverse() : [];
+                                    // build tape versions: oldest -> current
+                                    const curSev = (ev as any).severity || "move";
+                                    const curChip = { prev_venue: (ev as any).prev_venue || ev.venue, new_venue: ev.venue, prev_event_time: (ev as any).prev_event_time || ev.event_time, new_event_time: ev.event_time, severity: curSev, label: `LT2→LT5` };
+                                    const tapes = versions.length ? versions.map((h:any)=> ({ prev_venue:h.prev_venue, new_venue:h.new_venue, prev_event_time:h.prev_event_time, new_event_time:h.new_event_time, severity: curSev, changed_at:h.changed_at })) : [curChip];
+                                    // if no history but diff exists, show diff chip
+                                    if(!versions.length && timelineHist.diff) tapes[0]= { prev_venue: String((ev as any).prev_venue||"LT2"), new_venue: ev.venue, prev_event_time: String((ev as any).prev_event_time||"08:00"), new_event_time: ev.event_time, severity: curSev, changed_at: null };
+                                    return tapes.slice(0,12).map((t:any,ix:number)=>{
+                                      const sev:string = String(t.severity||curSev);
+                                      const bg = sev==="cancelled"? "bg-red-500 border-red-400 text-white" : sev==="shift"? "bg-yellow-400 border-yellow-300 text-black" : "bg-blue-500 border-blue-400 text-white";
+                                      const active = tapeIdx===ix;
+                                      return <button key={ix} onClick={()=> setTapeIdx(ix)} className={`tape-chip shrink-0 rounded-full border px-3 py-1.5 font-mono text-[10px] font-black ${active ? "tape-chip-active shadow" : bg}`}>{String(t.prev_venue||"—").slice(0,6)}→{String(t.new_venue).slice(0,6)} · {String(t.prev_event_time||"—").slice(0,5)}→{String(t.new_event_time).slice(0,5)} <span className={`ml-1 rounded-full px-1 py-0.5 text-[8px] ${sev==="shift"?"bg-black/10":"bg-white/20"}`}>{sev}</span></button>;
+                                    });
+                                  })()}
+                                </div>
+                                {/* scrub rewind per version with quorum bar 7/8 */}
+                                <div className="px-3 pb-2">
+                                  <input type="range" min={0} max={Math.max(0,(timelineHist.history?.length||1)-1)} value={Math.min(tapeIdx, Math.max(0,(timelineHist.history?.length||1)-1))} onChange={e=> setTapeIdx(parseInt(e.target.value,10)||0)} className="tape-scrub w-full accent-violet-500" />
+                                  <div className="mt-1 flex items-center gap-2">
+                                    <div className="flex-1 h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full bg-emerald-400 transition-all" style={{ width: `${Math.min(100,Math.round((Number(ev.authority_points||0)/8)*100))}%`, height: (Number(ev.authority_points||0)>=7 ? 8 : 6) as any }} /></div>
+                                    <span className="font-mono text-[10px] font-bold text-emerald-300">{Number(ev.authority_points||0)}/8 quorum{Number(ev.authority_points||0)>=7?" · thickens":""}</span>
+                                  </div>
+                                  <p className="mt-1 font-mono text-[9px] text-slate-500">scrub rewind: tape version {tapeIdx+1} · quorum bar 7/8 thickens</p>
+                                </div>
+                                {/* history list with VOD on loser 0.35 */}
                                 <div className="max-h-[96px] overflow-auto divide-y divide-white/5">
                                   {timelineHist.history?.length ? timelineHist.history.slice(0,8).map((h:any,ix:number)=> (
                                     <div key={h.id||ix} className="flex items-center gap-2 px-3 py-1.5 font-mono text-[10px] text-slate-400">
@@ -3133,9 +3188,11 @@ function RoadmapInner() {
                                       <span className="ml-auto text-[9px] text-slate-600">{String(h.changed_at||"").slice(0,16).replace("T"," ")}</span>
                                     </div>
                                   )) : (
-                                    <div className="px-3 py-2 font-mono text-[10px] text-slate-500">Current venue/time diff vs previous version stored in event history — no prior edits yet (create with PATCH to add LT2→LT5 entry).</div>
+                                    <div className="px-3 py-2 font-mono text-[10px] text-slate-500">LT2→LT5 diff · severity {String((ev as any).severity||"move")} · blue/yellow/red chips above · scrub to rewind</div>
                                   )}
                                 </div>
+                                {/* VOD on loser 0.35 replays voters */}
+                                <button onClick={async()=>{ try{ const bid=String(ev.id).split("__tile")[0]; const r=await fetch(`/api/verify?event_id=${encodeURIComponent(bid)}`,{cache:"no-store"}); const j=await r.json().catch(()=>({} as any)); const voters=j.verifications??j.rows??[]; setGhostModal({open:true, ev, voters, forkIx:0}); setGhostConfetti(true); setTimeout(()=>setGhostConfetti(false),2800); vibrate(20); }catch{} }} className="flex w-full items-center justify-center gap-1.5 border-t border-white/10 bg-white/[0.04] px-3 py-2 font-mono text-[10px] font-bold text-violet-200 hover:bg-white hover:text-black transition" style={{opacity: 0.92}}><span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-white/10 text-[10px]">▶</span> VOD · tap loser 0.35 replays voters · {Number(ev.authority_points||0)>=8?"winner":"loser"} tape</button>
                               </div>
                             )}
                           </div>
