@@ -68,3 +68,26 @@ CREATE TABLE IF NOT EXISTS physi_canonical_log (
   promoted_by UUID REFERENCES physi_users(id) ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS physi_canonical_log_event_idx ON physi_canonical_log (event_id);
+
+-- Scope Merge Protocol Tables (Satoshi's Peer Resolution)
+CREATE TABLE IF NOT EXISTS physi_scope_votes (
+  voter_id UUID REFERENCES physi_users(id) ON DELETE CASCADE,
+  scope_a TEXT NOT NULL,
+  scope_b TEXT NOT NULL,
+  vote_value SMALLINT CHECK (vote_value IN (-1, 1)),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (voter_id, scope_a, scope_b)
+);
+
+CREATE TABLE IF NOT EXISTS physi_scope_resolution (
+  scope_a TEXT,
+  scope_b TEXT,
+  merged_into TEXT,
+  resolved_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  resolution TEXT CHECK (resolution IN ('merged', 'separate')),
+  PRIMARY KEY (scope_a, scope_b)
+);
+
+CREATE INDEX IF NOT EXISTS physi_scope_votes_voter_idx ON physi_scope_votes (voter_id);
+CREATE INDEX IF NOT EXISTS physi_scope_votes_scope_idx ON physi_scope_votes (scope_a, scope_b);
+CREATE INDEX IF NOT EXISTS physi_scope_votes_time_idx ON physi_scope_votes (created_at);

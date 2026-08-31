@@ -5,6 +5,8 @@ export {
   ensureVerifications,
   ensureMiningLogs,
   ensureCanonicalLog,
+  ensureScopeVotes,
+  ensureScopeResolution,
   ensureAllTables,
   ensureUsersTable,
   ensureEventsTable,
@@ -12,5 +14,7 @@ export {
   ensureMiningLogsTable,
   ensureMiningTable,
   ensureCanonicalLogTable,
+  ensureScopeVotes as ensureScopeVotesTable,
+  ensureScopeResolution as ensureScopeResolutionTable,
   ensureTables,
 } from "./db";

@@ -205,6 +205,38 @@ export async function ensureCanonicalLog(): Promise<void> {
   await c`CREATE INDEX IF NOT EXISTS physi_canonical_event_idx2 ON physi_canonical_log (event_id)`;
 }
 
+// Scope Merge Protocol Functions (Satoshi's Peer Resolution)
+export async function ensureScopeVotes(): Promise<void> {
+  const c = getSql() ?? sql;
+  if (!c) return;
+  await c`
+    CREATE TABLE IF NOT EXISTS physi_scope_votes (
+      voter_id UUID REFERENCES physi_users(id) ON DELETE CASCADE,
+      scope_a TEXT NOT NULL,
+      scope_b TEXT NOT NULL,
+      vote_value SMALLINT CHECK (vote_value IN (-1, 1)),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (voter_id, scope_a, scope_b)
+    )`;
+  await c`CREATE INDEX IF NOT EXISTS physi_scope_votes_voter_idx ON physi_scope_votes (voter_id)`;
+  await c`CREATE INDEX IF NOT EXISTS physi_scope_votes_scope_idx ON physi_scope_votes (scope_a, scope_b)`;
+  await c`CREATE INDEX IF NOT EXISTS physi_scope_votes_time_idx ON physi_scope_votes (created_at)`;
+}
+
+export async function ensureScopeResolution(): Promise<void> {
+  const c = getSql() ?? sql;
+  if (!c) return;
+  await c`
+    CREATE TABLE IF NOT EXISTS physi_scope_resolution (
+      scope_a TEXT,
+      scope_b TEXT,
+      merged_into TEXT,
+      resolved_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      resolution TEXT CHECK (resolution IN ('merged', 'separate')),
+      PRIMARY KEY (scope_a, scope_b)
+    )`;
+}
+
 export async function ensureEventHistory(): Promise<void> {
   const c = getSql() ?? sql;
   if (!c) return;
@@ -235,7 +267,7 @@ export async function ensureAllTables(): Promise<void> {
   const run = async () => {
     await ensureUsers();
     await ensureEvents();
-    await Promise.all([ensureVerifications(), ensureMiningLogs(), ensureCanonicalLog(), ensureEventHistory()]);
+    await Promise.all([ensureVerifications(), ensureMiningLogs(), ensureCanonicalLog(), ensureEventHistory(), ensureScopeVotes(), ensureScopeResolution()]);
   };
   try {
     await run();
@@ -254,5 +286,7 @@ export const ensureMiningLogsTable = ensureMiningLogs;
 export const ensureMiningTable = ensureMiningLogs;
 export const ensureCanonicalLogTable = ensureCanonicalLog;
 export const ensureEventHistoryTable = ensureEventHistory;
+export const ensureScopeVotesTable = ensureScopeVotes;
+export const ensureScopeResolutionTable = ensureScopeResolution;
 export const ensureTables = ensureAllTables;
 export const dbUnavailableResponse = dbNotConfigured;
