@@ -9,6 +9,10 @@ import { checkPresenceAward, requestGeolocation, persistPresence, getPresenceSco
 import SearchBar from "@/components/road/SearchBar";
 import QuorumBar from "@/components/road/QuorumBar";
 import VoiceGossipFab from "@/components/VoiceGossipFab";
+import GlassRail from "@/components/road/GlassRail";
+import CandyWell from "@/components/road/CandyWell";
+import { IsotopePanel, StreakRescueCard, BazaarBlastCard } from "@/components/road/IsotopePanels";
+import { vaultPut, vaultFlush, onEntangle } from "@/lib/shardsync";
 import { getSquad, isSquadFormed, setSquad as saveSquad, clearSquad, shouldApplySquadBoost, SQUAD_MULTIPLIER, SQUAD_KEY } from "@/lib/squad";
 import { getLecturer, isLecturerVerified, isEmeraldPinVerified, hasEmeraldBypass, verifyLecturerEmail, verifyLecturerPin, lecturerBadgeLabel, LECTURER_KEY, OFFICIAL_PIN } from "@/lib/lecturer";
 import { generateICS, downloadICS } from "@/lib/calendar";
@@ -3518,6 +3522,20 @@ function RoadmapInner() {
             </div>
           </div>
         )}
+        {/* ── 6 intuitions: Candy Well + Forest 2.5D + Isotope + Streak + Bazaar ── */}
+        <div className="pointer-events-auto fixed bottom-[78px] left-1/2 z-30 flex w-full max-w-[560px] -translate-x-1/2 flex-col gap-2 px-3">
+          <CandyWell count={16} />
+          <IsotopePanel rep={myRep} />
+          <StreakRescueCard />
+          <BazaarBlastCard squad={squad?.members||[]} />
+          <div className="flex items-center gap-2 font-mono text-[9px] text-white/40">
+            <span>ShardSync Vault · IndexedDB + Background Sync + BroadcastChannel CRDT</span>
+            <button onClick={async()=>{ const n=await vaultFlush(); setToast(n? `ShardSync flushed ${n} shards ✓`:`Vault empty — offline entangle ready`); }} className="ml-auto rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-bold text-white/70">Flush vault</button>
+            <button onClick={async()=>{ await vaultPut({ title: `Vault gist ${Date.now()}`, venue:"LT1", event_date:new Date().toISOString().slice(0,10), event_time:"10:00", scope_type:"whole_school" }); setToast("Vault entangle ✓ offline shard saved"); }} className="rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-black">Entangle</button>
+          </div>
+        </div>
+        {/* Thumb-Gravity Glass Rail 60px single rail */}
+        <GlassRail viewMode={viewMode} setViewMode={setViewMode} onFab={()=>setFabOpen(true)} bellCount={bellCount} bellOpen={bellOpen} setBellOpen={setBellOpen as any} fabFlash={fabFlash} hasNew={mineHasNew} />
       </div>
     </div>
   );

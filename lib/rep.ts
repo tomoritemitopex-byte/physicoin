@@ -65,3 +65,13 @@ export function inactiveDays(lastActiveIso: string | null | undefined): number {
   const diff = Date.now() - t;
   return Math.max(0, Math.floor(diff / (24*3600*1000)));
 }
+
+// ── Isotope Half-Life Engine verifiable deterministic ──
+// N(t)=N0*0.5^(t/half) client deterministic; verifiable via snapshot ts
+export function isotopeDecay(N0:number, tDays:number, half:number=REP_HALF_LIFE_DAYS):number{ return decayByHalfLife(N0,tDays,half); }
+export function isotopeSnapshot(rep:number, atIso:string, half:number=REP_HALF_LIFE_DAYS):{ rep:number; decayed:number; days:number; half:number; verifiable:true }{
+  const d=inactiveDays(atIso); return { rep, decayed:decayByHalfLife(rep,d,half), days:d, half, verifiable:true as const };
+}
+export function verifyDecay(snapshot:{rep:number; decayed:number; days:number; half:number}):boolean{
+  const exp=decayByHalfLife(snapshot.rep, snapshot.days, snapshot.half); return Math.abs(exp-snapshot.decayed)<0.02;
+}

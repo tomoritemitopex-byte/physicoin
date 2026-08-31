@@ -205,6 +205,13 @@ p { hanging-punctuation: first; }
   -webkit-backdrop-filter: blur(16px) saturate(1.22);
   border-color: rgba(255,255,255,0.08);
 }
+/* Thumb-Gravity Glass Rail 60px — single rail | Candy Well + Forest 2.5D | ShardSync | Bazaar */
+.physicoin-glass-rail { width: min(560px, 96vw); }
+.glass-rail-inner { width: 100%; justify-content: space-between; }
+.candy-well { will-change: transform; }
+.forest-layer-far { filter: blur(2.5px); opacity: 0.52; }
+.forest-layer-mid { filter: blur(1.2px); opacity: 0.68; }
+.forest-layer-near { filter: none; opacity: 0.92; }
 
 /* ── Candy spring 0.92→1.08 280ms on YES ── */
 @keyframes candySpring { 0%{transform:scale(0.92)} 55%{transform:scale(1.08)} 100%{transform:scale(1)} }
