@@ -83,26 +83,44 @@ export function buildGhostChainSigs(
  * For use outside sql.transaction (e.g. mining check-in), it will execute via
  * Promise.all on prepared queries. For use inside sql.transaction, use
  * prepareGhostChainQueries directly with pre-computed sigs.
+ *
+ * IMPORTANT: When used inside sql.transaction((tx) => [...]), do NOT await
+ * appendGhostChain(tx, ...) — instead pre-compute sigs with buildGhostChainSigs
+ * and spread prepareGhostChainQueries(tx, ...) into the returned array.
+ * Neon HTTP driver requires: sql.transaction((tx) => [tx`...`, ...])
+ * so query promises must be returned in the array, not awaited separately.
  */
 export async function appendGhostChain(
   txOrSql: any,
   userId: string,
   action: string,
   opts?: { prevSig?: string | null; timestamp?: string }
-): Promise<{ prevSig: string; newSig: string; timestamp: string }> {
+): Promise<{ prevSig: string; newSig: string; timestamp: string; queries: any[] }> {
   const ts = opts?.timestamp ?? new Date().toISOString();
+  const isTransactionClient = typeof (txOrSql as any)?.transaction !== "function";
   let prevSig: string | null = opts?.prevSig !== undefined ? opts.prevSig : null;
-  if (prevSig === null) {
+  if (prevSig === null && !isTransactionClient) {
     try {
       const rows = await txOrSql`SELECT rep_ghost_sig FROM physi_users WHERE id=${userId} LIMIT 1`;
       prevSig = rows?.[0]?.rep_ghost_sig ?? null;
     } catch { prevSig = null; }
   }
+  // If inside transaction and prevSig still null, caller should have pre-fetched
+  // and passed opts.prevSig — don't issue SELECT inside batch (Neon HTTP requires reads before tx)
   const { prev, newSig } = buildGhostChainSigs(prevSig, action, userId, ts);
-
-  // Prepare query promises (do not sequentially await)
+  // Prepare query promises — MUST be included in sql.transaction([...]) array
+  // when used transactionally (Neon HTTP driver: sql.transaction((tx) => [tx`...`])).
+  // Do NOT await appendGhostChain(tx, ...) inside a transaction; instead use
+  // buildGhostChainSigs + prepareGhostChainQueries and spread into the array.
   const queries = prepareGhostChainQueries(txOrSql, userId, action, prev, newSig);
-  // Execute — use Promise.all to avoid sequential awaits
-  try { await Promise.all(queries.map((q) => q.catch(() => null))); } catch {}
-  return { prevSig: prev, newSig, timestamp: ts };
+  // For standalone (non-transactional) callers like mining check-in, execute
+  // here directly. Do not swallow errors — previous .catch(()=>null) hid failures
+  // and left chain at genesis. For transactional callers, return queries for
+  // spreading into sql.transaction array — don't double-execute inside batch.
+  if (!isTransactionClient) {
+    // sql (outside transaction) — execute now
+    await Promise.all(queries);
+  }
+  // Always return queries so caller CAN spread into transaction array if needed
+  return { prevSig: prev, newSig, timestamp: ts, queries };
 }
