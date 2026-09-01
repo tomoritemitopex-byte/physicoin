@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useCallback, useMemo, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Search, Plus, Check, X, Map as MapIcon, List, Clock3, MapPin, Users } from "lucide-react";
+import { Search, Plus, X, Map as MapIcon, List, Clock3, MapPin } from "lucide-react";
 
 type EventRow = {
   id: string; title: string; venue: string; event_date: string; event_time: string;
@@ -45,8 +45,7 @@ function RoadmapInner() {
   const [pickerHandle, setPickerHandle] = useState("");
   const [pickerBusy, setPickerBusy] = useState(false);
   const [pickerErr, setPickerErr] = useState<string | null>(null);
-  const pendingVoteRef = useState<{ id: string; v: "YES"|"NO"|"CANCEL" } | null>(null)[1] as any;
-  const [pendingVote, setPendingVote] = pendingVoteRef as any;
+  const [pendingVote, setPendingVote] = useState<{ id: string; v: "YES"|"NO"|"CANCEL" } | null>(null);
 
   const fetchFeed = useCallback(async () => {
     setLoading(true); setErr(null);
