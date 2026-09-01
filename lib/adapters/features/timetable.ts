@@ -107,8 +107,32 @@ async function handleTimetable(req: Request): Promise<Response> {
         }
       } catch {}
       const required_points = (scope === "global" || scope === "university" || scope === "faculty" || scope === "department") ? 5.0 : 3.0;
+      // mempool RBF: check competing claim in same slot before insert (lazy expiry first)
+      try { const { expireMempool } = await import("@/lib/mempool"); await expireMempool(sql); } catch {}
       const isZkAttested = b.is_zk_attested === true || b.isZkAttested === true || false;
       // duplicate cross-reference: if title+venue+date within 7d exists, return duplicate_suggestion (unless force=true)
+      // mempool double-spend: if same slot already pending, return existing mempool entry (RBF — don't create duplicate row)
+      if (!b.force && b.title && b.event_date && b.event_time) {
+        try {
+          const { getCompetingClaims } = await import("@/lib/mempool");
+          const slot = { scope_value: (b.scope_value as string) ?? null, event_date: String(b.event_date), event_time: String(b.event_time), title: String(b.title) };
+          const competing = await getCompetingClaims(sql, slot);
+          if (competing.length) {
+            const existing = competing[0];
+            const conflicts_with = competing.map((c: any) => ({ id: c.id, venue: c.venue, event_time: c.event_time, title: c.title }));
+            // also include the attempted new venue as contender for tip display
+            return NextResponse.json({
+              ok: false,
+              code: "MEMPOOL_CONFLICT",
+              message: "Slot already claimed — competing claim exists. Vote on existing entry.",
+              existing_event_id: existing.id,
+              existing,
+              conflicts_with: [...conflicts_with, { venue: String(b.venue), event_time: String(b.event_time), title: String(b.title), pending: true }],
+              hint: "This timetable slot (scope+date+time±30m+title) already has a pending claim. Your venue is a competing claim — vote on the existing entry to tip the winner.",
+            }, { status: 409 });
+          }
+        } catch {}
+      }
       if (!b.force && b.title && b.venue && b.event_date) {
         try {
           const { findDuplicateEvents, resolveCanonicalVenue } = await import("@/lib/eventDedup");
@@ -132,8 +156,8 @@ async function handleTimetable(req: Request): Promise<Response> {
       }
       try {
         const r = await sql`\
-        INSERT INTO physi_events (title, venue, event_date, event_time, scope_type, scope_value, status, authority_points, required_points, created_by, severity, prev_venue, prev_event_time, prev_event_date, is_zk_attested, prof_name)
-        VALUES (${String(b.title)}, ${String(b.venue)}, ${String(b.event_date)}, ${String(b.event_time)}, ${String(b.scope_type)}, ${(b.scope_value as string) ?? null}, ${status}, ${authority_points}, ${required_points}, ${(b.created_by as string) ?? null}, ${sev}, ${prevVenue}, ${prevTime}, ${prevDate}, ${isZkAttested}, ${profName})
+        INSERT INTO physi_events (title, venue, event_date, event_time, scope_type, scope_value, status, authority_points, required_points, created_by, severity, prev_venue, prev_event_time, prev_event_date, is_zk_attested, prof_name, expires_at)
+        VALUES (${String(b.title)}, ${String(b.venue)}, ${String(b.event_date)}, ${String(b.event_time)}, ${String(b.scope_type)}, ${(b.scope_value as string) ?? null}, ${status}, ${authority_points}, ${required_points}, ${(b.created_by as string) ?? null}, ${sev}, ${prevVenue}, ${prevTime}, ${prevDate}, ${isZkAttested}, ${profName}, NOW() + INTERVAL '24 hours')
         RETURNING *`;
         // also log history if prev exists
         if (prevVenue || prevTime) {
@@ -175,6 +199,8 @@ async function handleTimetable(req: Request): Promise<Response> {
     } catch (e) {
       logError("TIMETABLE_FETCH_FAILED", e, { route: "/api/timetable", method: "GET", phase: "ensure" });
     }
+    // lazy expiry (mempool 24h TTL)
+    try { const { expireMempool } = await import("@/lib/mempool"); await expireMempool(sql); } catch {}
     const { searchParams } = new URL(req.url);
     // history timeline diff fetch: ?history=event_id
     const histId = searchParams.get("history") || searchParams.get("event_id_history");

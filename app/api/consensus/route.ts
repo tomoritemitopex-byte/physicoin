@@ -130,6 +130,8 @@ export async function GET(req: NextRequest) {
     try {
       await ensureAllTables();
     } catch {}
+    // lazy expiry: pending + expires_at < NOW() -> rejected (mempool RBF time-lock)
+    try { const { expireMempool } = await import("@/lib/mempool"); await expireMempool(sql); } catch {}
 
     const { searchParams } = new URL(req.url);
     const programme = searchParams.get("programme")?.trim() || null;
@@ -138,7 +140,7 @@ export async function GET(req: NextRequest) {
     const limit = Number.isFinite(limitParam) ? Math.max(1, Math.min(50, Math.floor(limitParam))) : 50;
 
     // Fetch in parallel — pending only
-    const [hallRows, profRows, scopeRows] = await Promise.all([
+    const [hallRows, profRows, scopeRows, mempoolGroups] = await Promise.all([
       (async () => {
         try {
           if (programme && level) {
@@ -192,16 +194,63 @@ export async function GET(req: NextRequest) {
           return [] as any[];
         }
       })(),
+      // mempool: pending physi_events grouped by slot (RBF — one entry per UTXO)
+      (async () => {
+        try {
+          const { groupBySlot } = await import("@/lib/mempool");
+          const rows = (await sql`SELECT id, title, venue, event_date, event_time, scope_value, status, created_at, expires_at, created_by FROM physi_events WHERE status='pending' ORDER BY created_at DESC LIMIT 100`) as any[];
+          if (!rows.length) return [] as any[];
+          const grouped = groupBySlot(rows);
+          const mempoolItems: any[] = [];
+          for (const [slotKey, claims] of Array.from(grouped.entries())) {
+            if (claims.length <= 1) continue; // only show competing slots (RBF contested)
+            // tip = earliest claim; contenders = rest
+            const sorted = [...claims].sort((a,b)=> new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+            const tip = sorted[0];
+            const contenders = sorted.slice(1);
+            // compute quorum progress: we treat each claim as 1 vote for its venue; show leading count
+            // fetch verifications for tip vs contenders would be heavy; use claim counts as proxy for tip display
+            const total = claims.length;
+            mempoolItems.push({
+              id: `mempool:${slotKey}`,
+              type: "mempool",
+              alias: String(tip.title || ""),
+              canonical: String(tip.venue || ""),
+              votes_yes: 1,
+              votes_no: contenders.length,
+              total,
+              total_weight: total,
+              quorum_progress: Math.min(100, Math.round((total / QUORUM_MIN) * 100)),
+              yes_pct: Math.round((1/total)*100),
+              programme: tip.scope_value ?? null,
+              level: null,
+              group_key: slotKey,
+              created_at: tip.created_at ? new Date(tip.created_at).toISOString() : new Date().toISOString(),
+              expires_at: tip.expires_at ? new Date(tip.expires_at).toISOString() : null,
+              status: "pending",
+              // RBF specific: tip + contenders for "leading 6/8 vs 2/8" display
+              mempool: {
+                slot: slotKey,
+                tip: { id: tip.id, venue: tip.venue, event_time: tip.event_time, title: tip.title },
+                contenders: contenders.map((c:any)=>({ id:c.id, venue:c.venue, event_time:c.event_time, title:c.title })),
+                tip_label: `${tip.venue} (leading 1/${total} — ${contenders.map((c:any)=>c.venue).join(" vs ")})`,
+              },
+            });
+          }
+          return mempoolItems;
+        } catch { return [] as any[]; }
+      })(),
     ]);
 
     const hallItems = (hallRows as any[]).map(toItemFromHall);
     const profItems = (profRows as any[]).map(toItemFromProf);
     const scopeItems = (scopeRows as any[]).map(toItemFromScope);
+    const mempoolItems = (mempoolGroups as any[]) || [];
 
     // Student-native: filter programme/level only applies to hall items if supplied; scope/prof always shown
     // (they are campus-wide truth coordination)
 
-    const all: ConsensusItem[] = [...hallItems, ...profItems, ...scopeItems];
+    const all: ConsensusItem[] = [...hallItems, ...profItems, ...scopeItems, ...(mempoolItems as any)];
 
     // Sort: most votes first (close to resolution), then newest
     all.sort((a, b) => {
@@ -225,6 +274,7 @@ export async function GET(req: NextRequest) {
         hall: hallItems.length,
         prof: profItems.length,
         scope: scopeItems.length,
+        mempool: mempoolItems.length,
       },
     });
   } catch (e) {
