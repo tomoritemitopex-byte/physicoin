@@ -18,11 +18,11 @@ function Breadcrumb({ pathname }: { pathname: string | null }) {
   return (
     <div className="mx-auto flex max-w-[1280px] items-center justify-between px-4 py-2.5 sm:px-6 lg:px-8">
       <div className="flex items-center gap-2">
-        <a href="/app/roadmap" className="font-mono text-xs text-slate-400 hover:text-white transition">Home</a>
-        <span className="text-slate-600">›</span>
-        <span className="text-sm font-medium text-white">{title}</span>
+        <a href="/app/roadmap" className="font-mono text-xs text-[rgba(240,253,244,0.60)] hover:text-[#f0fdf4] transition">Home</a>
+        <span className="text-[rgba(240,253,244,0.30)]">›</span>
+        <span className="text-sm font-medium text-[#f0fdf4]">{title}</span>
       </div>
-      <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-white/[0.06] bg-white/[0.03] px-2.5 py-1 font-mono text-[11px] text-slate-400">advisory only</span>
+      <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-[rgba(52,211,153,0.15)] bg-[#1a5f48]/60 px-2.5 py-1 font-mono text-[11px] text-[rgba(240,253,244,0.65)]">advisory only</span>
     </div>
   );
 }
@@ -53,7 +53,7 @@ function BottomNav({ pathname }: { pathname: string | null }) {
   }, [pathname]);
 
   return (
-    <nav className="fixed bottom-0 inset-x-0 z-40 border-t border-white/[0.07] bg-[#0c1222]/90 backdrop-blur-xl">
+    <nav className="fixed bottom-0 inset-x-0 z-40 border-t border-[rgba(52,211,153,0.15)] bg-[#022c1e]/92 backdrop-blur-xl">
       <div className="mx-auto flex max-w-[480px] items-center gap-2 px-3 py-3">
         {BOTTOM_TABS.map((t) => {
           const active = pathname === t.href || pathname?.startsWith(t.href + "/");
@@ -62,16 +62,16 @@ function BottomNav({ pathname }: { pathname: string | null }) {
           const isRoad = t.href==="/app/roadmap";
           return (
             <a key={t.href} href={t.href}
-              className={`relative flex flex-1 items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-semibold transition ${active ? "bg-white text-[#070a12] shadow-lg" : "border border-white/10 bg-white/[0.05] text-slate-300 hover:bg-white/[0.08] hover:text-white"}`}>
-              <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs ${active ? "bg-[#070a12] text-white" : "bg-white/10 text-white"}`}>{icon}</span>
+              className={`relative flex flex-1 items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-semibold transition ${active ? "bg-[#34d399] text-[#022c1e] shadow-lg shadow-[rgba(52,211,153,0.18)]" : "border border-[rgba(52,211,153,0.15)] bg-[#1a5f48]/70 text-[rgba(240,253,244,0.80)] hover:bg-[#1a5f48] hover:text-[#f0fdf4]"}`}>
+              <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs ${active ? "bg-[#022c1e] text-[#34d399]" : "bg-[#022c1e]/40 text-[#f0fdf4] border border-[rgba(52,211,153,0.15)]"}`}>{icon}</span>
               {label}
-              {isRoad && mineDot && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-[#0c1222] animate-pulse" />}
+              {isRoad && mineDot && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-[#fbbf24] ring-2 ring-[#022c1e] animate-pulse" />}
             </a>
           );
         })}
       </div>
-      {isRoadmap && <p className="pb-2 text-center font-mono text-[11px] text-slate-500">Map · List inside — tap nodes to verify</p>}
-      <div className="h-[env(safe-area-inset-bottom)] bg-[#0c1222]" />
+      {isRoadmap && <p className="pb-2 text-center font-mono text-[11px] text-[rgba(240,253,244,0.50)]">Map · List inside — tap nodes to verify</p>}
+      <div className="h-[env(safe-area-inset-bottom)] bg-[#022c1e]" />
     </nav>
   );
 }
@@ -87,52 +87,52 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const isRoadmap = pathname?.startsWith("/app/roadmap");
 
   return (
-    <div className="min-h-screen bg-[#070a12] text-slate-200 selection:bg-white selection:text-[#070a12]">
+    <div className="min-h-screen bg-[#0d3b2a] text-[#f0fdf4] selection:bg-[#34d399] selection:text-[#022c1e]">
       <div className="pointer-events-none fixed inset-0 -z-10">
-        <div className="absolute inset-0 bg-[#070a12]" />
-        <div className="absolute -top-32 left-1/2 h-[400px] w-[800px] -translate-x-1/2 rounded-full bg-white/[0.02] blur-[60px]" />
+        <div className="absolute inset-0 bg-[#0d3b2a]" />
+        <div className="absolute -top-32 left-1/2 h-[400px] w-[800px] -translate-x-1/2 rounded-full opacity-[0.28] blur-[60px]" style={{ background: "radial-gradient(ellipse at center, #1a5f48, transparent 70%)" }} />
       </div>
 
-      <header className={`sticky top-0 z-40 border-b transition ${scrolled ? "border-white/[0.07] bg-[#070a12]/90 backdrop-blur-xl shadow-lg" : "border-white/[0.06] bg-[#070a12]/70 backdrop-blur-xl"}`}>
+      <header className={`sticky top-0 z-40 border-b transition ${scrolled ? "border-[rgba(52,211,153,0.15)] bg-[#0d3b2a]/90 backdrop-blur-xl shadow-lg shadow-[rgba(2,44,30,0.35)]" : "border-[rgba(52,211,153,0.12)] bg-[#0d3b2a]/75 backdrop-blur-xl"}`}>
         <div className="mx-auto flex max-w-[1280px] items-center justify-between gap-3 px-4 py-2.5 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
             <button aria-label="Toggle navigation" aria-expanded={mobileOpen} onClick={() => setMobileOpen(v=>!v)}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/[0.07] bg-white/[0.04] text-slate-400 hover:text-white sm:hidden">
+              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-[rgba(52,211,153,0.15)] bg-[#1a5f48]/60 text-[rgba(240,253,244,0.70)] hover:text-[#f0fdf4] sm:hidden">
               {mobileOpen ? "✕" : "☰"}
             </button>
-            <a href="/" className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-[10px] font-black tracking-tight text-[#070a12]">PHYSI</a>
-            <span className="hidden sm:inline text-sm font-semibold tracking-tight text-white">PHYSI</span>
-            <span className="hidden sm:inline-flex rounded-full border border-white/[0.06] bg-white/[0.04] px-2.5 py-1 font-mono text-[11px] text-slate-400">inside</span>
+            <a href="/" className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#f0fdf4] text-[10px] font-black tracking-tight text-[#022c1e]">PHYSI</a>
+            <span className="hidden sm:inline text-sm font-semibold tracking-tight text-[#f0fdf4]">PHYSI</span>
+            <span className="hidden sm:inline-flex rounded-full border border-[rgba(52,211,153,0.15)] bg-[#1a5f48]/60 px-2.5 py-1 font-mono text-[11px] text-[rgba(240,253,244,0.65)]">inside</span>
           </div>
-          <a href="/app/profile" className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium transition ${isProfile ? "border-white bg-white text-[#070a12]" : "border-white/10 bg-white/[0.05] text-slate-300 hover:bg-white/[0.08] hover:text-white"}`}>
+          <a href="/app/profile" className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium transition ${isProfile ? "border-[#34d399] bg-[#34d399] text-[#022c1e]" : "border-[rgba(52,211,153,0.15)] bg-[#1a5f48]/60 text-[rgba(240,253,244,0.80)] hover:bg-[#1a5f48] hover:text-[#f0fdf4]"}`}>
             <span className="hidden sm:inline">{isProfile ? "Profile · active" : "Profile"}</span>
             <span className="sm:hidden">Profile</span>
-            <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] ${isProfile ? "bg-[#070a12] text-white" : "bg-white text-[#070a12]"}`}>◯</span>
+            <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] ${isProfile ? "bg-[#022c1e] text-[#fbbf24]" : "bg-[#f0fdf4] text-[#022c1e]"}`}>◯</span>
           </a>
         </div>
         {mobileOpen && (
-          <div className="border-t border-white/[0.06] bg-[#070a12]/95 px-4 py-3 backdrop-blur sm:hidden">
+          <div className="border-t border-[rgba(52,211,153,0.12)] bg-[#022c1e]/95 px-4 py-3 backdrop-blur sm:hidden">
             <nav className="grid grid-cols-2 gap-2">
               {ALL_TABS.map((t) => {
                 const active = pathname === t.href || pathname?.startsWith(t.href + "/");
-                return <a key={t.href} href={t.href} className={`min-h-[44px] rounded-xl border px-3 py-2.5 text-center text-sm font-medium flex items-center justify-center ${active ? "border-white bg-white text-[#070a12]" : "border-white/10 bg-white/[0.04] text-slate-300"}`}>{GAME_LABELS[t.href] ?? t.label}</a>;
+                return <a key={t.href} href={t.href} className={`min-h-[44px] rounded-xl border px-3 py-2.5 text-center text-sm font-medium flex items-center justify-center ${active ? "border-[#34d399] bg-[#34d399] text-[#022c1e]" : "border-[rgba(52,211,153,0.15)] bg-[#1a5f48]/60 text-[rgba(240,253,244,0.80)]"}`}>{GAME_LABELS[t.href] ?? t.label}</a>;
               })}
             </nav>
           </div>
         )}
-        {/* Advisory strip — compact, single line */}
-        <div className="border-t border-amber-500/10 bg-amber-500/[0.03]">
-          <div className="mx-auto max-w-[1280px] px-4 py-1.5 text-center font-mono text-[11px] leading-none text-amber-200/60">
-            <a href="/terms" className="hover:text-amber-200 transition">advisory feed — green tick = confirmed · Terms →</a>
+        {/* Advisory strip — gold highlight */}
+        <div className="border-t border-[rgba(251,191,36,0.15)] bg-[rgba(251,191,36,0.06)]">
+          <div className="mx-auto max-w-[1280px] px-4 py-1.5 text-center font-mono text-[11px] leading-none text-[#fbbf24]/70">
+            <a href="/terms" className="hover:text-[#fbbf24] transition">advisory feed — gold tick = confirmed · Terms →</a>
           </div>
         </div>
       </header>
 
-      {!isRoadmap && <div className="border-b border-white/[0.04] bg-white/[0.01]"><Breadcrumb pathname={pathname} /></div>}
+      {!isRoadmap && <div className="border-b border-[rgba(52,211,153,0.08)] bg-[#1a5f48]/20"><Breadcrumb pathname={pathname} /></div>}
       <main className={`${isRoadmap ? "w-full" : "mx-auto max-w-[1280px] px-4 py-6 sm:px-6 lg:px-8"} pb-[88px] overflow-x-hidden`}>{children}</main>
       <BottomNav pathname={pathname} />
-      <footer className="mx-auto max-w-[1280px] border-t border-white/[0.04] px-4 py-6 text-center font-mono text-xs text-slate-600 sm:px-6 lg:px-8">
-        PHYSI · built by students · <a href="/terms" className="underline decoration-white/15 hover:text-slate-400">Terms →</a>
+      <footer className="mx-auto max-w-[1280px] border-t border-[rgba(52,211,153,0.08)] px-4 py-6 text-center font-mono text-xs text-[rgba(240,253,244,0.45)] sm:px-6 lg:px-8">
+        PHYSI · built by students · <a href="/terms" className="underline decoration-[rgba(52,211,153,0.20)] hover:text-[rgba(240,253,244,0.70)]">Terms →</a>
       </footer>
     </div>
   );

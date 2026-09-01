@@ -19,7 +19,7 @@ export const viewport = { themeColor: '#0d3b2a' };
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={fredoka.variable}>
-      <body className="min-h-screen bg-[#070a12] text-slate-100 antialiased selection:bg-white selection:text-[#070a12]" style={{ fontFamily: 'var(--font-fredoka), system-ui, sans-serif' }}>
+      <body className="min-h-screen bg-[#0d3b2a] text-[#f0fdf4] antialiased selection:bg-[#34d399] selection:text-[#022c1e]" style={{ fontFamily: 'var(--font-fredoka), system-ui, sans-serif' }}>
         {children}
       </body>
     </html>

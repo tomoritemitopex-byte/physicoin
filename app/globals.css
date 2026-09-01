@@ -2,25 +2,36 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── PHYSI Design System — minimal, restrained forest ── */
+/* ── PHYSI Tonal Palette — forest with depth (6 roles) ──
+   Base     #0d3b2a  deep forest · page background
+   Mid      #1a5f48  living green · cards / surfaces
+   Accent   #34d399  mint glow · primary CTA / interactive
+   Highlight #fbbf24 warm gold · verified badges / rewards
+   Cream    #f0fdf4  soft text · primary copy
+   Shadow   #022c1e  dark depth · contrast / CTA text
+*/
 :root {
   --physi-bg: #0d3b2a;
-  --physi-bg-soft: #0c1222;
-  --physi-card: rgba(255,255,255,0.04);
-  --physi-card-hover: rgba(255,255,255,0.07);
-  --physi-border: rgba(255,255,255,0.07);
-  --physi-border-strong: rgba(255,255,255,0.11);
-  --physi-muted: #94a3b8;
-  --physi-muted-2: #64748b;
-  --physi-accent: #ffffff;
-  --physi-success: #10b981;
-  --physi-warning: #f59e0b;
+  --physi-bg-soft: #022c1e;
+  --physi-card: #1a5f48;
+  --physi-card-hover: #1d6b52;
+  --physi-border: rgba(52,211,153,0.15);
+  --physi-border-strong: rgba(52,211,153,0.24);
+  --physi-muted: rgba(240,253,244,0.70);
+  --physi-muted-2: rgba(240,253,244,0.50);
+  --physi-accent: #34d399;
+  --physi-accent-hover: #6ee7b7;
+  --physi-highlight: #fbbf24;
+  --physi-highlight-soft: rgba(251,191,36,0.14);
+  --physi-cream: #f0fdf4;
+  --physi-shadow: #022c1e;
+  /* legacy aliases — remapped to tonal */
+  --physi-success: #fbbf24;
+  --physi-warning: #fbbf24;
   --physi-forest: #0d3b2a;
-  --physi-forest-mid: #143d2e;
+  --physi-forest-mid: #1a5f48;
   --physi-forest-light: #34d399;
-  --physi-forest-2: #1a5c3a;
-  --physi-purple: #8b5cf6;
-  --physi-purple-light: #a78bfa;
+  --physi-forest-2: #1a5f48;
   --font-fredoka: "Fredoka", system-ui, sans-serif;
 }
 
@@ -28,7 +39,7 @@
 html { scroll-behavior: smooth; -webkit-font-smoothing: antialiased; }
 html, body {
   background: var(--physi-bg);
-  color: #e2e8f0;
+  color: #f0fdf4;
   font-family: var(--font-fredoka), system-ui, sans-serif;
   line-height: 1.6;
   letter-spacing: -0.01em;
@@ -37,53 +48,53 @@ h1, h2, h3 { font-family: var(--font-fredoka), system-ui, sans-serif; letter-spa
 h1 { font-weight: 700; }
 h2 { font-weight: 600; }
 
-/* — Cards — single glass, used sparingly */
+/* — Cards — tonal surface #1a5f48 with mint border — */
 .physi-card {
   border-radius: 20px;
   border: 1px solid var(--physi-border);
   background: var(--physi-card);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.24);
+  box-shadow: 0 8px 32px rgba(2,44,30,0.35);
 }
 .physi-card:hover { background: var(--physi-card-hover); border-color: var(--physi-border-strong); }
 
 .liquid-glass {
-  background: rgba(255,255,255,0.05);
+  background: rgba(26,95,72,0.55);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid var(--physi-border);
 }
 
-/* Forest accent — use sparingly */
+/* Forest tokens */
 .bg-forest { background: var(--physi-forest); }
 .bg-forest-soft { background: rgba(13,59,42,0.5); }
-.border-forest { border-color: rgba(52,211,153,0.15); }
-.text-forest { color: #34d399; }
+.border-forest { border-color: var(--physi-border); }
+.text-forest { color: var(--physi-accent); }
 
-/* Focus */
-*:focus-visible { outline: 2px solid #a78bfa; outline-offset: 2px; }
+/* Focus — mint */
+*:focus-visible { outline: 2px solid #34d399; outline-offset: 2px; }
 
-/* — Primary CTA — white on dark, single per screen */
+/* — Primary CTA — mint #34d399 on shadow #022c1e — */
 .primary-cta {
-  background: white;
-  color: #0d3b2a;
+  background: #34d399;
+  color: #022c1e;
   font-weight: 700;
   border-radius: 9999px;
-  box-shadow: 0 4px 20px rgba(255,255,255,0.12);
+  box-shadow: 0 4px 20px rgba(52,211,153,0.28);
   transition: all 180ms ease;
 }
-.primary-cta:hover { background: #f8fafc; transform: translateY(-1px); box-shadow: 0 6px 24px rgba(255,255,255,0.16); }
+.primary-cta:hover { background: #6ee7b7; transform: translateY(-1px); box-shadow: 0 6px 24px rgba(52,211,153,0.36); }
 
 .secondary-cta {
-  background: rgba(255,255,255,0.06);
-  color: white;
-  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(26,95,72,0.70);
+  color: #f0fdf4;
+  border: 1px solid var(--physi-border);
   border-radius: 9999px;
   backdrop-filter: blur(8px);
   transition: all 180ms ease;
 }
-.secondary-cta:hover { background: rgba(255,255,255,0.10); }
+.secondary-cta:hover { background: rgba(26,95,72,0.90); border-color: var(--physi-border-strong); }
 
 /* Subtle animations — restrained */
 @keyframes fadeInUp { from { opacity:0; transform: translateY(10px); } to { opacity:1; transform: translateY(0); } }
@@ -98,12 +109,12 @@ h2 { font-weight: 600; }
   transform: translateX(-50%);
   z-index: 40;
   width: min(520px, 94vw);
-  background: rgba(13,59,42,0.78);
+  background: rgba(2,44,30,0.84);
   backdrop-filter: blur(20px) saturate(1.2);
   -webkit-backdrop-filter: blur(20px) saturate(1.2);
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid var(--physi-border);
   border-radius: 9999px;
-  box-shadow: 0 12px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06);
+  box-shadow: 0 12px 40px rgba(2,44,30,0.55), inset 0 1px 0 rgba(240,253,244,0.06);
   display: flex; align-items: center; justify-content: space-between;
   gap: 8px; padding: 6px 8px;
 }
