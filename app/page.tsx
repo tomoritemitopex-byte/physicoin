@@ -75,7 +75,7 @@ export default function LandingPage() {
             <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/15 bg-emerald-500/10 px-3 py-1.5">
               <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
               <span className="font-mono text-xs font-medium text-emerald-200">Live · student-powered</span>
-              <span className="hidden sm:inline text-xs text-emerald-200/60">· pilot</span>
+              <span className="hidden sm:inline text-xs text-emerald-200/60">· live</span>
             </div>
 
             <h1 className="mt-6 text-[34px] font-bold leading-[0.95] tracking-[-0.04em] sm:text-[44px] lg:text-[52px]">
@@ -198,12 +198,12 @@ export default function LandingPage() {
 
         {/* ── Testimonials — restrained ── */}
         <section className="mt-10 rounded-[20px] border border-white/[0.06] bg-white/[0.02] px-6 py-6">
-          <p className="font-mono text-xs uppercase tracking-[0.12em] text-slate-500">What pilot testers say — illustrative</p>
+          <p className="font-mono text-xs uppercase tracking-[0.12em] text-slate-500">What students say — illustrative</p>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             {[
               { q: '“If it’s not green, I double-check. Saved me two wrong-hall treks.”', a: '200L · Anatomy' },
               { q: '“We posted at 7:42, by 8:10 twenty people tapped Yes. No broadcast needed.”', a: 'Class rep · Biochemistry' },
-              { q: '“It just shows I showed up today. Not money — that’s clear.”', a: '100L · Pilot' },
+              { q: '“It just shows I showed up today. Not money — that’s clear.”', a: '100L · Physiology' },
             ].map((t) => (
               <figure key={t.a} className="rounded-2xl border border-white/[0.05] bg-white/[0.02] px-4 py-4">
                 <blockquote className="text-sm leading-5 text-slate-300">{t.q}</blockquote>
@@ -221,7 +221,7 @@ export default function LandingPage() {
           <div className="mt-6 flex justify-center">
             <a href="/app/roadmap" className="primary-cta inline-flex items-center gap-2 px-7 py-3.5 text-[15px]">Open the road <ArrowRight className="h-4 w-4" /></a>
           </div>
-          <p className="mt-4 font-mono text-xs text-slate-500"><a href="/terms" className="underline decoration-white/15 hover:text-slate-300">Terms · TEST-PHYSI has no cash value →</a></p>
+          <p className="mt-4 font-mono text-xs text-slate-500"><a href="/terms" className="underline decoration-white/15 hover:text-slate-300">Terms · PHYSI energy has no cash value →</a></p>
         </section>
 
         <p className="py-8 text-center font-mono text-xs text-slate-600">PHYSI · built by students, for students</p>

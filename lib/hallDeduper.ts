@@ -13,6 +13,17 @@ export function hallGroupKey(ev: { scope_value: string|null; event_date: string;
   return `${progLevel}::${day}::${time}::${subj}`;
 }
 
+/** Canonical subject key via profMatch — so hall deduper groups 'BIO 101 Prof Adams' and 'BIO 101 Adams' together */
+export function hallGroupKeyWithProf(ev: { scope_value: string|null; event_date: string; event_time: string; title: string; prof_name?: string|null }): string {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { profMatchKey: pmk } = require("@/lib/profMatch") as { profMatchKey: (s:string)=>string };
+  const base = hallGroupKey(ev);
+  try {
+    const pk = pmk(ev.prof_name || ev.title || "");
+    return pk ? `${base}::${pk}` : base;
+  } catch { return base; }
+}
+
 export function dayOfWeek(dateStr: string): string {
   try { const d=new Date(dateStr+"T00:00:00Z"); return String(d.getUTCDay()); } catch { return "unknown"; }
 }

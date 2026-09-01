@@ -41,13 +41,17 @@ function RoadmapInner() {
   const [posting, setPosting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [voteBusy, setVoteBusy] = useState<string | null>(null);
-  const [form, setForm] = useState({ title: "", venue: "", event_date: "", event_time: "", scope_type: "general", scope_value: "" });
+  const [form, setForm] = useState({ title: "", venue: "", event_date: "", event_time: "", scope_type: "general", scope_value: "", prof_name: "", severity: "move" as "move"|"shift"|"cancelled" });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerHandle, setPickerHandle] = useState("");
   const [pickerBusy, setPickerBusy] = useState(false);
   const [pickerErr, setPickerErr] = useState<string | null>(null);
   const [pendingVote, setPendingVote] = useState<{ id: string; v: "YES"|"NO"|"CANCEL" } | null>(null);
+  const [sightingBusy, setSightingBusy] = useState<string | null>(null);
+  const [hallOpts, setHallOpts] = useState<string[]>([]);
+  const [profSightings, setProfSightings] = useState<Record<string, {label:string, ago:number}>>({});
+  const [repeatBusy, setRepeatBusy] = useState(false);
 
   const fetchFeed = useCallback(async () => {
     setLoading(true); setErr(null);
@@ -63,6 +67,32 @@ function RoadmapInner() {
   useEffect(() => { fetchFeed(); const iv = setInterval(fetchFeed, 15000); return () => clearInterval(iv); }, [fetchFeed]);
   useEffect(() => { if (!toast) return; const t = setTimeout(()=>setToast(null), 2600); return ()=>clearTimeout(t); }, [toast]);
   useEffect(() => { setFilter(filterParam); }, [filterParam]);
+  // smart hall dropdown: resolved canonical halls for this programme/level
+  useEffect(() => {
+    const prog = (form.scope_value || "Physiology").split(",")[0]?.trim() || "Physiology";
+    const lvl = form.scope_value || "";
+    const qs = new URLSearchParams(); qs.set("status","resolved"); if(prog) qs.set("programme", prog);
+    fetch(`/api/halls/alias?${qs.toString()}`,{cache:"no-store"}).then(r=>r.json()).then(j=>{
+      const opts = Array.from(new Set((j.proposals||[]).map((x:any)=>String(x.canonical||x.alias).trim()).filter(Boolean))) as string[];
+      if(opts.length) setHallOpts(opts);
+      else setHallOpts(["LT1","LT2","Hall B","Anatomy Hall","New Lab","LT3","200L Hall"]);
+    }).catch(()=> setHallOpts(["LT1","LT2","Hall B","Anatomy Hall"]));
+  }, [form.scope_value]);
+  // prof sightings: fetch recent sightings for visible events
+  useEffect(()=> {
+    if(!events.length) return;
+    const ids = events.slice(0,8).map(e=>e.id);
+    Promise.all(ids.map(id=> fetch(`/api/prof/sighting?event_id=${encodeURIComponent(id)}`,{cache:"no-store"}).then(r=>r.json()).catch(()=>null))).then(results=>{
+      const map:Record<string,{label:string,ago:number}>={};
+      results.forEach((j,i)=>{
+        if(j?.sightings?.length){
+          const s=j.sightings[0];
+          map[ids[i]] = { label: `${s.prof_name}: ${s.building||s.venue} (verified ${s.ago_min ?? 0} min ago)`, ago: s.ago_min ?? 0 };
+        }
+      });
+      if(Object.keys(map).length) setProfSightings(map);
+    });
+  }, [events]);
 
   const setView = (v: string) => {
     const p = new URLSearchParams(sp.toString()); p.set("view", v); router.replace(`/app/roadmap?${p.toString()}`);
@@ -93,10 +123,42 @@ function RoadmapInner() {
     if (!form.title || !form.venue || !form.event_date || !form.event_time) { setToast("Fill title, venue, date and time"); return; }
     setPosting(true);
     try {
-      const r = await fetch("/api/timetable", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: form.title.trim(), venue: form.venue.trim(), event_date: form.event_date, event_time: form.event_time, scope_type: form.scope_type, scope_value: form.scope_value || null, status: "pending" }) });
+      const r = await fetch("/api/timetable", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: form.title.trim(), venue: form.venue.trim(), event_date: form.event_date, event_time: form.event_time, scope_type: form.scope_type, scope_value: form.scope_value || null, prof_name: form.prof_name.trim() || null, severity: form.severity, created_by: getProfileId() }) });
       const j = await r.json(); if (!r.ok || j.ok===false) throw new Error(j.error || "post failed");
-      setToast("Posted — live as advisory ✓"); setForm({ title:"", venue:"", event_date:"", event_time:"", scope_type:"general", scope_value:"" }); setShowPost(false); fetchFeed();
+      try { const { autoBumpStreak } = await import("@/lib/streak"); autoBumpStreak("event_post"); } catch {}
+      setToast("Posted — live as advisory ✓"); setForm({ title:"", venue:"", event_date:"", event_time:"", scope_type:"general", scope_value:"", prof_name:"", severity:"move" }); setShowPost(false); fetchFeed();
     } catch (e: any) { setToast(e.message); } finally { setPosting(false); }
+  }
+
+  async function repeatLastWeek() {
+    const pid = getProfileId();
+    if (!pid) { setToast("Create a profile first"); setPickerOpen(true); return; }
+    setRepeatBusy(true);
+    try {
+      const r = await fetch("/api/events/repeat", { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify({ user_id: pid, scope_value: form.scope_value || null }) });
+      const j = await r.json(); if (!r.ok || j.ok===false) throw new Error(j?.message || j?.error || "repeat failed");
+      try { const { autoBumpStreak } = await import("@/lib/streak"); autoBumpStreak("event_post"); } catch {}
+      setToast(j.created ? `Repeated ${j.created} events → next week ✓` : "Nothing to repeat — post one first");
+      fetchFeed();
+    } catch (e:any){ setToast(e.message); } finally { setRepeatBusy(false); }
+  }
+
+  function sameAsLastMonday() {
+    const last = [...events].sort((a,b)=> new Date(b.created_at).getTime()-new Date(a.created_at).getTime())[0];
+    if (!last) { setToast("No previous event yet — fill manually"); return; }
+    // find event from same weekday as last Monday (or last same title)
+    const lastDate = new Date(last.event_date + "T00:00:00");
+    const nextDate = new Date();
+    // compute next occurrence of that weekday
+    const targetDay = lastDate.getDay();
+    const curDay = nextDate.getDay();
+    let diff = targetDay - curDay;
+    if (diff <= 0) diff += 7;
+    nextDate.setDate(nextDate.getDate() + diff);
+    const pad = (n:number)=>String(n).padStart(2,"0");
+    const iso = `${nextDate.getFullYear()}-${pad(nextDate.getMonth()+1)}-${pad(nextDate.getDate())}`;
+    setForm(f=> ({ ...f, title: last.title, venue: last.venue, scope_type: last.scope_type, scope_value: last.scope_value || "", event_date: iso, event_time: String(last.event_time).slice(0,5), prof_name: (last as any).prof_name || "" }));
+    setToast(`Copied "${last.title}" → ${iso} — edit and post`);
   }
 
   function getProfileId(): string | null {
@@ -111,9 +173,40 @@ function RoadmapInner() {
     try {
       const r = await fetch("/api/verify", { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify({ verifier_id: pid, event_id: id, vote: v }) });
       const j = await r.json(); if (!r.ok || j.ok===false) throw new Error(j.error || "vote failed");
+      try { const { autoBumpStreak } = await import("@/lib/streak"); autoBumpStreak("verify"); } catch {}
+      // prof sighting on YES: record prof location
+      if (v==="YES") {
+        try {
+          const evRow = events.find(e=>e.id===id) as any;
+          if (evRow?.venue && evRow?.prof_name) {
+            await fetch("/api/prof/sighting",{method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify({ prof_name: evRow.prof_name, building: evRow.venue, venue: evRow.venue, event_id: id, sighted_by: pid })}).catch(()=>null);
+          }
+        } catch {}
+      }
       setToast(v==="YES" ? "You confirmed — thanks!" : v==="NO" ? "Marked not there" : "Skipped");
       fetchFeed();
     } catch (e: any) { setToast(e.message); } finally { setVoteBusy(null); }
+  }
+
+  async function profSighting(id: string) {
+    const pid = getProfileId();
+    if (!pid) { setPickerOpen(true); return; }
+    setSightingBusy(id);
+    try {
+      // Bunk Radar: prof sighting = 'happening' signal; also counts as YES verify
+      const evRow = events.find(e=>e.id===id) as any;
+      const profName = evRow?.prof_name || evRow?.title || "";
+      const venue = evRow?.venue || "";
+      if (profName && venue) {
+        await fetch("/api/prof/sighting",{method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify({ prof_name: profName, building: venue, venue, event_id: id, sighted_by: pid })}).catch(()=>null);
+      }
+      const bunk = await fetch("/api/bunk", { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify({ event_id: id, reporter_id: pid, vote: "happening" }) }).then(r=>r.json()).catch(()=>null);
+      // also verify YES so quorum green tick can happen
+      const ver = await fetch("/api/verify", { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify({ verifier_id: pid, event_id: id, vote: "YES", is_witness: true }) }).then(r=>r.json()).catch(()=>null);
+      try { const { autoBumpStreak } = await import("@/lib/streak"); autoBumpStreak("verify"); } catch {}
+      setToast("Prof spotted — bunk cleared + verified ✓");
+      fetchFeed();
+    } catch (e: any) { setToast(e.message || "sighting failed"); } finally { setSightingBusy(null); }
   }
 
   async function handlePickerConfirm(e?: React.FormEvent) {
@@ -189,7 +282,15 @@ function RoadmapInner() {
           <p className="mt-1 text-sm text-slate-400">Example: “ANA 203 moved to LT2, Friday 8am — HOD announced after lab.”</p>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <label className="space-y-1"><span className="font-mono text-xs text-slate-500">What</span><input value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} placeholder="ANA 203 — Osteology" className="w-full rounded-xl border border-white/10 bg-[#0b1020] px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-white/15 focus:outline-none" /></label>
-            <label className="space-y-1"><span className="font-mono text-xs text-slate-500">Where</span><input value={form.venue} onChange={e=>setForm(f=>({...f,venue:e.target.value}))} placeholder="LT2 / Anatomy Hall" className="w-full rounded-xl border border-white/10 bg-[#0b1020] px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-white/15 focus:outline-none" /></label>
+            <label className="space-y-1"><span className="font-mono text-xs text-slate-500">Where</span>
+              <div className="flex gap-1">
+                <select value={hallOpts.includes(form.venue) ? form.venue : ""} onChange={e=>{ if(e.target.value) setForm(f=>({...f,venue:e.target.value})); }} className="w-28 shrink-0 rounded-xl border border-white/10 bg-[#0b1020] px-2 py-2.5 text-xs text-white focus:outline-none">
+                  <option value="">— hall —</option>
+                  {hallOpts.map(h=> <option key={h} value={h}>{h}</option>)}
+                </select>
+                <input value={form.venue} onChange={e=>setForm(f=>({...f,venue:e.target.value}))} placeholder="LT2 / Anatomy Hall" className="flex-1 rounded-xl border border-white/10 bg-[#0b1020] px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-white/15 focus:outline-none" />
+              </div>
+            </label>
             <label className="space-y-1"><span className="font-mono text-xs text-slate-500">Date (WAT)</span><input type="date" value={form.event_date} onChange={e=>setForm(f=>({...f,event_date:e.target.value}))} className="w-full rounded-xl border border-white/10 bg-[#0b1020] px-3 py-2.5 text-sm text-white focus:outline-none" /></label>
             <label className="space-y-1"><span className="font-mono text-xs text-slate-500">Time (WAT)</span><input type="time" value={form.event_time} onChange={e=>setForm(f=>({...f,event_time:e.target.value}))} className="w-full rounded-xl border border-white/10 bg-[#0b1020] px-3 py-2.5 text-sm text-white focus:outline-none" /></label>
             <label className="space-y-1"><span className="font-mono text-xs text-slate-500">Who needs this</span>
@@ -198,6 +299,17 @@ function RoadmapInner() {
               </select>
             </label>
             <label className="space-y-1"><span className="font-mono text-xs text-slate-500">Scope detail</span><input value={form.scope_value} onChange={e=>setForm(f=>({...f,scope_value:e.target.value}))} placeholder="200L or Physiology" className="w-full rounded-xl border border-white/10 bg-[#0b1020] px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none" /></label>
+            <label className="space-y-1"><span className="font-mono text-xs text-slate-500">Prof (optional)</span><input value={form.prof_name} onChange={e=>setForm(f=>({...f,prof_name:e.target.value}))} placeholder="Prof Adams" className="w-full rounded-xl border border-white/10 bg-[#0b1020] px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none" /></label>
+            <label className="space-y-1"><span className="font-mono text-xs text-slate-500">Type</span>
+              <select value={form.severity} onChange={e=>setForm(f=>({...f,severity:e.target.value as any}))} className="w-full rounded-xl border border-white/10 bg-[#0b1020] px-3 py-2.5 text-sm text-white focus:outline-none">
+                <option value="move">move (hall changed)</option><option value="shift">shift (time changed)</option><option value="cancelled">cancelled</option>
+              </select>
+            </label>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button type="button" onClick={sameAsLastMonday} className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xs font-medium text-slate-300 hover:bg-white/[0.07]">↻ Same as Last Monday</button>
+            <button type="button" onClick={repeatLastWeek} disabled={repeatBusy} className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-xs font-medium text-emerald-300 hover:bg-emerald-500 hover:text-white disabled:opacity-50">{repeatBusy?"…":"↻ Repeat last week"}</button>
+            <span className="ml-1 font-mono text-xs text-slate-500">repeats all your events +7 days</span>
           </div>
           <div className="mt-4 flex gap-2">
             <button disabled={posting} className="rounded-full bg-white px-6 py-2.5 text-sm font-semibold text-[#070a12] hover:bg-slate-100 disabled:opacity-50 transition">{posting ? "Posting…" : "Post as advisory →"}</button>
@@ -279,6 +391,7 @@ function RoadmapInner() {
                 <button onClick={()=>vote(selected.id,"YES")} disabled={!!voteBusy} className="rounded-full bg-emerald-500 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-600 disabled:opacity-50">{voteBusy===selected.id+"YES" ? "…" : "Yes ✓"}</button>
                 <button onClick={()=>vote(selected.id,"NO")} disabled={!!voteBusy} className="rounded-full border border-white/10 bg-white/[0.05] px-5 py-2 text-sm font-medium text-slate-200 hover:bg-white hover:text-[#070a12] disabled:opacity-50">{voteBusy===selected.id+"NO" ? "…" : "No ✕"}</button>
                 <button onClick={()=>vote(selected.id,"CANCEL")} disabled={!!voteBusy} className="rounded-full border border-white/10 bg-white/[0.02] px-5 py-2 text-sm text-slate-400 hover:bg-white/[0.06] disabled:opacity-50">Skip</button>
+                <button onClick={()=>profSighting(selected.id)} disabled={!!sightingBusy} className="rounded-full border border-violet-500/20 bg-violet-500/10 px-4 py-2 text-sm font-medium text-violet-300 hover:bg-violet-500 hover:text-white disabled:opacity-50">{sightingBusy===selected.id ? "…" : "👁 Prof spotted"}</button>
               </div>
             </div>
           )}
@@ -317,8 +430,9 @@ function RoadmapInner() {
                       <p className="text-sm font-semibold text-white">{ev.title}</p>
                       <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
                         <span className="inline-flex items-center gap-1 rounded-full bg-white/[0.06] px-2 py-1 text-slate-300"><MapPin className="h-3 w-3" />{ev.venue}</span>
-                        <span className="inline-flex items-center gap-1"><Clock3 className="h-3 w-3" />{ev.event_date.slice(0,10)} · {String(ev.event_time).slice(0,5)} WAT</span>
+                        <span className="inline-flex items-center gap-1 font-mono text-xs text-slate-500"><Clock3 className="h-3 w-3" />{ev.event_date.slice(0,10)} · {String(ev.event_time).slice(0,5)} WAT</span>
                         {ev.scope_value && <span className="rounded-full border border-white/10 px-2 py-0.5 font-mono text-[11px]">{ev.scope_type} · {ev.scope_value}</span>}
+                        {profSightings[ev.id] && <span className="rounded-full border border-violet-500/20 bg-violet-500/10 px-2 py-0.5 font-mono text-[11px] text-violet-300">{profSightings[ev.id].label}</span>}
                       </p>
                       <div className="mt-3 flex items-center gap-2">
                         <div className="h-1.5 flex-1 max-w-[200px] overflow-hidden rounded-full bg-white/10"><div className={`h-full rounded-full ${v ? "bg-emerald-400" : "bg-amber-400"}`} style={{ width:`${p}%`}} /></div>
@@ -333,6 +447,7 @@ function RoadmapInner() {
                     <button onClick={()=>vote(ev.id,"YES")} disabled={!!voteBusy} className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3.5 py-1.5 text-sm font-medium text-emerald-300 hover:bg-emerald-500 hover:text-white disabled:opacity-50">{voteBusy===ev.id+"YES" ? "…" : "Yes ✓"}</button>
                     <button onClick={()=>vote(ev.id,"NO")} disabled={!!voteBusy} className="rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-1.5 text-sm text-slate-200 hover:bg-white hover:text-[#070a12] disabled:opacity-50">{voteBusy===ev.id+"NO" ? "…" : "No ✕"}</button>
                     <button onClick={()=>vote(ev.id,"CANCEL")} disabled={!!voteBusy} className="rounded-full border border-white/10 bg-white/[0.02] px-3.5 py-1.5 text-sm text-slate-400 hover:bg-white/[0.06] disabled:opacity-50">Skip</button>
+                    <button onClick={()=>profSighting(ev.id)} disabled={!!sightingBusy} className="rounded-full border border-violet-500/20 bg-violet-500/10 px-3 py-1.5 text-xs font-medium text-violet-300 hover:bg-violet-500 hover:text-white disabled:opacity-50">{sightingBusy===ev.id ? "…" : "👁 Spotted"}</button>
                   </div>
                 </div>
                 <div className="h-1 bg-white/[0.04]"><div className={`h-full ${v ? "bg-emerald-400" : "bg-amber-400/60"}`} style={{ width:`${p}%`}} /></div>

@@ -21,7 +21,9 @@ export const miningFeature = {
 registerFeature(miningFeature);
 
 // Satoshi P1-5: faucet not mining. base_reward is always 1.
+// Auto-streak: verified actions auto-bump streak; manual mining is bonus +0.5 Rep on top of auto.
 const BASE_REWARD = 1;
+const MANUAL_BONUS = 0.5;
 
 async function handleMining(req: Request): Promise<Response> {
   try {
@@ -41,11 +43,14 @@ async function handleMining(req: Request): Promise<Response> {
         const mult = Number((u[0] as { authority_final?: number }).authority_final ?? 1.0);
         // Satoshi P1-5: base_reward is always BASE_REWARD (1), never client-controlled.
         // No $ coin icon anywhere. Rep only.
+        // Manual mining is bonus +0.5 Rep on top (auto-streak covers daily bump)
         const base = BASE_REWARD;
-        const earned = +(base * mult).toFixed(2);
+        const earnedBase = +(base * mult).toFixed(2);
+        const bonus = MANUAL_BONUS;
+        const earned = +(earnedBase + bonus).toFixed(2);
         const r = await sql`
       INSERT INTO physi_mining_logs (user_id, base_reward, authority_multiplier, earned_amount)
-      VALUES (${b.user_id}, ${base}, ${mult}, ${earned}) RETURNING *`;
+      VALUES (${b.user_id}, ${base + bonus}, ${mult}, ${earned}) RETURNING *`;
         await sql`UPDATE physi_users SET mining_balance = mining_balance + ${earned}, updated_at = NOW() WHERE id = ${b.user_id}`;
         // Ghost Witness: extend chain on mining check-in
         try {

@@ -117,6 +117,30 @@ async function handleTimetable(req: Request): Promise<Response> {
         if (prevVenue || prevTime) {
           try { await sql`INSERT INTO physi_event_history (event_id, prev_venue, prev_event_date, prev_event_time, new_venue, new_event_date, new_event_time, changed_by) VALUES (${r[0].id}, ${prevVenue}, ${prevDate}, ${prevTime}, ${String(b.venue)}, ${String(b.event_date)}, ${String(b.event_time)}, ${(b.created_by as string) ?? null})`; } catch {}
         }
+        // prof alias peer voting: create pending proposal for fuzzy-grouped prof name (canonical decided by students, not algorithm)
+        if (profName) {
+          try {
+            const { profGroupKey, displayProfName } = await import("@/lib/profMatch");
+            const groupKey = profGroupKey(profName);
+            const canonicalProposal = displayProfName(profName);
+            if (groupKey) {
+              // check if any proposal already exists for this group+canonical (first sighting = pending)
+              const existing = await sql`SELECT id FROM physi_prof_aliases WHERE prof_group_key=${groupKey} AND lower(canonical)=lower(${canonicalProposal}) LIMIT 1` as any[];
+              if (!existing.length) {
+                // use group-canonical unique index: insert if not exists
+                try {
+                  await sql`INSERT INTO physi_prof_aliases (alias, canonical, prof_group_key, programme, level) VALUES (${profName}, ${canonicalProposal}, ${groupKey}, ${(b.scope_value as string) ?? null}, ${(b.scope_value as string) ?? null}) ON CONFLICT DO NOTHING`;
+                } catch {}
+                // also ensure alias variant is tracked: if raw differs from canonical, insert alias->canonical pair for voting
+                if (profName.toLowerCase() !== canonicalProposal.toLowerCase()) {
+                  try {
+                    await sql`INSERT INTO physi_prof_aliases (alias, canonical, prof_group_key) VALUES (${profName}, ${canonicalProposal}, ${groupKey}) ON CONFLICT DO NOTHING`;
+                  } catch {}
+                }
+              }
+            }
+          } catch {}
+        }
         return NextResponse.json({ ok: true, event: r[0] }, { status: 201 });
       } catch (e) {
         logError("TIMETABLE_CREATE_FAILED", e, { route: "/api/timetable", method: "POST" });
