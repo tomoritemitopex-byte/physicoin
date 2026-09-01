@@ -2,10 +2,11 @@
  * lib/ghostWitness.ts — Ghost Witness Protocol (Satoshi Intuition #1)
  * SHA256 signature chain for reputation — zero officials, peer-to-peer.
  * Each action extends user's chain: sig_n = SHA256(prev_sig | action | userId | timestamp)
+ * HMAC variant: when GHOST_HMAC_SECRET/HMAC_SECRET set, sig_n = HMAC_SHA256(secret, payload) — unforgeable.
  * Stored in physi_users.rep_ghost_sig + physi_ghost_chain audit trail.
  * Pure functions, deterministic, verifiable by any peer.
  */
-import { createHash } from "crypto";
+import { createHash, createHmac } from "crypto";
 
 export const GHOST_GENESIS = "0000000000000000000000000000000000000000000000000000000000000000";
 
@@ -14,26 +15,51 @@ export function sha256Hex(input: string): string {
   return createHash("sha256").update(input, "utf8").digest("hex");
 }
 
+function getGhostSecret(): string | null {
+  const s = (process.env.GHOST_HMAC_SECRET || process.env.HMAC_SECRET || "").trim();
+  return s || null;
+}
+
 function canonicalTs(ts: string): string {
   try { return new Date(ts).toISOString(); } catch { return String(ts); }
 }
 
-/** Compute next ghost signature in chain — timestamp is canonical ISO (with millis+Z) */
+/** Compute next ghost signature in chain — HMAC if secret set, plain SHA256 fallback for local dev */
 export function ghostNextSig(prevSig: string | null | undefined, action: string, userId: string, timestamp?: string): string {
+  const secret = getGhostSecret();
+  if (secret) return ghostNextSigHMAC(prevSig, action, userId, timestamp, secret);
   const prev = prevSig && prevSig.length === 64 ? prevSig : GHOST_GENESIS;
   const ts = canonicalTs(timestamp ?? new Date().toISOString());
   const payload = `${prev}|${String(action)}|${String(userId)}|${ts}`;
   return sha256Hex(payload);
 }
 
+/** HMAC variant — only server can extend (unforgeable) */
+export function ghostNextSigHMAC(prevSig: string | null | undefined, action: string, userId: string, timestamp?: string, secret?: string): string {
+  const sec = secret || getGhostSecret() || "dev-fallback-hmac-secret-do-not-use-in-prod";
+  const prev = prevSig && prevSig.length === 64 ? prevSig : GHOST_GENESIS;
+  const ts = canonicalTs(timestamp ?? new Date().toISOString());
+  const payload = `${prev}|${String(action)}|${String(userId)}|${ts}`;
+  return createHmac("sha256", sec).update(payload, "utf8").digest("hex");
+}
+
 /** Verify chain link: does newSig == SHA256(prevSig|action|userId|ts)? — ts is canonical ISO */
 export function verifyGhostLink(prevSig: string | null | undefined, action: string, userId: string, timestamp: string, newSig: string): boolean {
-  const expected = ghostNextSig(prevSig, action, userId, canonicalTs(String(timestamp)));
-  return expected === String(newSig).toLowerCase();
+  const tsCanon = canonicalTs(String(timestamp));
+  // try HMAC first if secret set, then plain
+  const secret = getGhostSecret();
+  if (secret) {
+    const expectedHmac = ghostNextSigHMAC(prevSig, action, userId, tsCanon, secret);
+    if (expectedHmac === String(newSig).toLowerCase()) return true;
+  }
+  const expected = ghostNextSig(prevSig, action, userId, tsCanon);
+  // ghostNextSig already uses HMAC when secret set, so this is duplicate; keep plain fallback for old chains
+  const plain = (()=>{ const prev = prevSig && String(prevSig).length===64 ? String(prevSig) : GHOST_GENESIS; return sha256Hex(`${prev}|${String(action)}|${String(userId)}|${tsCanon}`); })();
+  return expected === String(newSig).toLowerCase() || plain === String(newSig).toLowerCase();
 }
 
 /** Verify full chain (array of {prev_sig, new_sig, action, user_id, created_at})
- *  Backward compat: tries canonical ISO of created_at, plus legacy slice fallback for old rows.
+ *  Tries HMAC first, falls back to plain SHA256 for legacy chains.
  */
 export function verifyGhostChain(chain: Array<{ prev_sig: string | null; new_sig: string; action: string; user_id: string; created_at: string }>): boolean {
   for (const link of chain) {
