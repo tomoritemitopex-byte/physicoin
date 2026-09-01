@@ -16,9 +16,9 @@ function Breadcrumb({ pathname }: { pathname: string | null }) {
   const page = seg[seg.indexOf("app") + 1];
   const title = page ? LABELS[page] ?? page : "Dashboard";
   return (
-    <div className="mx-auto flex max-w-[1280px] items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
+    <div className="mx-auto flex max-w-[1280px] items-center justify-between px-4 py-2.5 sm:px-6 lg:px-8">
       <div className="flex items-center gap-2">
-        <a href="/app/roadmap" className="font-mono text-xs text-slate-500 hover:text-slate-300">Home</a>
+        <a href="/app/roadmap" className="font-mono text-xs text-slate-400 hover:text-white transition">Home</a>
         <span className="text-slate-600">›</span>
         <span className="text-sm font-medium text-white">{title}</span>
       </div>
@@ -94,17 +94,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </div>
 
       <header className={`sticky top-0 z-40 border-b transition ${scrolled ? "border-white/[0.07] bg-[#070a12]/90 backdrop-blur-xl shadow-lg" : "border-white/[0.06] bg-[#070a12]/70 backdrop-blur-xl"}`}>
-        <div className="mx-auto flex max-w-[1280px] items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
+        <div className="mx-auto flex max-w-[1280px] items-center justify-between gap-3 px-4 py-2.5 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
             <button aria-label="Toggle navigation" aria-expanded={mobileOpen} onClick={() => setMobileOpen(v=>!v)}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.07] bg-white/[0.04] text-slate-400 hover:text-white sm:hidden">
+              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/[0.07] bg-white/[0.04] text-slate-400 hover:text-white sm:hidden">
               {mobileOpen ? "✕" : "☰"}
             </button>
             <a href="/" className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-[10px] font-black tracking-tight text-[#070a12]">PHYSI</a>
             <span className="hidden sm:inline text-sm font-semibold tracking-tight text-white">PHYSI</span>
             <span className="hidden sm:inline-flex rounded-full border border-white/[0.06] bg-white/[0.04] px-2.5 py-1 font-mono text-[11px] text-slate-400">inside</span>
           </div>
-          <a href="/app/profile" className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition ${isProfile ? "border-white bg-white text-[#070a12]" : "border-white/10 bg-white/[0.05] text-slate-300 hover:bg-white/[0.08] hover:text-white"}`}>
+          <a href="/app/profile" className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium transition ${isProfile ? "border-white bg-white text-[#070a12]" : "border-white/10 bg-white/[0.05] text-slate-300 hover:bg-white/[0.08] hover:text-white"}`}>
             <span className="hidden sm:inline">{isProfile ? "Profile · active" : "Profile"}</span>
             <span className="sm:hidden">Profile</span>
             <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] ${isProfile ? "bg-[#070a12] text-white" : "bg-white text-[#070a12]"}`}>◯</span>
@@ -115,20 +115,21 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <nav className="grid grid-cols-2 gap-2">
               {ALL_TABS.map((t) => {
                 const active = pathname === t.href || pathname?.startsWith(t.href + "/");
-                return <a key={t.href} href={t.href} className={`rounded-xl border px-3 py-2.5 text-center text-sm font-medium ${active ? "border-white bg-white text-[#070a12]" : "border-white/10 bg-white/[0.04] text-slate-300"}`}>{GAME_LABELS[t.href] ?? t.label}</a>;
+                return <a key={t.href} href={t.href} className={`min-h-[44px] rounded-xl border px-3 py-2.5 text-center text-sm font-medium flex items-center justify-center ${active ? "border-white bg-white text-[#070a12]" : "border-white/10 bg-white/[0.04] text-slate-300"}`}>{GAME_LABELS[t.href] ?? t.label}</a>;
               })}
             </nav>
           </div>
         )}
+        {/* Advisory strip — compact, single line */}
         <div className="border-t border-amber-500/10 bg-amber-500/[0.03]">
-          <div className="mx-auto max-w-[1280px] px-4 py-1.5 text-center font-mono text-[11px] text-amber-200/60">
-            <a href="/terms" className="hover:text-amber-200">advisory feed — green tick = confirmed · Terms →</a>
+          <div className="mx-auto max-w-[1280px] px-4 py-1.5 text-center font-mono text-[11px] leading-none text-amber-200/60">
+            <a href="/terms" className="hover:text-amber-200 transition">advisory feed — green tick = confirmed · Terms →</a>
           </div>
         </div>
       </header>
 
       {!isRoadmap && <div className="border-b border-white/[0.04] bg-white/[0.01]"><Breadcrumb pathname={pathname} /></div>}
-      <main className={`${isRoadmap ? "w-full" : "mx-auto max-w-[1280px] px-4 py-6 sm:px-6 lg:px-8"} pb-[88px]`}>{children}</main>
+      <main className={`${isRoadmap ? "w-full" : "mx-auto max-w-[1280px] px-4 py-6 sm:px-6 lg:px-8"} pb-[88px] overflow-x-hidden`}>{children}</main>
       <BottomNav pathname={pathname} />
       <footer className="mx-auto max-w-[1280px] border-t border-white/[0.04] px-4 py-6 text-center font-mono text-xs text-slate-600 sm:px-6 lg:px-8">
         PHYSI · built by students · <a href="/terms" className="underline decoration-white/15 hover:text-slate-400">Terms →</a>

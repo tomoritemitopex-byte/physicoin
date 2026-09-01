@@ -79,21 +79,21 @@ export default function StreakHeatmap({ userId }: { userId: string }) {
     <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-white">Streak · 30 days</h3>
-        <span className={`rounded-full px-2.5 py-1 font-mono text-xs font-medium ${daysLeft===0?"bg-red-500/15 text-red-300 border border-red-500/20":"bg-amber-500/15 text-amber-300 border border-amber-500/20"}`}>{fireText}</span>
+        <span className={`rounded-full border px-2.5 py-1 font-mono text-xs font-medium ${daysLeft===0?"bg-red-500/15 text-red-300 border-red-500/20":"bg-amber-500/15 text-amber-300 border-amber-500/20"}`}>{fireText}</span>
       </div>
       <div className="mt-3 grid grid-cols-6 gap-1.5 sm:gap-2">
         {days.map(d=>{
           const isToday = d.date===isoToday;
           return (
           <div key={d.date} title={`${d.date}: ${d.activity_count} ${d.activity_count===1?"activity":"activities"}${isToday?" · today":""}`} className={`aspect-square rounded-lg border ${dotColor(d.intensity)} flex items-center justify-center relative ${isToday ? "ring-2 ring-amber-400/60 ring-offset-1 ring-offset-[#0b1020]" : ""}`}>
-            <span className="font-mono text-[7px] text-white/30 sm:text-[8px]">{d.date.slice(8,10)}</span>
+            <span className="font-mono text-[7px] text-white/40 sm:text-[8px]">{d.date.slice(8,10)}</span>
             {isToday && <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-amber-400 ring-2 ring-[#0b1020]" />}
           </div>
         )})}
       </div>
-      <div className="mt-3 flex items-center justify-between">
-        <p className="font-mono text-xs text-slate-400">{summary}</p>
-        {streakLen>0 && <span className="font-mono text-xs font-bold text-emerald-300">{streakLen}🔥 streak</span>}
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <p className="font-mono text-xs text-slate-400 truncate">{summary}</p>
+        {streakLen>0 && <span className="shrink-0 font-mono text-xs font-bold text-emerald-300">{streakLen}🔥 streak</span>}
       </div>
       <div className="mt-2 flex items-center gap-1.5 font-mono text-[10px] text-slate-500">
         <span>Less</span><span className="h-3 w-3 rounded border bg-white/[0.06] border-white/5" /><span className="h-3 w-3 rounded border bg-emerald-900/40 border-emerald-800/50" /><span className="h-3 w-3 rounded border bg-emerald-700/50" /><span className="h-3 w-3 rounded border bg-emerald-500/70" /><span className="h-3 w-3 rounded border bg-emerald-400" /><span>More</span>
@@ -104,12 +104,12 @@ export default function StreakHeatmap({ userId }: { userId: string }) {
           <p className="font-mono text-[11px] font-bold uppercase tracking-wide text-amber-300">Today · {todayClasses.length} upcoming · tap to verify</p>
           <div className="mt-2 space-y-1.5">
             {todayClasses.map(c=> (
-              <button key={c.id} onClick={()=>handleVerify(c.id)} disabled={!!verifyBusy} className="flex w-full items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-left hover:bg-white hover:text-black disabled:opacity-50 transition">
+              <button key={c.id} onClick={()=>handleVerify(c.id)} disabled={!!verifyBusy} className="flex w-full items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5 text-left hover:bg-white hover:text-[#070a12] disabled:opacity-50 transition group">
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13px] font-bold text-white group-hover:text-black">{c.title} <span className="font-mono text-[11px] font-medium text-white/60">· {c.venue}</span></span>
-                  <span className="font-mono text-[11px] text-white/50">{c.event_time} · {c.authority_points}/{c.required_points} votes</span>
+                  <span className="block truncate text-[13px] font-bold text-white group-hover:text-[#070a12]">{c.title} <span className="font-mono text-[11px] font-medium text-slate-400 group-hover:text-slate-600">· {c.venue}</span></span>
+                  <span className="font-mono text-[11px] text-slate-400 group-hover:text-slate-600">{c.event_time} · {c.authority_points}/{c.required_points} votes</span>
                 </span>
-                <span className={`shrink-0 rounded-full px-3 py-1 font-mono text-[11px] font-black ${verifyBusy===c.id ? "bg-white/10 text-white/60" : "bg-emerald-500 text-white"}`}>{verifyBusy===c.id ? "…" : "Verify ✓"}</span>
+                <span className={`shrink-0 rounded-full px-3 py-1.5 font-mono text-[11px] font-bold ${verifyBusy===c.id ? "bg-white/10 text-slate-400" : "bg-emerald-500 text-white group-hover:bg-emerald-600"}`}>{verifyBusy===c.id ? "…" : "Verify ✓"}</span>
               </button>
             ))}
           </div>

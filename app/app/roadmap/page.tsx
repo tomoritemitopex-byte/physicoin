@@ -241,16 +241,16 @@ function RoadmapInner() {
       {/* Header — one clear title, single primary action */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="font-mono text-xs uppercase tracking-[0.12em] text-slate-500">Road · live timetable · WAT</p>
+          <p className="font-mono text-xs uppercase tracking-[0.12em] text-slate-400">Road · live timetable · WAT</p>
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-white sm:text-[26px]">Where&apos;s class today?</h1>
-          <p className="mt-1 max-w-[560px] text-sm leading-5 text-slate-400">Post what you hear. Tap Yes if you were there — green tick when your coursemates confirm.</p>
+          <p className="mt-1.5 max-w-[560px] text-sm leading-5 text-slate-400">Post what you hear. Tap Yes if you were there — green tick when your coursemates confirm.</p>
         </div>
-        <button onClick={()=>setShowPost(v=>!v)} className="inline-flex shrink-0 items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold text-[#070a12] shadow-lg hover:bg-slate-100 transition">
+        <button onClick={()=>setShowPost(v=>!v)} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-white px-6 min-h-[44px] text-sm font-semibold text-[#070a12] shadow-lg hover:bg-slate-100 transition">
           <Plus className="h-4 w-4" /> {showPost ? "Close" : "Post gist"}
         </button>
       </div>
 
-      {/* Stats — minimal */}
+      {/* Stats — minimal, breathable */}
       <div className="mt-5 grid grid-cols-3 gap-3">
         {[
           { label:"Live", value: stats.total, sub:"entries" },
@@ -258,36 +258,38 @@ function RoadmapInner() {
           { label:"Advisory", value: stats.advisory, sub:"awaiting", accent:"text-amber-300" },
         ].map(s=> (
           <div key={s.label} className="rounded-2xl border border-white/[0.06] bg-white/[0.03] px-4 py-3.5">
-            <p className="font-mono text-[11px] uppercase tracking-wide text-slate-500">{s.label}</p>
+            <p className="font-mono text-[11px] uppercase tracking-wide text-slate-400">{s.label}</p>
             <p className={`mt-1 text-xl font-bold tracking-tight ${s.accent ?? "text-white"}`}>{s.value}</p>
-            <p className="font-mono text-xs text-slate-500">{s.sub}</p>
+            <p className="font-mono text-xs text-slate-400">{s.sub}</p>
           </div>
         ))}
       </div>
 
-      {/* Search + filters + view toggle — single row, restrained */}
-      <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search courses, venues…" className="w-full rounded-full border border-white/10 bg-white/[0.04] py-2.5 pl-10 pr-4 text-sm text-white placeholder:text-slate-500 focus:border-white/15 focus:outline-none" />
+      {/* Search + filters + view toggle — breathable, 44px touch targets */}
+      <div className="mt-5 flex flex-col gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search courses, venues…" className="w-full rounded-full border border-white/10 bg-white/[0.04] py-3 pl-10 pr-4 text-sm text-white placeholder:text-slate-400 focus:border-white/15 focus:outline-none" />
+          </div>
+          <div className="flex items-center gap-1.5">
+            {[
+              { k:"all", label:"All" }, { k:"advisory", label:"Advisory" }, { k:"verified", label:"Green" }
+            ].map(f=> (
+              <button key={f.k} onClick={()=>setFilterParam(f.k)} className={`min-h-[40px] rounded-full px-4 text-sm font-medium transition ${filter===f.k ? "bg-white text-[#070a12]" : "border border-white/10 bg-white/[0.04] text-slate-300 hover:bg-white/[0.07]"}`}>{f.label}</button>
+            ))}
+          </div>
         </div>
-        <div className="flex items-center gap-1.5">
-          {[
-            { k:"all", label:"All" }, { k:"advisory", label:"Advisory" }, { k:"verified", label:"Green" }
-          ].map(f=> (
-            <button key={f.k} onClick={()=>setFilterParam(f.k)} className={`rounded-full px-3.5 py-2 text-sm font-medium transition ${filter===f.k ? "bg-white text-[#070a12]" : "border border-white/10 bg-white/[0.04] text-slate-300 hover:bg-white/[0.07]"}`}>{f.label}</button>
-          ))}
-        </div>
-        <div className="flex items-center rounded-full border border-white/10 bg-white/[0.04] p-1">
-          <button onClick={()=>setView("map")} className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition ${view==="map" ? "bg-white text-[#070a12]" : "text-slate-400"}`}><MapIcon className="h-3.5 w-3.5" /> Map</button>
-          <button onClick={()=>setView("list")} className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition ${view==="list" ? "bg-white text-[#070a12]" : "text-slate-400"}`}><List className="h-3.5 w-3.5" /> List</button>
-          <button onClick={()=>setView("consensus")} className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition ${view==="consensus" ? "bg-white text-[#070a12]" : "text-slate-400"}`}><GitMerge className="h-3.5 w-3.5" /> Consensus</button>
+        <div className="flex w-fit items-center rounded-full border border-white/10 bg-white/[0.04] p-1">
+          <button onClick={()=>setView("map")} className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-4 text-sm font-medium transition ${view==="map" ? "bg-white text-[#070a12]" : "text-slate-400 hover:text-white"}`}><MapIcon className="h-3.5 w-3.5" /> Map</button>
+          <button onClick={()=>setView("list")} className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-4 text-sm font-medium transition ${view==="list" ? "bg-white text-[#070a12]" : "text-slate-400 hover:text-white"}`}><List className="h-3.5 w-3.5" /> List</button>
+          <button onClick={()=>setView("consensus")} className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-4 text-sm font-medium transition ${view==="consensus" ? "bg-white text-[#070a12]" : "text-slate-400 hover:text-white"}`}><GitMerge className="h-3.5 w-3.5" /> Consensus</button>
         </div>
       </div>
 
       {/* Post form — disclosure, not always open */}
       {showPost && (
-        <form onSubmit={handlePost} className="mt-4 rounded-[20px] border border-white/[0.07] bg-white/[0.04] p-5 backdrop-blur">
+        <form onSubmit={handlePost} className="mt-4 rounded-[20px] border border-white/[0.07] bg-white/[0.04] p-5 backdrop-blur sm:p-6">
           <h3 className="text-sm font-semibold text-white">Post what you heard — keep it honest</h3>
           <p className="mt-1 text-sm text-slate-400">Example: “ANA 203 moved to LT2, Friday 8am — HOD announced after lab.”</p>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -344,21 +346,32 @@ function RoadmapInner() {
             <span className="ml-1 font-mono text-xs text-slate-500">repeats all your events +7 days</span>
           </div>
           <div className="mt-4 flex gap-2">
-            <button disabled={posting} className="rounded-full bg-white px-6 py-2.5 text-sm font-semibold text-[#070a12] hover:bg-slate-100 disabled:opacity-50 transition">{posting ? "Posting…" : "Post as advisory →"}</button>
-            <button type="button" onClick={()=>setShowPost(false)} className="rounded-full border border-white/10 bg-white/[0.04] px-5 py-2.5 text-sm text-slate-300">Cancel</button>
+            <button disabled={posting} className="min-h-[44px] rounded-full bg-white px-7 text-sm font-semibold text-[#070a12] hover:bg-slate-100 disabled:opacity-50 transition">{posting ? "Posting…" : "Post as advisory →"}</button>
+            <button type="button" onClick={()=>setShowPost(false)} className="min-h-[44px] rounded-full border border-white/10 bg-white/[0.04] px-6 text-sm text-slate-300">Cancel</button>
           </div>
         </form>
       )}
 
-      {/* Consensus Map — truth coordination strip (always visible on map/list, full when tab selected) */}
+      {/* Consensus — full on consensus tab, compact disclosure on map/list to reduce clutter */}
       {view === "consensus" ? (
         <div className="mt-6">
           <ConsensusMap />
         </div>
       ) : (
-        <div className="mt-6">
-          <ConsensusMap />
-        </div>
+        <details className="mt-6 group rounded-[20px] border border-white/[0.06] bg-white/[0.02] open:bg-white/[0.03] open:border-white/[0.07]">
+          <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-4">
+            <span className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-violet-400 animate-pulse" />
+              <span className="text-sm font-semibold text-white">Consensus · pending decisions</span>
+              <span className="hidden sm:inline font-mono text-xs text-slate-400">halls · lecturers · courses</span>
+            </span>
+            <span className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 font-mono text-xs text-slate-400 group-open:hidden">Show <span aria-hidden>▾</span></span>
+            <span className="hidden items-center gap-1.5 rounded-full bg-white px-3 py-1 font-mono text-xs font-semibold text-[#070a12] group-open:inline-flex">Hide <span aria-hidden>▴</span></span>
+          </summary>
+          <div className="border-t border-white/[0.06] p-2 sm:p-3">
+            <ConsensusMap />
+          </div>
+        </details>
       )}
 
       {/* Content — hidden when on consensus tab (events shown separately) */}
@@ -380,8 +393,8 @@ function RoadmapInner() {
               <p className="font-mono text-xs uppercase tracking-[0.12em] text-emerald-200/70">Endless road · WAT</p>
               <span className="rounded-full bg-white px-3 py-1 font-mono text-xs font-bold text-[#070a12]">{filtered.length} nodes</span>
             </div>
-            <div className="relative mt-4 overflow-x-auto no-scrollbar">
-              <svg viewBox="0 0 640 170" className="h-[140px] w-[640px] sm:h-[150px] sm:w-full" style={{ minWidth: 640 }} role="img" aria-label="Road">
+            <div className="relative mt-4 -mx-1 overflow-x-auto no-scrollbar sm:mx-0">
+              <svg viewBox="0 0 640 170" className="h-[140px] w-full min-w-[520px] sm:h-[150px]" role="img" aria-label="Road">
                 <defs>
                   <linearGradient id="roadGrad" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stopColor="#6e45d0"/><stop offset="50%" stopColor="#8b5cf6"/><stop offset="100%" stopColor="#a78bfa"/></linearGradient>
                 </defs>
@@ -429,12 +442,12 @@ function RoadmapInner() {
                 </div>
                 <button onClick={()=>setSelectedId(null)} className="rounded-full border border-white/10 bg-white/[0.04] p-2 text-slate-400 hover:text-white"><X className="h-4 w-4" /></button>
               </div>
-              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10"><div className={`h-full rounded-full ${isVerified(selected) ? "bg-emerald-400" : "bg-amber-400"}`} style={{ width: `${pctOf(selected)}%`}} /></div>
+              <div className="mt-3 hidden h-1.5 overflow-hidden rounded-full bg-white/10 sm:flex"><div className={`h-full rounded-full ${isVerified(selected) ? "bg-emerald-400" : "bg-amber-400"}`} style={{ width: `${pctOf(selected)}%`}} /></div>
               <div className="mt-3"><EchoRing eventId={selected.id} /></div>
               <div className="mt-4 flex flex-wrap gap-2">
-                <button onClick={()=>vote(selected.id,"YES")} disabled={!!voteBusy} className="rounded-full bg-emerald-500 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-600 disabled:opacity-50">{voteBusy===selected.id+"YES" ? "…" : "Yes ✓"}</button>
-                <button onClick={()=>vote(selected.id,"NO")} disabled={!!voteBusy} className="rounded-full border border-white/10 bg-white/[0.05] px-5 py-2 text-sm font-medium text-slate-200 hover:bg-white hover:text-[#070a12] disabled:opacity-50">{voteBusy===selected.id+"NO" ? "…" : "No ✕"}</button>
-                <button onClick={()=>vote(selected.id,"CANCEL")} disabled={!!voteBusy} className="rounded-full border border-white/10 bg-white/[0.02] px-5 py-2 text-sm text-slate-400 hover:bg-white/[0.06] disabled:opacity-50">Skip</button>
+                <button onClick={()=>vote(selected.id,"YES")} disabled={!!voteBusy} className="min-h-[44px] rounded-full bg-emerald-500 px-6 text-sm font-semibold text-white hover:bg-emerald-600 disabled:opacity-50">{voteBusy===selected.id+"YES" ? "…" : "Yes ✓"}</button>
+                <button onClick={()=>vote(selected.id,"NO")} disabled={!!voteBusy} className="min-h-[44px] rounded-full border border-white/10 bg-white/[0.05] px-6 text-sm font-medium text-slate-200 hover:bg-white hover:text-[#070a12] disabled:opacity-50">{voteBusy===selected.id+"NO" ? "…" : "No ✕"}</button>
+                <button onClick={()=>vote(selected.id,"CANCEL")} disabled={!!voteBusy} className="min-h-[44px] rounded-full border border-white/10 bg-white/[0.02] px-6 text-sm text-slate-400 hover:bg-white/[0.06] disabled:opacity-50">Skip</button>
                 {myWeightLabel && <span className="ml-1 self-center"><VoteWeightBadge weight={myWeight} label={myWeightLabel} /></span>}
               </div>
             </div>
@@ -488,10 +501,10 @@ function RoadmapInner() {
                     <span className={`hidden sm:inline-flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${v ? "bg-emerald-500 text-white" : "bg-amber-500 text-white"}`}>{v ? "✓" : "●"}</span>
                   </div>
                   <div className="mt-4 flex flex-wrap items-center gap-1.5">
-                    <span className="font-mono text-xs uppercase tracking-wide text-slate-500">Were you there?</span>
-                    <button onClick={()=>vote(ev.id,"YES")} disabled={!!voteBusy} className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3.5 py-1.5 text-sm font-medium text-emerald-300 hover:bg-emerald-500 hover:text-white disabled:opacity-50">{voteBusy===ev.id+"YES" ? "…" : "Yes ✓"}</button>
-                    <button onClick={()=>vote(ev.id,"NO")} disabled={!!voteBusy} className="rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-1.5 text-sm text-slate-200 hover:bg-white hover:text-[#070a12] disabled:opacity-50">{voteBusy===ev.id+"NO" ? "…" : "No ✕"}</button>
-                    <button onClick={()=>vote(ev.id,"CANCEL")} disabled={!!voteBusy} className="rounded-full border border-white/10 bg-white/[0.02] px-3.5 py-1.5 text-sm text-slate-400 hover:bg-white/[0.06] disabled:opacity-50">Skip</button>
+                    <span className="font-mono text-xs uppercase tracking-wide text-slate-400">Were you there?</span>
+                    <button onClick={()=>vote(ev.id,"YES")} disabled={!!voteBusy} className="min-h-[40px] rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 text-sm font-medium text-emerald-300 hover:bg-emerald-500 hover:text-white disabled:opacity-50">{voteBusy===ev.id+"YES" ? "…" : "Yes ✓"}</button>
+                    <button onClick={()=>vote(ev.id,"NO")} disabled={!!voteBusy} className="min-h-[40px] rounded-full border border-white/10 bg-white/[0.04] px-4 text-sm text-slate-200 hover:bg-white hover:text-[#070a12] disabled:opacity-50">{voteBusy===ev.id+"NO" ? "…" : "No ✕"}</button>
+                    <button onClick={()=>vote(ev.id,"CANCEL")} disabled={!!voteBusy} className="min-h-[40px] rounded-full border border-white/10 bg-white/[0.02] px-4 text-sm text-slate-400 hover:bg-white/[0.06] disabled:opacity-50">Skip</button>
                     {myWeightLabel && <VoteWeightBadge weight={myWeight} label={myWeightLabel} />}
                   </div>
                 </div>
