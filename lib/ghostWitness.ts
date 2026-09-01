@@ -14,24 +14,40 @@ export function sha256Hex(input: string): string {
   return createHash("sha256").update(input, "utf8").digest("hex");
 }
 
-/** Compute next ghost signature in chain */
+function canonicalTs(ts: string): string {
+  try { return new Date(ts).toISOString(); } catch { return String(ts); }
+}
+
+/** Compute next ghost signature in chain — timestamp is canonical ISO (with millis+Z) */
 export function ghostNextSig(prevSig: string | null | undefined, action: string, userId: string, timestamp?: string): string {
   const prev = prevSig && prevSig.length === 64 ? prevSig : GHOST_GENESIS;
-  const ts = timestamp ?? new Date().toISOString();
+  const ts = canonicalTs(timestamp ?? new Date().toISOString());
   const payload = `${prev}|${String(action)}|${String(userId)}|${ts}`;
   return sha256Hex(payload);
 }
 
-/** Verify chain link: does newSig == SHA256(prevSig|action|userId|ts)? */
+/** Verify chain link: does newSig == SHA256(prevSig|action|userId|ts)? — ts is canonical ISO */
 export function verifyGhostLink(prevSig: string | null | undefined, action: string, userId: string, timestamp: string, newSig: string): boolean {
-  const expected = ghostNextSig(prevSig, action, userId, timestamp);
+  const expected = ghostNextSig(prevSig, action, userId, canonicalTs(String(timestamp)));
   return expected === String(newSig).toLowerCase();
 }
 
-/** Verify full chain (array of {prev_sig, new_sig, action, user_id, created_at}) */
+/** Verify full chain (array of {prev_sig, new_sig, action, user_id, created_at})
+ *  Backward compat: tries canonical ISO of created_at, plus legacy slice fallback for old rows.
+ */
 export function verifyGhostChain(chain: Array<{ prev_sig: string | null; new_sig: string; action: string; user_id: string; created_at: string }>): boolean {
   for (const link of chain) {
-    if (!verifyGhostLink(link.prev_sig, link.action, link.user_id, String(link.created_at).slice(0, 24), link.new_sig)) return false;
+    const tsRaw = String((link as any).created_at ?? "");
+    // primary: canonical ISO of created_at
+    const tsCanon = (() => { try { return new Date(tsRaw).toISOString(); } catch { return tsRaw; }})();
+    const userId = String((link as any).user_id ?? "");
+    if (!userId) return false;
+    if (verifyGhostLink(link.prev_sig, link.action, userId, tsCanon, link.new_sig)) continue;
+    // fallback: raw string (for chains where created_at was inserted as exact ISO string)
+    if (verifyGhostLink(link.prev_sig, link.action, userId, tsRaw, link.new_sig)) continue;
+    // legacy fallback: slice(0,24) for pre-fix chains (always false, but keep for compat)
+    if (verifyGhostLink(link.prev_sig, link.action, userId, tsRaw.slice(0, 24), link.new_sig)) continue;
+    return false;
   }
   return true;
 }
@@ -51,17 +67,20 @@ export const GHOST_ACTIONS = {
  * Prepare ghost chain query promises — do NOT await sequentially.
  * Returns array of Neon query promises to be used inside sql.transaction((tx) => [...])
  * Caller must have already computed prev/newSig via ghostNextSig.
+ * Timestamp is stored explicitly as created_at so verification matches.
  */
 export function prepareGhostChainQueries(
   tx: any,
   userId: string,
   action: string,
   prev: string,
-  newSig: string
+  newSig: string,
+  timestamp?: string
 ): any[] {
-  const updateQ = tx`UPDATE physi_users SET rep_ghost_sig=${newSig}, updated_at=NOW() WHERE id=${userId}`;
-  const insertQ = tx`INSERT INTO physi_ghost_chain (user_id, prev_sig, new_sig, action) VALUES (${userId}, ${prev}, ${newSig}, ${action})`;
-  // prepare promises then return as array (no sequential awaits)
+  const ts = timestamp ? (()=>{ try{ return new Date(timestamp).toISOString(); } catch{ return String(timestamp);} })() : new Date().toISOString();
+  // Store exact timestamp used for hashing as created_at so verifyGhostChain can match
+  const updateQ = tx`UPDATE physi_users SET rep_ghost_sig=${newSig}, ghost_sig_updated_at=${ts}::timestamptz, updated_at=NOW() WHERE id=${userId}`;
+  const insertQ = tx`INSERT INTO physi_ghost_chain (user_id, prev_sig, new_sig, action, created_at) VALUES (${userId}, ${prev}, ${newSig}, ${action}, ${ts}::timestamptz)`;
   return [updateQ, insertQ];
 }
 
@@ -72,7 +91,7 @@ export function buildGhostChainSigs(
   userId: string,
   timestamp?: string
 ): { prev: string; newSig: string; timestamp: string } {
-  const ts = timestamp ?? new Date().toISOString();
+  const ts = canonicalTs(timestamp ?? new Date().toISOString());
   const prev = prevSig && String(prevSig).length === 64 ? String(prevSig) : GHOST_GENESIS;
   const newSig = ghostNextSig(prev, action, userId, ts);
   return { prev, newSig, timestamp: ts };
@@ -96,7 +115,7 @@ export async function appendGhostChain(
   action: string,
   opts?: { prevSig?: string | null; timestamp?: string }
 ): Promise<{ prevSig: string; newSig: string; timestamp: string; queries: any[] }> {
-  const ts = opts?.timestamp ?? new Date().toISOString();
+  const ts = canonicalTs(opts?.timestamp ?? new Date().toISOString());
   const isTransactionClient = typeof (txOrSql as any)?.transaction !== "function";
   let prevSig: string | null = opts?.prevSig !== undefined ? opts.prevSig : null;
   if (prevSig === null && !isTransactionClient) {
@@ -105,14 +124,8 @@ export async function appendGhostChain(
       prevSig = rows?.[0]?.rep_ghost_sig ?? null;
     } catch { prevSig = null; }
   }
-  // If inside transaction and prevSig still null, caller should have pre-fetched
-  // and passed opts.prevSig — don't issue SELECT inside batch (Neon HTTP requires reads before tx)
   const { prev, newSig } = buildGhostChainSigs(prevSig, action, userId, ts);
-  // Prepare query promises — MUST be included in sql.transaction([...]) array
-  // when used transactionally (Neon HTTP driver: sql.transaction((tx) => [tx`...`])).
-  // Do NOT await appendGhostChain(tx, ...) inside a transaction; instead use
-  // buildGhostChainSigs + prepareGhostChainQueries and spread into the array.
-  const queries = prepareGhostChainQueries(txOrSql, userId, action, prev, newSig);
+  const queries = prepareGhostChainQueries(txOrSql, userId, action, prev, newSig, ts);
   // For standalone (non-transactional) callers like mining check-in, execute
   // here directly. Do not swallow errors — previous .catch(()=>null) hid failures
   // and left chain at genesis. For transactional callers, return queries for

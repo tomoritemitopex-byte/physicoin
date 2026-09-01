@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
   try {
     const user = await sql`SELECT id, rep_ghost_sig, ghost_sig_updated_at FROM physi_users WHERE id=${userId} LIMIT 1`;
     if (!user.length) return NextResponse.json({ ok: false, code: "NOT_FOUND" }, { status: 404 });
-    const chain = await sql`SELECT id, prev_sig, new_sig, action, created_at FROM physi_ghost_chain WHERE user_id=${userId} ORDER BY created_at ASC LIMIT 100`;
+    const chain = await sql`SELECT id, user_id, prev_sig, new_sig, action, created_at FROM physi_ghost_chain WHERE user_id=${userId} ORDER BY created_at ASC LIMIT 100`;
     const verify = searchParams.get("verify") === "1" || searchParams.get("verify") === "true";
     let chainValid: boolean | null = null;
     if (verify && chain.length > 0) {
