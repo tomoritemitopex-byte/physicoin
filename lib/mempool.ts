@@ -9,14 +9,47 @@ export const MEMPOOL_EXPIRY_HOURS = 24;
 export const MEMPOOL_TTL_MS = MEMPOOL_EXPIRY_HOURS * 3600 * 1000;
 export const MEMPOOL_SLOT_WINDOW_MIN = 30;
 
-function normalizeTitle(s: string): string {
-  return String(s || "").trim().toLowerCase().replace(/\s+/g, " ").replace(/[^a-z0-9 ]/g, "").trim();
+export function normalizeTitle(s: string): string {
+  return String(s || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
+
+// Levenshtein distance (pure JS, no deps)
+export function levenshtein(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  let prev = Array.from({ length: n + 1 }, (_, i) => i);
+  let cur = new Array(n + 1);
+  for (let i = 1; i <= m; i++) {
+    cur[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+    }
+    const tmp = prev; prev = cur; cur = tmp;
+  }
+  return prev[n];
+}
+
+export function titleFuzzyMatch(a: string, b: string): boolean {
+  const na = normalizeTitle(a);
+  const nb = normalizeTitle(b);
+  if (na === nb) return true;
+  if (na.length <= 3 || nb.length <= 3) return na === nb; // short titles require exact
+  if (Math.abs(na.length - nb.length) > 2) return false;
+  return levenshtein(na, nb) <= 2;
+}
+
+// backward compat: titleFuzzyKey now returns full normalized title for bucket safety
 function titleFuzzyKey(title: string): string {
-  // first 3 chars of normalized title as fuzzy bucket (BIO 101 vs BIO101 -> bio)
-  const n = normalizeTitle(title);
-  return n.slice(0, 3) || n;
+  return normalizeTitle(title);
 }
+
 function timeToMinutes(t: string): number {
   const s = String(t || "00:00").slice(0, 5);
   const [h, m] = s.split(":").map(Number);
@@ -34,8 +67,10 @@ export type Slot = {
 export function slotKey(s: Slot): string {
   const scope = String(s.scope_value || "").trim().toLowerCase();
   const date = String(s.event_date).slice(0, 10);
-  const fk = titleFuzzyKey(s.title);
-  return `${scope}::${date}::${fk}`;
+  const fk = normalizeTitle(s.title);
+  // include 12 chars to avoid false positives from 3-char prefix
+  const keyPart = fk.slice(0, 12) || fk;
+  return `${scope}::${date}::${keyPart}`;
 }
 
 /** Find competing claims: pending events in same UTXO slot */
@@ -43,10 +78,7 @@ export async function getCompetingClaims(sql: any, slot: Slot): Promise<any[]> {
   if (!sql) return [];
   const scope = slot.scope_value ? String(slot.scope_value).trim() : null;
   const date = String(slot.event_date).slice(0, 10);
-  const fk = titleFuzzyKey(slot.title);
-  // scope_value + date exact, title fuzzy (first 3 chars), time window filtered in JS
   try {
-    // fetch candidates in same scope+date bucket, then filter fuzzy+time in JS to avoid pg trigram dependency
     let rows: any[];
     if (scope) {
       rows = await sql`SELECT id, title, venue, event_date, event_time, scope_value, status, created_by, expires_at, created_at FROM physi_events WHERE status='pending' AND event_date=${date}::date AND lower(COALESCE(scope_value,''))=lower(${scope}) LIMIT 20` as any[];
@@ -55,8 +87,7 @@ export async function getCompetingClaims(sql: any, slot: Slot): Promise<any[]> {
     }
     return (rows || []).filter((r: any) => {
       const t = String(r.title || "");
-      if (titleFuzzyKey(t) !== fk) return false;
-      // also require same normalized prefix or substring? use fuzzy key only for now
+      if (!titleFuzzyMatch(t, slot.title)) return false;
       if (!withinWindow(String(r.event_time || "00:00").slice(0, 5), String(slot.event_time).slice(0, 5))) return false;
       return true;
     });
@@ -78,7 +109,6 @@ export async function expireMempool(sql: any): Promise<number> {
     const r: any = await sql`UPDATE physi_events SET status='rejected', updated_at=NOW() WHERE status='pending' AND expires_at IS NOT NULL AND expires_at < NOW() RETURNING id`;
     return Array.isArray(r) ? r.length : 0;
   } catch {
-    // column may not exist yet
     return 0;
   }
 }
@@ -97,7 +127,6 @@ export function groupBySlot(events: any[]): Map<string, any[]> {
 /** For a slot group, compute tip: venue/time with most weight. Simplified: most votes or earliest. */
 export function pickTip(claims: any[]): { tip: any; contenders: any[] } | null {
   if (!claims.length) return null;
-  // sort by venue frequency or created_at
   const sorted = [...claims].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
   return { tip: sorted[0], contenders: sorted.slice(1) };
 }
