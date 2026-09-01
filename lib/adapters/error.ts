@@ -32,6 +32,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   BAD_VOTE: "Invalid vote. Please try again.",
   NOT_FOUND: "Not found.",
   USER_NOT_FOUND: "User not found. Please check your handle.",
+  VOTER_NOT_FOUND: "Invalid voter. Please check your account.",
   NICKNAME_TAKEN: "That handle is taken. Try another one.",
   VERIFY_FAILED: "Could not record your vote. Please try again.",
   STATS_ERROR: "Could not load stats. Please try again.",

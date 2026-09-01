@@ -29,6 +29,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, code: "INVALID_SCOPE", message: "scope_a and scope_b must differ" }, { status: 400 });
 
     try {
+      // Verify voter exists (prevent Sybil attacks and duplicate voting)
+      const [voter] = await sql`SELECT id FROM physi_users WHERE id = ${b.voter_id} LIMIT 1`;
+      if (!voter) {
+        return NextResponse.json({ ok: false, code: "VOTER_NOT_FOUND", message: "Invalid voter_id" }, { status: 404 });
+      }
+
       // Insert or update vote
       await sql`
         INSERT INTO physi_scope_votes (voter_id, scope_a, scope_b, vote_value)
