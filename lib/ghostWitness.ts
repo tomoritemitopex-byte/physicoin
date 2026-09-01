@@ -47,12 +47,47 @@ export const GHOST_ACTIONS = {
   PROFILE_CREATE: "profile:create",
 } as const;
 
-/** Server-side helper: extend user's ghost chain in a transaction */
+/**
+ * Prepare ghost chain query promises — do NOT await sequentially.
+ * Returns array of Neon query promises to be used inside sql.transaction((tx) => [...])
+ * Caller must have already computed prev/newSig via ghostNextSig.
+ */
+export function prepareGhostChainQueries(
+  tx: any,
+  userId: string,
+  action: string,
+  prev: string,
+  newSig: string
+): any[] {
+  const updateQ = tx`UPDATE physi_users SET rep_ghost_sig=${newSig}, updated_at=NOW() WHERE id=${userId}`;
+  const insertQ = tx`INSERT INTO physi_ghost_chain (user_id, prev_sig, new_sig, action) VALUES (${userId}, ${prev}, ${newSig}, ${action})`;
+  // prepare promises then return as array (no sequential awaits)
+  return [updateQ, insertQ];
+}
+
+/** Build ghost chain sigs (pure, no DB) */
+export function buildGhostChainSigs(
+  prevSig: string | null | undefined,
+  action: string,
+  userId: string,
+  timestamp?: string
+): { prev: string; newSig: string; timestamp: string } {
+  const ts = timestamp ?? new Date().toISOString();
+  const prev = prevSig && String(prevSig).length === 64 ? String(prevSig) : GHOST_GENESIS;
+  const newSig = ghostNextSig(prev, action, userId, ts);
+  return { prev, newSig, timestamp: ts };
+}
+
+/** Server-side helper: extend user's ghost chain in a transaction
+ * Refactored: prepares query promises then returns them as array pattern.
+ * For use outside sql.transaction (e.g. mining check-in), it will execute via
+ * Promise.all on prepared queries. For use inside sql.transaction, use
+ * prepareGhostChainQueries directly with pre-computed sigs.
+ */
 export async function appendGhostChain(
   txOrSql: any,
   userId: string,
   action: string,
-  // optional explicit prevSig (if caller already knows), else fetch from DB
   opts?: { prevSig?: string | null; timestamp?: string }
 ): Promise<{ prevSig: string; newSig: string; timestamp: string }> {
   const ts = opts?.timestamp ?? new Date().toISOString();
@@ -63,15 +98,11 @@ export async function appendGhostChain(
       prevSig = rows?.[0]?.rep_ghost_sig ?? null;
     } catch { prevSig = null; }
   }
-  const prev = prevSig && String(prevSig).length === 64 ? String(prevSig) : GHOST_GENESIS;
-  const newSig = ghostNextSig(prev, action, userId, ts);
+  const { prev, newSig } = buildGhostChainSigs(prevSig, action, userId, ts);
 
-  // update users table
-  try { await txOrSql`UPDATE physi_users SET rep_ghost_sig=${newSig}, updated_at=NOW() WHERE id=${userId}`; } catch {}
-
-  // audit trail
-  try {
-    await txOrSql`INSERT INTO physi_ghost_chain (user_id, prev_sig, new_sig, action) VALUES (${userId}, ${prev}, ${newSig}, ${action})`;
-  } catch {}
+  // Prepare query promises (do not sequentially await)
+  const queries = prepareGhostChainQueries(txOrSql, userId, action, prev, newSig);
+  // Execute — use Promise.all to avoid sequential awaits
+  try { await Promise.all(queries.map((q) => q.catch(() => null))); } catch {}
   return { prevSig: prev, newSig, timestamp: ts };
 }

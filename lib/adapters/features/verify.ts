@@ -8,7 +8,7 @@ import { getSql, isDbConfigured, dbNotConfigured, ensureAllTables } from "@/lib/
 import { registerApiAdapter } from "../api";
 import { registerFeature } from "../features";
 import { logError, getErrorMessage } from "../error";
-import { GHOST_ACTIONS, appendGhostChain } from "@/lib/ghostWitness";
+import { GHOST_ACTIONS, prepareGhostChainQueries, buildGhostChainSigs } from "@/lib/ghostWitness";
 import { zkThresholdCheck } from "@/lib/zkAuthority";
 
 export const verifyFeature = {
@@ -29,9 +29,11 @@ registerFeature(verifyFeature);
  *                AND total >= 3
  * Demotion rule:
  *   if NO votes break ratio < 0.66, flip back to 'pending'
+ * Refactored: prepares query promises then returns them as array (no sequential awaits).
  */
 async function promoteIfQuorum(tx: any, eventId: string, verifierId: string): Promise<{ promoted: boolean; demoted: boolean; yesW: number; noW: number; total: number; ratio: number }> {
-  // aggregate weighted votes (consistent snapshot within tx)
+  // aggregate weighted votes (consistent snapshot — caller should have fetched before tx in batch mode)
+  // For backwards compat, still supports sequential mode but prepares queries
   const agg = await tx`SELECT vote, SUM(authority_weight)::float as w FROM physi_verifications WHERE event_id=${eventId} GROUP BY vote`;
   let yesW = 0, noW = 0, total = 0;
   for (const row of agg as Array<{vote:string; w:number}>) {
@@ -50,16 +52,79 @@ async function promoteIfQuorum(tx: any, eventId: string, verifierId: string): Pr
   const promote = yesW >= required && ratio >= 0.66 && total >= 3;
   const demote = ev.status === "verified" && noW > 0 && ratio < 0.66;
 
+  // Prepare query promises (no sequential awaits — batch via Promise.all)
+  const queries: any[] = [];
   if (promote && ev.status !== "verified") {
-    await tx`UPDATE physi_events SET status='verified', authority_points=${yesW}, required_points=${total}, updated_at=NOW() WHERE id=${eventId}`;
-    await tx`INSERT INTO physi_canonical_log (event_id, yes_weight, total_weight, yes_ratio, promoted_by) VALUES (${eventId}, ${yesW}, ${total}, ${ratio}, ${verifierId})`;
+    const q1 = tx`UPDATE physi_events SET status='verified', authority_points=${yesW}, required_points=${total}, updated_at=NOW() WHERE id=${eventId}`;
+    const q2 = tx`INSERT INTO physi_canonical_log (event_id, yes_weight, total_weight, yes_ratio, promoted_by) VALUES (${eventId}, ${yesW}, ${total}, ${ratio}, ${verifierId})`;
+    queries.push(q1, q2);
   } else if (demote) {
-    await tx`UPDATE physi_events SET status='pending', authority_points=${yesW}, required_points=${required}, updated_at=NOW() WHERE id=${eventId}`;
+    const q1 = tx`UPDATE physi_events SET status='pending', authority_points=${yesW}, required_points=${required}, updated_at=NOW() WHERE id=${eventId}`;
+    queries.push(q1);
   } else {
-    await tx`UPDATE physi_events SET authority_points=${yesW}, required_points=${required}, updated_at=NOW() WHERE id=${eventId}`;
+    const q1 = tx`UPDATE physi_events SET authority_points=${yesW}, required_points=${required}, updated_at=NOW() WHERE id=${eventId}`;
+    queries.push(q1);
   }
+  try { await Promise.all(queries.map((q: any) => q.catch(() => null))); } catch {}
 
   return { promoted: promote, demoted: demote, yesW, noW, total, ratio };
+}
+
+/**
+ * Pure helper: compute promotion decision from pre-fetched aggregates and event row.
+ * Used for Neon HTTP batch transaction where reads must happen before tx.
+ */
+function computePromotion(
+  agg: Array<{ vote: string; w: number }>,
+  ev: { id: string; status: string; required_points: number } | null,
+  projectedYesW: number,
+  projectedNoW: number,
+  projectedTotal: number
+): { promoted: boolean; demoted: boolean; yesW: number; noW: number; total: number; ratio: number; required: number } {
+  let yesW = projectedYesW;
+  let noW = projectedNoW;
+  let total = projectedTotal;
+  // If no projection supplied, compute from agg
+  if (projectedTotal === -1) {
+    yesW = 0; noW = 0; total = 0;
+    for (const row of agg) {
+      const weight = Number(row.w) || 0;
+      total += weight;
+      if (row.vote === "YES") yesW = weight;
+      if (row.vote === "NO") noW = weight;
+    }
+  }
+  const ratio = total > 0 ? yesW / total : 0;
+  if (!ev) return { promoted: false, demoted: false, yesW, noW, total, ratio, required: 5 };
+  const required = Number(ev.required_points) || 5;
+  const promote = yesW >= required && ratio >= 0.66 && total >= 3;
+  const demote = ev.status === "verified" && noW > 0 && ratio < 0.66;
+  return { promoted: promote, demoted: demote, yesW, noW, total, ratio, required };
+}
+
+/**
+ * Prepare promotion query promises (no sequential awaits)
+ */
+function preparePromotionQueries(
+  tx: any,
+  eventId: string,
+  verifierId: string,
+  decision: { promoted: boolean; demoted: boolean; yesW: number; total: number; ratio: number; required: number },
+  evStatus: string
+): any[] {
+  const queries: any[] = [];
+  if (decision.promoted && evStatus !== "verified") {
+    const q1 = tx`UPDATE physi_events SET status='verified', authority_points=${decision.yesW}, required_points=${decision.total}, updated_at=NOW() WHERE id=${eventId}`;
+    const q2 = tx`INSERT INTO physi_canonical_log (event_id, yes_weight, total_weight, yes_ratio, promoted_by) VALUES (${eventId}, ${decision.yesW}, ${decision.total}, ${decision.ratio}, ${verifierId})`;
+    queries.push(q1, q2);
+  } else if (decision.demoted) {
+    const q1 = tx`UPDATE physi_events SET status='pending', authority_points=${decision.yesW}, required_points=${decision.required}, updated_at=NOW() WHERE id=${eventId}`;
+    queries.push(q1);
+  } else {
+    const q1 = tx`UPDATE physi_events SET authority_points=${decision.yesW}, required_points=${decision.required}, updated_at=NOW() WHERE id=${eventId}`;
+    queries.push(q1);
+  }
+  return queries;
 }
 
 async function handleVerify(req: Request): Promise<Response> {
@@ -80,54 +145,107 @@ async function handleVerify(req: Request): Promise<Response> {
         return NextResponse.json({ ok: false, code: "BAD_VOTE", message: getErrorMessage("BAD_VOTE") }, { status: 400 });
       }
       try {
-        // Satoshi P0-3: atomic transaction — INSERT vote + quorum + promotion all together.
-        // Prevents double-spend: two concurrent votes can't both pass quorum.
-        // Satoshi P0-1: no string-based authority bonuses — weight is pure authority_final (1.0).
-        const result = await sql.transaction(async (tx: any) => {
-          // 1. Fetch voter authority
-          const [u] = await tx`SELECT authority_final, rep_ghost_sig FROM physi_users WHERE id = ${b.verifier_id} LIMIT 1`;
-          if (!u) throw new Error("USER_NOT_FOUND");
+        // --- Pre-transaction reads & pure computation (Neon HTTP batch requires non-async tx fn) ---
+        const [u] = await sql`SELECT authority_final, rep_ghost_sig FROM physi_users WHERE id = ${b.verifier_id} LIMIT 1`;
+        if (!u) throw new Error("USER_NOT_FOUND");
 
-          // 2. Compute weight — NO squad boost, NO lecturer bypass, NO string matching
-          // NO votes subtract half-weight; CANCEL is witness no-op (0 weight)
-          let w = Number((u as any).authority_final) || 1.0;
-          if (b.vote === "NO") w = w * 0.5;
-          if (b.vote === "CANCEL") w = 0;
+        let w = Number((u as any).authority_final) || 1.0;
+        if (b.vote === "NO") w = w * 0.5;
+        if (b.vote === "CANCEL") w = 0;
 
-          // 3. Insert/replace verification (upsert — one vote per verifier per event)
-          const isWitness = b?.is_witness === true || b?.isWitness === true || false;
-          const award = Number(b?.award ?? (isWitness ? 1.0 : 0.3));
-          const r = await tx`
+        const isWitness = b?.is_witness === true || b?.isWitness === true || false;
+        const award = Number(b?.award ?? (isWitness ? 1.0 : 0.3));
+
+        const act = b.vote === "YES" ? GHOST_ACTIONS.VERIFY_YES : b.vote === "NO" ? GHOST_ACTIONS.VERIFY_NO : GHOST_ACTIONS.VERIFY_CANCEL;
+        const prevSig = (u as any).rep_ghost_sig ?? null;
+        const ghostBuild = buildGhostChainSigs(prevSig, act, String(b.verifier_id));
+
+        // Fetch existing verification to compute delta
+        let existingVerif: { vote: string; authority_weight: number } | null = null;
+        try {
+          const rows = await sql`SELECT vote, authority_weight FROM physi_verifications WHERE verifier_id=${b.verifier_id} AND event_id=${b.event_id} LIMIT 1`;
+          if (rows.length) existingVerif = rows[0] as any;
+        } catch {}
+
+        // Fetch current aggregates
+        let agg: Array<{ vote: string; w: number }> = [];
+        try {
+          const rows = await sql`SELECT vote, SUM(authority_weight)::float as w FROM physi_verifications WHERE event_id=${b.event_id} GROUP BY vote`;
+          agg = rows as any;
+        } catch {}
+
+        // Compute projected aggregates after upsert
+        let yesW = 0, noW = 0, total = 0;
+        for (const row of agg) {
+          const weight = Number((row as any).w) || 0;
+          total += weight;
+          if (row.vote === "YES") yesW = weight;
+          if (row.vote === "NO") noW = weight;
+        }
+        if (existingVerif) {
+          const oldW = Number((existingVerif as any).authority_weight) || 0;
+          total -= oldW;
+          if ((existingVerif as any).vote === "YES") yesW -= oldW;
+          if ((existingVerif as any).vote === "NO") noW -= oldW;
+        }
+        if (b.vote === "YES") { yesW += w; total += w; }
+        else if (b.vote === "NO") { noW += w; total += w; }
+        // CANCEL adds 0
+
+        const ratio = total > 0 ? yesW / total : 0;
+
+        // Fetch event row
+        let ev: { id: string; status: string; required_points: number } | null = null;
+        try {
+          const rows = await sql`SELECT id, status, required_points FROM physi_events WHERE id = ${b.event_id} LIMIT 1`;
+          if (rows.length) ev = rows[0] as any;
+        } catch {}
+        if (!ev) throw new Error("EVENT_NOT_FOUND");
+
+        const required = Number((ev as any).required_points) || 5;
+        const promote = yesW >= required && ratio >= 0.66 && total >= 3;
+        const demote = (ev as any).status === "verified" && noW > 0 && ratio < 0.66;
+        const quorumDecision = { promoted: promote, demoted: demote, yesW, noW, total, ratio, required };
+
+        // --- Transactional batch: prepare query promises then return as array (Neon HTTP correct pattern) ---
+        const txResults = await sql.transaction((tx: any) => {
+          const queries: any[] = [];
+          // 1. Insert/replace verification (upsert — one vote per verifier per event)
+          const verifQ = tx`
             INSERT INTO physi_verifications (verifier_id, event_id, vote, authority_weight, is_witness, squad_boost, award)
             VALUES (${b.verifier_id}, ${b.event_id}, ${b.vote}, ${w}, ${isWitness}, false, ${award})
             ON CONFLICT (verifier_id, event_id) DO UPDATE SET vote = EXCLUDED.vote, authority_weight = EXCLUDED.authority_weight, is_witness = EXCLUDED.is_witness, squad_boost = EXCLUDED.squad_boost, award = EXCLUDED.award
             RETURNING *`;
+          queries.push(verifQ);
 
-          // 3b. Ghost Witness: extend chain
-          try {
-            const act = b.vote === "YES" ? GHOST_ACTIONS.VERIFY_YES : b.vote === "NO" ? GHOST_ACTIONS.VERIFY_NO : GHOST_ACTIONS.VERIFY_CANCEL;
-            await appendGhostChain(tx, String(b.verifier_id), act);
-          } catch {}
+          // 2. Ghost Witness: extend chain (prepare queries)
+          const ghostQueries = prepareGhostChainQueries(tx, String(b.verifier_id), act, ghostBuild.prev, ghostBuild.newSig);
+          queries.push(...ghostQueries);
 
-          // 4. Quorum check + promotion/demotion (all within same tx — atomic)
-          const q = await promoteIfQuorum(tx, b.event_id, b.verifier_id);
+          // 3. Quorum check + promotion/demotion (prepare queries based on pre-computed decision)
+          const promoQueries = preparePromotionQueries(tx, b.event_id, b.verifier_id, quorumDecision, (ev as any).status);
+          queries.push(...promoQueries);
 
-          return { verification: r[0], quorum: q };
+          return queries;
         });
+
+        const verification = (txResults as any[])[0]?.[0] ?? null;
+        const quorum = { promoted: promote, demoted: demote, yesW, noW, total, ratio };
+        const result = { verification, quorum };
 
         // fire-and-forget notify on promotion (never blocks response)
         if (result.quorum.promoted) {
           try {
             const { notifyCanonical } = await import("@/lib/adapters/notify");
             const evRows = await sql`SELECT * FROM physi_events WHERE id=${b.event_id} LIMIT 1`;
-            const ev = evRows?.[0] as Record<string, unknown> | undefined;
-            if (ev) {
+            const ev2 = evRows?.[0] as Record<string, unknown> | undefined;
+            if (ev2) {
               notifyCanonical({
-                id: String(ev.id ?? b.event_id),
-                title: String((ev as {title?:string}).title ?? ""),
-                venue: String((ev as {venue?:string}).venue ?? ""),
-                event_date: String((ev as {event_date?:string}).event_date ?? ""),
-                event_time: String((ev as {event_time?:string}).event_time ?? ""),
+                id: String(ev2.id ?? b.event_id),
+                title: String((ev2 as {title?:string}).title ?? ""),
+                venue: String((ev2 as {venue?:string}).venue ?? ""),
+                event_date: String((ev2 as {event_date?:string}).event_date ?? ""),
+                event_time: String((ev2 as {event_time?:string}).event_time ?? ""),
                 yes_weight: result.quorum.yesW,
                 total_weight: result.quorum.total,
                 yes_ratio: result.quorum.ratio,
