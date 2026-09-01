@@ -1,11 +1,12 @@
 "use client";
 import { useEffect, useState, useCallback, useMemo, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Search, Plus, X, Map as MapIcon, List, Clock3, MapPin } from "lucide-react";
+import { Search, Plus, X, Map as MapIcon, List, Clock3, MapPin, GitMerge } from "lucide-react";
 import Onboarding from "@/components/Onboarding";
 import { RoadSkeleton, MapSkeleton } from "@/components/Skeletons";
 import { useVoteWeight } from "@/hooks/useVoteWeight";
 import { VoteWeightBadge } from "@/components/VoteWeightBadge";
+import ConsensusMap from "@/components/road/ConsensusMap";
 
 type EventRow = {
   id: string; title: string; venue: string; event_date: string; event_time: string;
@@ -31,7 +32,8 @@ export default function RoadmapPage() {
 function RoadmapInner() {
   const router = useRouter();
   const sp = useSearchParams();
-  const view = sp.get("view") === "list" ? "list" : "map";
+  const rawView = sp.get("view");
+  const view = rawView === "list" ? "list" : rawView === "consensus" ? "consensus" : "map";
   const filterParam = sp.get("filter") || "all";
 
   const [events, setEvents] = useState<EventRow[]>([]);
@@ -72,6 +74,17 @@ function RoadmapInner() {
   useEffect(() => { fetchFeed(); const iv = setInterval(fetchFeed, 15000); return () => clearInterval(iv); }, [fetchFeed]);
   useEffect(() => { if (!toast) return; const t = setTimeout(()=>setToast(null), 2600); return ()=>clearTimeout(t); }, [toast]);
   useEffect(() => { setFilter(filterParam); }, [filterParam]);
+  // consensus map → needs profile / toast bridge
+  useEffect(() => {
+    const onNeed = () => { setPickerHandle(""); setPickerErr(null); setPickerOpen(true); };
+    const onToast = (e: any) => setToast(String(e.detail ?? "vote failed"));
+    window.addEventListener("physi-needs-profile", onNeed as any);
+    window.addEventListener("physi-toast", onToast as any);
+    return () => {
+      window.removeEventListener("physi-needs-profile", onNeed as any);
+      window.removeEventListener("physi-toast", onToast as any);
+    };
+  }, []);
   // smart hall dropdown: resolved canonical halls for this programme/level
   useEffect(() => {
     const prog = (form.scope_value || "Physiology").split(",")[0]?.trim() || "Physiology";
@@ -267,6 +280,7 @@ function RoadmapInner() {
         <div className="flex items-center rounded-full border border-white/10 bg-white/[0.04] p-1">
           <button onClick={()=>setView("map")} className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition ${view==="map" ? "bg-white text-[#070a12]" : "text-slate-400"}`}><MapIcon className="h-3.5 w-3.5" /> Map</button>
           <button onClick={()=>setView("list")} className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition ${view==="list" ? "bg-white text-[#070a12]" : "text-slate-400"}`}><List className="h-3.5 w-3.5" /> List</button>
+          <button onClick={()=>setView("consensus")} className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition ${view==="consensus" ? "bg-white text-[#070a12]" : "text-slate-400"}`}><GitMerge className="h-3.5 w-3.5" /> Consensus</button>
         </div>
       </div>
 
@@ -335,8 +349,19 @@ function RoadmapInner() {
         </form>
       )}
 
-      {/* Content */}
-      {loading ? (
+      {/* Consensus Map — truth coordination strip (always visible on map/list, full when tab selected) */}
+      {view === "consensus" ? (
+        <div className="mt-6">
+          <ConsensusMap />
+        </div>
+      ) : (
+        <div className="mt-6">
+          <ConsensusMap />
+        </div>
+      )}
+
+      {/* Content — hidden when on consensus tab (events shown separately) */}
+      {view === "consensus" ? null : loading ? (
         view==="map" ? <MapSkeleton /> : <RoadSkeleton />
       ) : err ? (
         <div className="mt-6 rounded-2xl border border-red-500/15 bg-red-500/10 px-4 py-4 text-sm text-red-200">{err} <button onClick={fetchFeed} className="ml-2 underline">Retry</button></div>
