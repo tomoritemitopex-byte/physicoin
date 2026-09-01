@@ -9,8 +9,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSql, isDbConfigured, dbNotConfigured, ensureAllTables } from "@/lib/db";
 import { logError, getErrorMessage } from "@/lib/adapters/error";
 import { GHOST_ACTIONS, prepareGhostChainQueries, buildGhostChainSigs } from "@/lib/ghostWitness";
-import { awardScopeRewards, buildScopeRewardDetails, prepareScopeRewardQueries } from "@/lib/scopeMining";
-import { weightFromTotal, weightedQuorumStatus, scopeWeightedStatus } from "@/lib/voteWeight";
+import { buildScopeRewardDetails, prepareScopeRewardQueries } from "@/lib/scopeMining";
+import { weightFromTotal, weightedQuorumStatus, scopeWeightedStatus, getVoteWeights } from "@/lib/voteWeight";
 import { getCohesionMultipliers } from "@/lib/cohortTrust";
 
 // Satoshi P2: Quorum thresholds — 8 peers minimum, 70% agreement
@@ -104,23 +104,11 @@ export async function POST(req: NextRequest) {
       if (idx >= 0) votesForRewards[idx] = { voter_id: String(b.voter_id), vote_value: voteValue };
       else votesForRewards.push({ voter_id: String(b.voter_id), vote_value: voteValue });
 
-      // weighted quorum: weight each voter by history × cohort trust (anonymous)
+      // weighted quorum: weight each voter by history × cohort trust (anonymous) — N+1 fix: batch + cache
       let weightedYes = 0, weightedNo = 0;
       try {
         const uniqIds = Array.from(new Set(votesForRewards.map(v => String(v.voter_id))));
-        const weightMap = new Map<string, number>();
-        await Promise.all(uniqIds.map(async (uid) => {
-          try {
-            const [c1, c2, c3, c4] = await Promise.all([
-              sql`SELECT COUNT(*)::int AS c FROM physi_verifications WHERE verifier_id=${uid}`.then((r:any)=>Number(r[0]?.c||0)).catch(()=>0),
-              sql`SELECT COUNT(*)::int AS c FROM physi_scope_votes WHERE voter_id=${uid}`.then((r:any)=>Number(r[0]?.c||0)).catch(()=>0),
-              sql`SELECT COUNT(*)::int AS c FROM physi_hall_alias_votes WHERE voter_id=${uid}`.then((r:any)=>Number(r[0]?.c||0)).catch(()=>0),
-              sql`SELECT COUNT(*)::int AS c FROM physi_prof_alias_votes WHERE voter_id=${uid}`.then((r:any)=>Number(r[0]?.c||0)).catch(()=>0),
-            ]);
-            weightMap.set(uid, weightFromTotal(c1+c2+c3+c4));
-          } catch { weightMap.set(uid, 1); }
-        }));
-        // cohort trust multiplier (anonymous, server-side only) — 1.3x if shares pattern with any peer
+        const weightMap = await getVoteWeights(sql, uniqIds);
         let cohortMap = new Map<string, number>();
         try { cohortMap = await getCohesionMultipliers(sql, uniqIds); } catch {}
         for (const v of votesForRewards) {
@@ -144,7 +132,9 @@ export async function POST(req: NextRequest) {
       const rewardedDetails = shouldReward ? rewardInfo.rewards : [];
 
       // --- Transactional batch: prepare query promises then return as array (Neon HTTP correct pattern) ---
-      await sql.transaction((tx: any) => {
+      // Quorum race fix: resolution uses ON CONFLICT DO NOTHING + RETURNING; only tipper gets reward.
+      const shouldAttemptResolution = status !== "pending";
+      const txResults: any[] = await sql.transaction((tx: any) => {
         const queries: any[] = [];
         // 1. Insert vote (upsert)
         const voteQ = tx`
@@ -155,39 +145,54 @@ export async function POST(req: NextRequest) {
         queries.push(voteQ);
 
         // 2. Ghost Witness: extend caller's chain (prepare queries)
-        const ghostQueries = prepareGhostChainQueries(tx, String(b.voter_id), ghostAction, ghostBuild.prev, ghostBuild.newSig);
+        const ghostQueries = prepareGhostChainQueries(tx, String(b.voter_id), ghostAction, ghostBuild.prev, ghostBuild.newSig, ghostBuild.timestamp);
         queries.push(...ghostQueries);
 
-        // 3. Resolution + mining rewards (quorum dependent — decided before tx)
+        // 3. Resolution — ON CONFLICT DO NOTHING so only first tipper wins (race fix)
         if (quorumYes) {
           const resQ = tx`
             INSERT INTO physi_scope_resolution (scope_a, scope_b, merged_into, resolution)
             VALUES (${sa}, ${sb}, ${sa}, 'merged')
-            ON CONFLICT (scope_a, scope_b) DO UPDATE SET resolution = 'merged', merged_into = ${sa}, resolved_at = NOW()
+            ON CONFLICT (scope_a, scope_b) DO NOTHING
+            RETURNING *
           `;
           queries.push(resQ);
-          if (shouldReward) {
-            const rewardQueries = prepareScopeRewardQueries(tx, sa, sb, rewardedDetails);
-            queries.push(...rewardQueries);
-          }
         } else if (quorumNo) {
           const resQ = tx`
             INSERT INTO physi_scope_resolution (scope_a, scope_b, resolution)
             VALUES (${sa}, ${sb}, NULL, 'separate')
-            ON CONFLICT (scope_a, scope_b) DO UPDATE SET resolution = 'separate', merged_into = NULL, resolved_at = NOW()
+            ON CONFLICT (scope_a, scope_b) DO NOTHING
+            RETURNING *
           `;
           queries.push(resQ);
-          if (shouldReward) {
-            const rewardQueries = prepareScopeRewardQueries(tx, sa, sb, rewardedDetails);
-            queries.push(...rewardQueries);
-          }
         }
-        // Return array of query promises (non-async function)
         return queries;
       });
 
+      // Determine if we were the tipper (resolution insert returned row)
+      let wasTipper = false;
+      try {
+        // resolution result is last element if quorum attempted
+        if (shouldAttemptResolution && Array.isArray(txResults) && txResults.length >= 3) {
+          const resRet = txResults[txResults.length - 1];
+          if (Array.isArray(resRet) && resRet.length > 0) wasTipper = true;
+        }
+      } catch {}
+
+      // Only award if we tipped quorum (prevents double bonus on race)
+      let rewarded: { awarded: number; details: any[] } | null = null;
+      if (shouldReward && wasTipper && rewardInfo.rewards.length) {
+        try {
+          await sql.transaction((tx: any) => prepareScopeRewardQueries(tx, sa, sb, rewardInfo.rewards));
+          rewarded = { awarded: rewardInfo.rewards.reduce((s, r) => s + r.amount, 0), details: rewardInfo.rewards };
+        } catch {
+          rewarded = null;
+        }
+      } else if (!shouldAttemptResolution || !wasTipper) {
+        rewarded = null;
+      }
+
       const ghost = { newSig: ghostBuild.newSig, prevSig: ghostBuild.prev };
-      const rewarded = shouldReward ? { awarded: rewardedDetails.reduce((s, r) => s + r.amount, 0), details: rewardedDetails } : null;
       const result = { yes: projectedYes, no: projectedNo, total, status, ghost, rewarded, weighted: { yes: Number(weightedYes.toFixed(2)), no: Number(weightedNo.toFixed(2)), total: Number(weightedTotal.toFixed(2)) } };
 
       if (result.status === "merged") {

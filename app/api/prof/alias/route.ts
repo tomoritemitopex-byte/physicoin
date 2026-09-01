@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSql, isDbConfigured, dbNotConfigured, ensureAllTables } from "@/lib/db";
 import { logError, getErrorMessage } from "@/lib/adapters/error";
 import { profGroupKey, profQuorumStatus } from "@/lib/profMatch";
-import { weightFromTotal, weightedQuorumStatus } from "@/lib/voteWeight";
+import { weightedQuorumStatus, getVoteWeights } from "@/lib/voteWeight";
 import { getCohesionMultipliers } from "@/lib/cohortTrust";
 
 export const dynamic = "force-dynamic";
@@ -68,24 +68,13 @@ export async function POST(req: NextRequest) {
     const yes = Number((agg[0] as any)?.yes || 0);
     const no = Number((agg[0] as any)?.no || 0);
     const total = yes + no;
-    // weighted quorum (history × cohort trust anonymously)
+    // weighted quorum (history × cohort trust anonymously) — N+1 fix: batched + cached
     let weightedYes = yes, weightedNo = no;
     let wStatus: "pending"|"resolved"|"rejected" = profQuorumStatus(yes,no);
     try {
       const voters: any[] = await sql`SELECT voter_id::text as voter_id, vote_value FROM physi_prof_alias_votes WHERE alias_id=${aliasId}` as any[];
       const uniq = Array.from(new Set(voters.map((v:any)=>String(v.voter_id))));
-      const wmap = new Map<string, number>();
-      await Promise.all(uniq.map(async (uid)=>{
-        try {
-          const [c1,c2,c3,c4] = await Promise.all([
-            sql`SELECT COUNT(*)::int AS c FROM physi_verifications WHERE verifier_id=${uid}`.then((r:any)=>Number(r[0]?.c||0)).catch(()=>0),
-            sql`SELECT COUNT(*)::int AS c FROM physi_scope_votes WHERE voter_id=${uid}`.then((r:any)=>Number(r[0]?.c||0)).catch(()=>0),
-            sql`SELECT COUNT(*)::int AS c FROM physi_hall_alias_votes WHERE voter_id=${uid}`.then((r:any)=>Number(r[0]?.c||0)).catch(()=>0),
-            sql`SELECT COUNT(*)::int AS c FROM physi_prof_alias_votes WHERE voter_id=${uid}`.then((r:any)=>Number(r[0]?.c||0)).catch(()=>0),
-          ]);
-          wmap.set(uid, weightFromTotal(c1+c2+c3+c4));
-        } catch { wmap.set(uid, 1); }
-      }));
+      const wmap = await getVoteWeights(sql, uniq);
       let cohortMap = new Map<string, number>();
       try { cohortMap = await getCohesionMultipliers(sql, uniq); } catch {}
       let wYes=0,wNo=0;

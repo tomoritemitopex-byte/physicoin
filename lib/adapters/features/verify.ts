@@ -219,7 +219,7 @@ async function handleVerify(req: Request): Promise<Response> {
           queries.push(verifQ);
 
           // 2. Ghost Witness: extend chain (prepare queries)
-          const ghostQueries = prepareGhostChainQueries(tx, String(b.verifier_id), act, ghostBuild.prev, ghostBuild.newSig);
+          const ghostQueries = prepareGhostChainQueries(tx, String(b.verifier_id), act, ghostBuild.prev, ghostBuild.newSig, ghostBuild.timestamp);
           queries.push(...ghostQueries);
 
           // 3. Quorum check + promotion/demotion (prepare queries based on pre-computed decision)
