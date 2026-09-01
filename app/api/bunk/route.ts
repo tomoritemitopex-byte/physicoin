@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSql, isDbConfigured, dbNotConfigured, ensureAllTables, ensureBunkTables } from "@/lib/db";
 import { liveStatus } from "@/lib/bunkRadar";
+import { weightFromTotal } from "@/lib/voteWeight";
 
 export const dynamic = "force-dynamic";
 
@@ -24,24 +25,79 @@ export async function GET(req: NextRequest) {
     if (eventId) {
       const ev = await sql`SELECT id, title, venue, event_date, event_time, status FROM physi_events WHERE id=${eventId} LIMIT 1`;
       if (!ev.length) return NextResponse.json({ ok: false, code: "NOT_FOUND" }, { status: 404 });
-      const reports = await sql`SELECT id, reporter_id, vote, created_at FROM physi_bunk_reports WHERE event_id=${eventId} ORDER BY created_at DESC LIMIT 50`;
+      const reports = await sql`SELECT id, reporter_id::text as reporter_id, vote, created_at FROM physi_bunk_reports WHERE event_id=${eventId} ORDER BY created_at DESC LIMIT 50` as any[];
       const noShow = (reports as any[]).filter(r => r.vote === "no_show").length;
       const happening = (reports as any[]).filter(r => r.vote === "happening").length;
       const status = liveStatus(String((ev[0] as any).event_date).slice(0, 10), String((ev[0] as any).event_time).slice(0, 5), nowMs, noShow);
       const alert = noShow >= 3;
-      return NextResponse.json({ ok: true, event: ev[0], reports, no_show_count: noShow, happening_count: happening, live_status: status, alert, threshold: 3 });
+      // trust enrichment for single event
+      let avgTrust: number | null = null;
+      let reporterWeights: number[] = [];
+      let verifiedWitnesses = 0;
+      try {
+        const ids = Array.from(new Set((reports as any[]).map(r=> String(r.reporter_id||"")).filter(Boolean)));
+        if (ids.length) {
+          const wmap = new Map<string, number>();
+          await Promise.all(ids.map(async (uid) => {
+            try {
+              const [c1,c2,c3,c4] = await Promise.all([
+                sql`SELECT COUNT(*)::int AS c FROM physi_verifications WHERE verifier_id=${uid}`.then((r:any)=>Number(r[0]?.c||0)).catch(()=>0),
+                sql`SELECT COUNT(*)::int AS c FROM physi_scope_votes WHERE voter_id=${uid}`.then((r:any)=>Number(r[0]?.c||0)).catch(()=>0),
+                sql`SELECT COUNT(*)::int AS c FROM physi_hall_alias_votes WHERE voter_id=${uid}`.then((r:any)=>Number(r[0]?.c||0)).catch(()=>0),
+                sql`SELECT COUNT(*)::int AS c FROM physi_prof_alias_votes WHERE voter_id=${uid}`.then((r:any)=>Number(r[0]?.c||0)).catch(()=>0),
+              ]);
+              wmap.set(uid, weightFromTotal(c1+c2+c3+c4));
+            } catch { wmap.set(uid, 1); }
+          }));
+          reporterWeights = (reports as any[]).filter(r=>r.reporter_id).map(r=> wmap.get(String(r.reporter_id)) ?? 1);
+          if (reporterWeights.length) avgTrust = Number((reporterWeights.reduce((a,b)=>a+b,0)/reporterWeights.length).toFixed(2));
+          verifiedWitnesses = reporterWeights.filter(w=>w>=1.25).length;
+        }
+      } catch {}
+      return NextResponse.json({ ok: true, event: ev[0], reports, no_show_count: noShow, happening_count: happening, live_status: status, alert, threshold: 3, avg_trust: avgTrust, reporter_weights: reporterWeights, verified_witness_count: verifiedWitnesses });
     }
-    // list today + tomorrow + ongoing window: fetch recent events and compute status
+    // list today + tomorrow + ongoing window: fetch recent events and compute status + trust
     const rows = await sql`SELECT id, title, venue, event_date, event_time, status FROM physi_events ORDER BY event_date DESC, event_time DESC LIMIT 40`;
     const enriched: any[] = [];
+    // batch collect reporter_ids for weight lookup
+    const allReporterIds: string[] = [];
+    const reportsByEvent = new Map<string, any[]>();
     for (const r of rows as any[]) {
       try {
-        const reports = await sql`SELECT vote FROM physi_bunk_reports WHERE event_id=${r.id} LIMIT 20`;
+        const reports = await sql`SELECT vote, reporter_id::text as reporter_id FROM physi_bunk_reports WHERE event_id=${r.id} LIMIT 20` as any[];
+        reportsByEvent.set(String(r.id), reports);
+        for (const rep of reports) if (rep.reporter_id) allReporterIds.push(String(rep.reporter_id));
+      } catch {
+        reportsByEvent.set(String(r.id), []);
+      }
+    }
+    // compute weights map
+    const weightMap = new Map<string, number>();
+    if (allReporterIds.length) {
+      const uniq = Array.from(new Set(allReporterIds));
+      await Promise.all(uniq.map(async (uid) => {
+        try {
+          const [c1,c2,c3,c4] = await Promise.all([
+            sql`SELECT COUNT(*)::int AS c FROM physi_verifications WHERE verifier_id=${uid}`.then((r:any)=>Number(r[0]?.c||0)).catch(()=>0),
+            sql`SELECT COUNT(*)::int AS c FROM physi_scope_votes WHERE voter_id=${uid}`.then((r:any)=>Number(r[0]?.c||0)).catch(()=>0),
+            sql`SELECT COUNT(*)::int AS c FROM physi_hall_alias_votes WHERE voter_id=${uid}`.then((r:any)=>Number(r[0]?.c||0)).catch(()=>0),
+            sql`SELECT COUNT(*)::int AS c FROM physi_prof_alias_votes WHERE voter_id=${uid}`.then((r:any)=>Number(r[0]?.c||0)).catch(()=>0),
+          ]);
+          weightMap.set(uid, weightFromTotal(c1+c2+c3+c4));
+        } catch { weightMap.set(uid, 1); }
+      }));
+    }
+    for (const r of rows as any[]) {
+      try {
+        const reports = reportsByEvent.get(String(r.id)) || [];
         const noShow = (reports as any[]).filter(x => x.vote === "no_show").length;
         const s = liveStatus(String(r.event_date).slice(0, 10), String(r.event_time).slice(0, 5), nowMs, noShow);
-        enriched.push({ ...r, no_show_count: noShow, live_status: s, alert: noShow >= 3 });
+        const reporterWeights = (reports as any[]).filter(x=>x.reporter_id).map(x=> weightMap.get(String(x.reporter_id)) ?? 1);
+        const avgTrust = reporterWeights.length ? Number((reporterWeights.reduce((a,b)=>a+b,0)/reporterWeights.length).toFixed(2)) : null;
+        const verifiedWitnesses = reporterWeights.filter(w=>w>=1.25).length;
+        enriched.push({ ...r, no_show_count: noShow, live_status: s, alert: noShow >= 3, avg_trust: avgTrust, reporter_weights: reporterWeights, verified_witness_count: verifiedWitnesses });
       } catch {
-        enriched.push({ ...r, no_show_count: 0, live_status: liveStatus(String(r.event_date).slice(0, 10), String(r.event_time).slice(0, 5), nowMs, 0), alert: false });
+        enriched.push({ ...r, no_show_count: 0, live_status: liveStatus(String(r.event_date).slice(0, 10), String(r.event_time).slice(0, 5), nowMs, 0), alert: false, avg_trust: null, reporter_weights: [], verified_witness_count: 0 });
       }
     }
     return NextResponse.json({ ok: true, events: enriched, count: enriched.length });

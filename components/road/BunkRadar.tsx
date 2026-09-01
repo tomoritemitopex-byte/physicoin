@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 import { useCalendar } from "@/hooks/useCalendar";
+import { VoterTrustPile, dotStyleForWeight } from "@/components/ui/VoterTrustPile";
 
 type BunkEvent = {
   id: string; title: string; venue: string; event_date: string; event_time: string;
@@ -8,6 +9,7 @@ type BunkEvent = {
   prof_name?: string | null; prof_reliability?: number | null; prof_reliability_pct?: number | null;
   risk?: string; no_show_rate?: number | null; minutes_until?: number; is_due_soon?: boolean; notify_due?: boolean;
   scope_type?: string; scope_value?: string | null;
+  avg_trust?: number | null; reporter_weights?: number[]; verified_witness_count?: number;
 };
 
 export default function BunkRadar({ userId }: { userId?: string | null }) {
@@ -16,6 +18,7 @@ export default function BunkRadar({ userId }: { userId?: string | null }) {
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
   const [initial, setInitial] = useState(true);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const { downloadIcs, loading: calLoading } = useCalendar(userId ?? null);
 
   const uid = (() => {
@@ -168,20 +171,44 @@ export default function BunkRadar({ userId }: { userId?: string | null }) {
         ) : events.length === 0 ? (
           <p className="rounded-xl border border-dashed border-white/10 bg-white/[0.03] px-3 py-4 text-center font-mono text-[11px] text-white/50">No classes found yet — add one on the road</p>
         ) : (
-          events.slice(0, 8).map(ev => (
-            <div key={ev.id} className={`flex items-center gap-2 rounded-[14px] border p-2 ${ev.alert || ev.notify_due ? "border-red-400/30 bg-red-500/10" : ev.risk==="HIGH" ? "border-amber-400/20 bg-amber-500/5" : "border-white/10 bg-black/20"}`}>
+          events.slice(0, 8).map(ev => {
+            const avg = (ev as any).avg_trust as number | null;
+            const weights = ((ev as any).reporter_weights as number[]) || [];
+            const verifiedCount = (ev as any).verified_witness_count || 0;
+            const isExpanded = !!expanded[ev.id];
+            return (
+            <div key={ev.id} className={`flex flex-col gap-1 rounded-[14px] border p-2 ${ev.alert || ev.notify_due ? "border-red-400/30 bg-red-500/10" : ev.risk==="HIGH" ? "border-amber-400/20 bg-amber-500/5" : "border-white/10 bg-black/20"}`}>
+              <div className="flex items-center gap-2">
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[13px] font-black text-white">{ev.title} <span className="font-mono text-[11px] font-medium text-white/60">· {ev.venue}</span></p>
                 <p className="font-mono text-[11px] text-white/60">{String(ev.event_date).slice(0, 10)} · {String(ev.event_time).slice(0, 5)} · {ev.no_show_count ? `${ev.no_show_count} say no-show` : "no reports yet"}{ev.scope_value ? ` · ${ev.scope_value}` : ""}</p>
-                <div className="mt-1 flex flex-wrap gap-1">{badge(ev)}{reliabilityBadge(ev)}</div>
+                <div className="mt-1 flex flex-wrap items-center gap-1">{badge(ev)}{reliabilityBadge(ev)}
+                  {ev.no_show_count ? (
+                    <button onClick={()=> setExpanded(s=> ({...s, [ev.id]: !s[ev.id]}))} className="inline-flex items-center gap-1 rounded-full border border-amber-400/20 bg-amber-500/10 px-2 py-0.5 font-mono text-[10px] font-bold text-amber-200 hover:bg-amber-500/20">
+                      🚨 {ev.no_show_count} reports{avg != null ? ` · ${Number(avg).toFixed(1)}× avg trust` : ""} {isExpanded ? "▴" : "▾"}
+                    </button>
+                  ) : null}
+                  {verifiedCount > 0 && <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/20 bg-emerald-500/15 px-2 py-0.5 font-mono text-[10px] font-black text-emerald-200">✓ {verifiedCount} verified witness{verifiedCount>1?"es":""}</span>}
+                </div>
                 {ev.notify_due && <p className="mt-1 font-mono text-[11px] font-bold text-red-300">⏰ Starts in ~{ev.minutes_until} min — HIGH no-show risk, check before you go</p>}
+                {isExpanded && weights.length > 0 && (
+                  <div className="mt-2 flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-2 py-1.5">
+                    <span className="font-mono text-[10px] text-white/50">witnesses:</span>
+                    <VoterTrustPile weights={weights} size={18} />
+                    <span className="font-mono text-[10px] text-white/40">{weights.map(w=> `${Number(w).toFixed(w===1?0:2)}×`).join(" · ")}</span>
+                  </div>
+                )}
+                {isExpanded && weights.length===0 && ev.no_show_count ? (
+                  <p className="mt-2 font-mono text-[10px] text-white/40">Anonymous reports — weights hidden for privacy</p>
+                ): null}
               </div>
               <div className="flex shrink-0 flex-col gap-1">
                 <button onClick={() => confirmNoShow(ev.id)} className="rounded-full bg-white px-3 py-1.5 font-mono text-[11px] font-black text-black hover:bg-red-50">Lecturer didn&apos;t show</button>
                 <button onClick={() => confirmHappening(ev.id)} className="rounded-full border border-white/15 bg-white/5 px-3 py-1 font-mono text-[10px] font-bold text-white hover:bg-white hover:text-black">It&apos;s holding</button>
               </div>
+              </div>
             </div>
-          ))
+          )})
         )}
       </div>
       {msg && <p className="mt-2 rounded-xl bg-white px-3 py-2 font-mono text-[11px] font-bold text-black">{msg}</p>}
