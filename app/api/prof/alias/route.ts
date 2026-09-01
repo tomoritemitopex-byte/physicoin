@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSql, isDbConfigured, dbNotConfigured, ensureAllTables } from "@/lib/db";
 import { logError, getErrorMessage } from "@/lib/adapters/error";
 import { profGroupKey, profQuorumStatus } from "@/lib/profMatch";
+import { weightFromTotal, weightedQuorumStatus } from "@/lib/voteWeight";
 
 export const dynamic = "force-dynamic";
 
@@ -66,7 +67,34 @@ export async function POST(req: NextRequest) {
     const yes = Number((agg[0] as any)?.yes || 0);
     const no = Number((agg[0] as any)?.no || 0);
     const total = yes + no;
-    const status = profQuorumStatus(yes, no);
+    // weighted quorum
+    let weightedYes = yes, weightedNo = no;
+    let wStatus: "pending"|"resolved"|"rejected" = profQuorumStatus(yes,no);
+    try {
+      const voters: any[] = await sql`SELECT voter_id::text as voter_id, vote_value FROM physi_prof_alias_votes WHERE alias_id=${aliasId}` as any[];
+      const uniq = Array.from(new Set(voters.map((v:any)=>String(v.voter_id))));
+      const wmap = new Map<string, number>();
+      await Promise.all(uniq.map(async (uid)=>{
+        try {
+          const [c1,c2,c3,c4] = await Promise.all([
+            sql`SELECT COUNT(*)::int AS c FROM physi_verifications WHERE verifier_id=${uid}`.then((r:any)=>Number(r[0]?.c||0)).catch(()=>0),
+            sql`SELECT COUNT(*)::int AS c FROM physi_scope_votes WHERE voter_id=${uid}`.then((r:any)=>Number(r[0]?.c||0)).catch(()=>0),
+            sql`SELECT COUNT(*)::int AS c FROM physi_hall_alias_votes WHERE voter_id=${uid}`.then((r:any)=>Number(r[0]?.c||0)).catch(()=>0),
+            sql`SELECT COUNT(*)::int AS c FROM physi_prof_alias_votes WHERE voter_id=${uid}`.then((r:any)=>Number(r[0]?.c||0)).catch(()=>0),
+          ]);
+          wmap.set(uid, weightFromTotal(c1+c2+c3+c4));
+        } catch { wmap.set(uid, 1); }
+      }));
+      let wYes=0,wNo=0;
+      for (const v of voters) {
+        const w = wmap.get(String((v as any).voter_id)) ?? 1;
+        if (Number((v as any).vote_value)===1) wYes+=w; else wNo+=w;
+      }
+      weightedYes = Number(wYes.toFixed(2));
+      weightedNo = Number(wNo.toFixed(2));
+      wStatus = weightedQuorumStatus(wYes,wNo) as any;
+    } catch {}
+    const status = wStatus;
 
     if (status === "pending") {
       await sql`UPDATE physi_prof_aliases SET vote_count=${total}, votes_yes=${yes}, votes_no=${no}, status='pending', resolved_at=NULL WHERE id=${aliasId}`;
@@ -77,7 +105,7 @@ export async function POST(req: NextRequest) {
     }
 
     const updated = await sql`SELECT * FROM physi_prof_aliases WHERE id=${aliasId} LIMIT 1`;
-    return NextResponse.json({ ok: true, alias: updated[0], votes: { yes, no, total }, status, quorum_needed: Math.max(0, 8 - total) });
+    return NextResponse.json({ ok: true, alias: updated[0], votes: { yes, no, total }, weighted:{yes: weightedYes, no: weightedNo, total: Number((weightedYes+weightedNo).toFixed(2))}, status, quorum_needed: Math.max(0, 8 - (weightedYes+weightedNo)), quorum_needed_raw: Math.max(0, 8 - total) });
   } catch (e) {
     logError("PROF_ALIAS_VOTE_FAILED", e, {});
     return NextResponse.json({ ok: false, code: "INTERNAL", message: getErrorMessage("INTERNAL") }, { status: 500 });

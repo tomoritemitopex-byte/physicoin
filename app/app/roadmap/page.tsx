@@ -4,6 +4,8 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { Search, Plus, X, Map as MapIcon, List, Clock3, MapPin } from "lucide-react";
 import Onboarding from "@/components/Onboarding";
 import { RoadSkeleton, MapSkeleton } from "@/components/Skeletons";
+import { useVoteWeight } from "@/hooks/useVoteWeight";
+import { VoteWeightBadge } from "@/components/VoteWeightBadge";
 
 type EventRow = {
   id: string; title: string; venue: string; event_date: string; event_time: string;
@@ -50,6 +52,11 @@ function RoadmapInner() {
   const [pendingVote, setPendingVote] = useState<{ id: string; v: "YES"|"NO"|"CANCEL" } | null>(null);
   const [hallOpts, setHallOpts] = useState<string[]>([]);
   const [repeatBusy, setRepeatBusy] = useState(false);
+  const [dupHint, setDupHint] = useState<any>(null);
+  const [autoTitleHint, setAutoTitleHint] = useState<string|null>(null);
+  const [myPid, setMyPid] = useState<string|null>(null);
+  useEffect(()=>{ try{ const r=localStorage.getItem("physi_profile"); setMyPid(r?JSON.parse(r)?.id:null);}catch{} },[]);
+  const { weight: myWeight, label: myWeightLabel } = useVoteWeight(myPid);
 
   const fetchFeed = useCallback(async () => {
     setLoading(true); setErr(null);
@@ -104,14 +111,48 @@ function RoadmapInner() {
   async function handlePost(e: React.FormEvent) {
     e.preventDefault();
     if (!form.title || !form.venue || !form.event_date || !form.event_time) { setToast("Fill title, venue, date and time"); return; }
-    setPosting(true);
+    setPosting(true); setDupHint(null);
     try {
       const r = await fetch("/api/timetable", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: form.title.trim(), venue: form.venue.trim(), event_date: form.event_date, event_time: form.event_time, scope_type: form.scope_type, scope_value: form.scope_value || null, prof_name: form.prof_name.trim() || null, severity: form.severity, created_by: getProfileId() }) });
-      const j = await r.json(); if (!r.ok || j.ok===false) throw new Error(j.error || "post failed");
+      const j = await r.json();
+      if (j.code==="DUPLICATE_SUGGESTION" || r.status===409) {
+        setDupHint(j.duplicate_suggestion || j);
+        setToast(j.duplicate_suggestion?.hint || j.merge_hint || "Looks like duplicate — merge?");
+        return;
+      }
+      if (!r.ok || j.ok===false) throw new Error(j.error || j.message || "post failed");
       try { const { autoBumpStreak } = await import("@/lib/streak"); autoBumpStreak("event_post"); } catch {}
-      setToast("Posted — live as advisory ✓"); setForm({ title:"", venue:"", event_date:"", event_time:"", scope_type:"general", scope_value:"", prof_name:"", severity:"move" }); setShowPost(false); fetchFeed();
+      setToast("Posted — live as advisory ✓"); setForm({ title:"", venue:"", event_date:"", event_time:"", scope_type:"general", scope_value:"", prof_name:"", severity:"move" }); setDupHint(null); setShowPost(false); fetchFeed();
     } catch (e: any) { setToast(e.message); } finally { setPosting(false); }
   }
+
+  // pre-check duplicate + auto-suggest when form changes
+  useEffect(()=>{
+    if (!form.title || !form.venue || !form.event_date) { setDupHint(null); return; }
+    const t = setTimeout(async()=>{
+      try {
+        const qs=new URLSearchParams({ title: form.title.trim(), venue: form.venue.trim(), event_date: form.event_date });
+        const r=await fetch(`/api/events/dedup?${qs.toString()}`,{cache:"no-store"});
+        const j=await r.json();
+        if (j.duplicate) setDupHint(j.duplicate_suggestion);
+        else setDupHint(null);
+      } catch {}
+    }, 450);
+    return ()=>clearTimeout(t);
+  },[form.title, form.venue, form.event_date]);
+
+  useEffect(()=>{
+    if (!form.scope_value) { setAutoTitleHint(null); return; }
+    if (form.title) return; // don't override if user already typed title
+    const t=setTimeout(async()=>{
+      try{
+        const r=await fetch(`/api/events/dedup?scope_value=${encodeURIComponent(form.scope_value)}`,{cache:"no-store"});
+        const j=await r.json();
+        if (j.autoTitle) setAutoTitleHint(j.autoTitle);
+      }catch{}
+    },300);
+    return ()=>clearTimeout(t);
+  },[form.scope_value, form.title]);
 
   async function repeatLastWeek() {
     const pid = getProfileId();
@@ -235,7 +276,9 @@ function RoadmapInner() {
           <h3 className="text-sm font-semibold text-white">Post what you heard — keep it honest</h3>
           <p className="mt-1 text-sm text-slate-400">Example: “ANA 203 moved to LT2, Friday 8am — HOD announced after lab.”</p>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <label className="space-y-1"><span className="font-mono text-xs text-slate-500">What</span><input value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} placeholder="ANA 203 — Osteology" className="w-full rounded-xl border border-white/10 bg-[#0b1020] px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-white/15 focus:outline-none" /></label>
+            <label className="space-y-1"><span className="font-mono text-xs text-slate-500">What</span><input value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} placeholder="ANA 203 — Osteology" className="w-full rounded-xl border border-white/10 bg-[#0b1020] px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-white/15 focus:outline-none" />
+              {autoTitleHint && !form.title && <button type="button" onClick={()=>setForm(f=>({...f,title:autoTitleHint}))} className="mt-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 font-mono text-xs text-emerald-300 hover:bg-emerald-500 hover:text-white">Auto-suggest: {autoTitleHint} → use?</button>}
+            </label>
             <label className="space-y-1"><span className="font-mono text-xs text-slate-500">Where</span>
               <div className="flex gap-1">
                 <select value={hallOpts.includes(form.venue) ? form.venue : ""} onChange={e=>{ if(e.target.value) setForm(f=>({...f,venue:e.target.value})); }} className="w-28 shrink-0 rounded-xl border border-white/10 bg-[#0b1020] px-2 py-2.5 text-xs text-white focus:outline-none">
@@ -260,6 +303,26 @@ function RoadmapInner() {
               </select>
             </label>
           </div>
+          {dupHint && (
+            <div className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3">
+              <p className="text-sm font-medium text-amber-200">Looks like duplicate — merge?</p>
+              <p className="mt-1 font-mono text-xs text-amber-200/70">{dupHint.hint || dupHint.message || "An event with same title + venue exists within 7 days."}</p>
+              {dupHint.existing && <p className="mt-1 font-mono text-xs text-slate-400">{dupHint.existing.title} @ {dupHint.existing.venue} · {String(dupHint.existing.event_date).slice(0,10)}</p>}
+              {dupHint.canonicalVenue && <button type="button" onClick={()=>setForm(f=>({...f,venue:dupHint.canonicalVenue}))} className="mt-2 rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#070a12]">Use canonical: {dupHint.canonicalVenue}</button>}
+              <div className="mt-2 flex gap-2">
+                <button type="button" onClick={async()=>{
+                  // force create despite duplicate
+                  setPosting(true);
+                  try{
+                    const r=await fetch("/api/timetable",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({title:form.title.trim(),venue:form.venue.trim(),event_date:form.event_date,event_time:form.event_time,scope_type:form.scope_type,scope_value:form.scope_value||null,prof_name:form.prof_name.trim()||null,severity:form.severity,created_by:getProfileId(),force:true})});
+                    const j=await r.json(); if(!r.ok||j.ok===false) throw new Error(j.error||j.message||"post failed");
+                    setToast("Posted despite duplicate ✓"); setDupHint(null); setShowPost(false); fetchFeed();
+                  }catch(e:any){ setToast(e.message);}finally{ setPosting(false);}
+                }} className="rounded-full border border-white/20 px-3 py-1 text-xs text-white hover:bg-white hover:text-[#070a12]">Post anyway</button>
+                <button type="button" onClick={()=>setDupHint(null)} className="rounded-full border border-white/10 px-3 py-1 text-xs text-slate-400">Dismiss</button>
+              </div>
+            </div>
+          )}
           <div className="mt-3 flex flex-wrap gap-2">
             <button type="button" onClick={sameAsLastMonday} className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xs font-medium text-slate-300 hover:bg-white/[0.07]">↻ Same as Last Monday</button>
             <button type="button" onClick={repeatLastWeek} disabled={repeatBusy} className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-xs font-medium text-emerald-300 hover:bg-emerald-500 hover:text-white disabled:opacity-50">{repeatBusy?"…":"↻ Repeat last week"}</button>
@@ -345,6 +408,7 @@ function RoadmapInner() {
                 <button onClick={()=>vote(selected.id,"YES")} disabled={!!voteBusy} className="rounded-full bg-emerald-500 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-600 disabled:opacity-50">{voteBusy===selected.id+"YES" ? "…" : "Yes ✓"}</button>
                 <button onClick={()=>vote(selected.id,"NO")} disabled={!!voteBusy} className="rounded-full border border-white/10 bg-white/[0.05] px-5 py-2 text-sm font-medium text-slate-200 hover:bg-white hover:text-[#070a12] disabled:opacity-50">{voteBusy===selected.id+"NO" ? "…" : "No ✕"}</button>
                 <button onClick={()=>vote(selected.id,"CANCEL")} disabled={!!voteBusy} className="rounded-full border border-white/10 bg-white/[0.02] px-5 py-2 text-sm text-slate-400 hover:bg-white/[0.06] disabled:opacity-50">Skip</button>
+                {myWeightLabel && <span className="ml-1 self-center"><VoteWeightBadge weight={myWeight} label={myWeightLabel} /></span>}
               </div>
             </div>
           )}
@@ -399,6 +463,7 @@ function RoadmapInner() {
                     <button onClick={()=>vote(ev.id,"YES")} disabled={!!voteBusy} className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3.5 py-1.5 text-sm font-medium text-emerald-300 hover:bg-emerald-500 hover:text-white disabled:opacity-50">{voteBusy===ev.id+"YES" ? "…" : "Yes ✓"}</button>
                     <button onClick={()=>vote(ev.id,"NO")} disabled={!!voteBusy} className="rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-1.5 text-sm text-slate-200 hover:bg-white hover:text-[#070a12] disabled:opacity-50">{voteBusy===ev.id+"NO" ? "…" : "No ✕"}</button>
                     <button onClick={()=>vote(ev.id,"CANCEL")} disabled={!!voteBusy} className="rounded-full border border-white/10 bg-white/[0.02] px-3.5 py-1.5 text-sm text-slate-400 hover:bg-white/[0.06] disabled:opacity-50">Skip</button>
+                    {myWeightLabel && <VoteWeightBadge weight={myWeight} label={myWeightLabel} />}
                   </div>
                 </div>
                 <div className="h-1 bg-white/[0.04]"><div className={`h-full ${v ? "bg-emerald-400" : "bg-amber-400/60"}`} style={{ width:`${p}%`}} /></div>

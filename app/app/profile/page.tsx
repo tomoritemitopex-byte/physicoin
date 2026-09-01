@@ -1,5 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
+import StreakHeatmap from "@/components/road/StreakHeatmap";
+import { VoteWeightBadge } from "@/components/VoteWeightBadge";
 
 type StoredProfile = {
   id: string; nickname: string; full_name: string; programme: string; level: string;
@@ -37,12 +39,20 @@ export default function ProfilePage(){
   const [busy,setBusy]=useState(false);
   const [err,setErr]=useState<string|null>(null);
   const [toast,setToast]=useState<string|null>(null);
+  const [voteWeight, setVoteWeight] = useState<number|null>(null);
+  const [voteWeightLabel, setVoteWeightLabel] = useState<string|null>(null);
 
   useEffect(()=>{
     try{ const raw=localStorage.getItem("physi_profile"); if(raw){ const p=JSON.parse(raw); if(p?.id) setProfile(p); }}catch{}
     setChecking(false);
   },[]);
   useEffect(()=>{ if(!toast) return; const t=setTimeout(()=>setToast(null),2400); return()=>clearTimeout(t); },[toast]);
+  useEffect(()=>{
+    if (!profile?.id) return;
+    fetch(`/api/vote-weight?user_id=${encodeURIComponent(profile.id)}`,{cache:"no-store"}).then(r=>r.json()).then(j=>{
+      if (j.ok) { setVoteWeight(Number(j.weight)); setVoteWeightLabel(j.label); }
+    }).catch(()=>{});
+  },[profile?.id]);
 
   async function create(e:React.FormEvent){
     e.preventDefault();
@@ -103,6 +113,8 @@ export default function ProfilePage(){
         <button onClick={logout} className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-slate-300 hover:bg-white/[0.07]">Sign out</button>
       </div>
 
+      <StreakHeatmap userId={profile.id} />
+
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] px-4 py-4">
           <p className="font-mono text-xs uppercase tracking-wide text-slate-500">Rep</p>
@@ -118,7 +130,10 @@ export default function ProfilePage(){
         <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] px-4 py-4">
           <p className="font-mono text-xs uppercase tracking-wide text-slate-500">Handle</p>
           <p className="mt-1 font-mono text-sm font-semibold text-white">@{profile.nickname}</p>
-          <p className="font-mono text-xs text-slate-500">×{Number(profile.authority_final||1).toFixed(2)} vote weight</p>
+          <div className="mt-1 flex items-center gap-2">
+            <p className="font-mono text-xs text-slate-500">×{Number(profile.authority_final||1).toFixed(2)} vote weight</p>
+            {voteWeightLabel && <VoteWeightBadge weight={voteWeight} label={voteWeightLabel} />}
+          </div>
         </div>
       </div>
 

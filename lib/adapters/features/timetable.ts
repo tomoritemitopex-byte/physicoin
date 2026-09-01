@@ -108,6 +108,28 @@ async function handleTimetable(req: Request): Promise<Response> {
       } catch {}
       const required_points = (scope === "global" || scope === "university" || scope === "faculty" || scope === "department") ? 5.0 : 3.0;
       const isZkAttested = b.is_zk_attested === true || b.isZkAttested === true || false;
+      // duplicate cross-reference: if title+venue+date within 7d exists, return duplicate_suggestion (unless force=true)
+      if (!b.force && b.title && b.venue && b.event_date) {
+        try {
+          const { findDuplicateEvents, resolveCanonicalVenue } = await import("@/lib/eventDedup");
+          const dups = await findDuplicateEvents(sql, String(b.title), String(b.venue), String(b.event_date));
+          if (dups.length) {
+            const canonicalVenue = await resolveCanonicalVenue(sql, String(b.venue));
+            return NextResponse.json({
+              ok: false,
+              code: "DUPLICATE_SUGGESTION",
+              duplicate_suggestion: {
+                message: "Looks like duplicate — merge?",
+                existing: dups[0],
+                all: dups,
+                canonicalVenue,
+                hint: canonicalVenue ? `Canonical venue is "${canonicalVenue}" — use it?` : `Existing: ${dups[0].title} @ ${dups[0].venue} on ${String(dups[0].event_date).slice(0,10)}`,
+              },
+              merge_hint: `Event "${String(b.title)}" @ ${String(b.venue)} on ${String(b.event_date).slice(0,10)} already exists within 7 days. Add ?force=true to create anyway.`,
+            }, { status: 409 });
+          }
+        } catch {}
+      }
       try {
         const r = await sql`\
         INSERT INTO physi_events (title, venue, event_date, event_time, scope_type, scope_value, status, authority_points, required_points, created_by, severity, prev_venue, prev_event_time, prev_event_date, is_zk_attested, prof_name)

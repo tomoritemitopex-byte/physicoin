@@ -10,6 +10,7 @@ import { getSql, isDbConfigured, dbNotConfigured, ensureAllTables } from "@/lib/
 import { logError, getErrorMessage } from "@/lib/adapters/error";
 import { GHOST_ACTIONS, prepareGhostChainQueries, buildGhostChainSigs } from "@/lib/ghostWitness";
 import { awardScopeRewards, buildScopeRewardDetails, prepareScopeRewardQueries } from "@/lib/scopeMining";
+import { weightFromTotal, weightedQuorumStatus, scopeWeightedStatus } from "@/lib/voteWeight";
 
 // Satoshi P2: Quorum thresholds — 8 peers minimum, 70% agreement
 const QUORUM_MIN = 8;
@@ -102,6 +103,36 @@ export async function POST(req: NextRequest) {
       if (idx >= 0) votesForRewards[idx] = { voter_id: String(b.voter_id), vote_value: voteValue };
       else votesForRewards.push({ voter_id: String(b.voter_id), vote_value: voteValue });
 
+      // weighted quorum: weight each voter by history
+      let weightedYes = 0, weightedNo = 0;
+      try {
+        const uniqIds = Array.from(new Set(votesForRewards.map(v => String(v.voter_id))));
+        const weightMap = new Map<string, number>();
+        await Promise.all(uniqIds.map(async (uid) => {
+          try {
+            const [c1, c2, c3, c4] = await Promise.all([
+              sql`SELECT COUNT(*)::int AS c FROM physi_verifications WHERE verifier_id=${uid}`.then((r:any)=>Number(r[0]?.c||0)).catch(()=>0),
+              sql`SELECT COUNT(*)::int AS c FROM physi_scope_votes WHERE voter_id=${uid}`.then((r:any)=>Number(r[0]?.c||0)).catch(()=>0),
+              sql`SELECT COUNT(*)::int AS c FROM physi_hall_alias_votes WHERE voter_id=${uid}`.then((r:any)=>Number(r[0]?.c||0)).catch(()=>0),
+              sql`SELECT COUNT(*)::int AS c FROM physi_prof_alias_votes WHERE voter_id=${uid}`.then((r:any)=>Number(r[0]?.c||0)).catch(()=>0),
+            ]);
+            weightMap.set(uid, weightFromTotal(c1+c2+c3+c4));
+          } catch { weightMap.set(uid, 1); }
+        }));
+        for (const v of votesForRewards) {
+          const w = weightMap.get(String(v.voter_id)) ?? 1;
+          if (Number(v.vote_value) === 1) weightedYes += w;
+          else weightedNo += w;
+        }
+      } catch {
+        weightedYes = projectedYes; weightedNo = projectedNo;
+      }
+      const weightedTotal = weightedYes + weightedNo;
+      const weightedStatus = scopeWeightedStatus(weightedYes, weightedNo);
+      // Override pending/merged/separate based on weighted quorum
+      if (weightedStatus !== "pending") status = weightedStatus;
+      else status = "pending";
+
       const rewardInfo = buildScopeRewardDetails(votesForRewards, String(b.voter_id));
       const shouldReward = status !== "pending" && rewardInfo.rewards.length > 0;
       const rewardedDetails = shouldReward ? rewardInfo.rewards : [];
@@ -151,20 +182,22 @@ export async function POST(req: NextRequest) {
 
       const ghost = { newSig: ghostBuild.newSig, prevSig: ghostBuild.prev };
       const rewarded = shouldReward ? { awarded: rewardedDetails.reduce((s, r) => s + r.amount, 0), details: rewardedDetails } : null;
-      const result = { yes: projectedYes, no: projectedNo, total, status, ghost, rewarded };
+      const result = { yes: projectedYes, no: projectedNo, total, status, ghost, rewarded, weighted: { yes: Number(weightedYes.toFixed(2)), no: Number(weightedNo.toFixed(2)), total: Number(weightedTotal.toFixed(2)) } };
 
       if (result.status === "merged") {
-        return NextResponse.json({ ok: true, status: "merged", into: sa, votes: { yes: result.yes, no: result.no, total: result.total }, ghost_sig: result.ghost?.newSig, mining_rewards: result.rewarded });
+        return NextResponse.json({ ok: true, status: "merged", into: sa, votes: { yes: result.yes, no: result.no, total: result.total }, weighted: result.weighted, ghost_sig: result.ghost?.newSig, mining_rewards: result.rewarded });
       }
       if (result.status === "separate") {
-        return NextResponse.json({ ok: true, status: "separate", votes: { yes: result.yes, no: result.no, total: result.total }, ghost_sig: result.ghost?.newSig, mining_rewards: result.rewarded });
+        return NextResponse.json({ ok: true, status: "separate", votes: { yes: result.yes, no: result.no, total: result.total }, weighted: result.weighted, ghost_sig: result.ghost?.newSig, mining_rewards: result.rewarded });
       }
 
       return NextResponse.json({
         ok: true,
         status: "pending",
         votes: { yes: result.yes, no: result.no, total: result.total },
-        quorum_needed: Math.max(0, QUORUM_MIN - result.total),
+        weighted: result.weighted,
+        quorum_needed: Math.max(0, QUORUM_MIN - weightedTotal),
+        quorum_needed_raw: Math.max(0, QUORUM_MIN - result.total),
         ghost_sig: result.ghost?.newSig,
       });
     } catch (e) {
