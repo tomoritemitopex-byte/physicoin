@@ -98,6 +98,47 @@ export function icsDataUri(ev: CalendarEvent): string {
   return `data:text/calendar;charset=utf-8,${encodeURIComponent(ics)}`;
 }
 
+export function generateICSForMany(events: CalendarEvent[], opts?: { durationMin?: number; linkBase?: string; calendarName?: string }): string {
+  const dur = opts?.durationMin ?? 60;
+  const linkBase = opts?.linkBase ?? (typeof window !== "undefined" ? window.location.origin : "https://physicoin.vercel.app");
+  const nowStamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+Z/, "Z");
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Physicoin//Calendar//EN",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    `X-WR-CALNAME:${escapeICS(opts?.calendarName ?? "Physicoin Classes")}`,
+  ];
+  for (const ev of events) {
+    const dtStart = toUTCStampFromWAT(ev.event_date, ev.event_time);
+    const startMs = Date.parse(`${String(ev.event_date).slice(0, 10)}T${String(ev.event_time).slice(0, 5)}:00+01:00`);
+    const endMs = (isNaN(startMs) ? Date.now() : startMs) + dur * 60 * 1000;
+    const endDt = new Date(endMs);
+    const dtEnd = `${endDt.getUTCFullYear()}${pad(endDt.getUTCMonth() + 1)}${pad(endDt.getUTCDate())}T${pad(endDt.getUTCHours())}${pad(endDt.getUTCMinutes())}${pad(endDt.getUTCSeconds())}Z`;
+    const watDisplay = toWATDisplay(ev.event_date, ev.event_time);
+    const link = `${linkBase}/app/roadmap?event=${encodeURIComponent(ev.id)}`;
+    const scopeLabel = ev.scope_type ? `${ev.scope_type}${ev.scope_value ? ` · ${ev.scope_value}` : ""}` : "";
+    lines.push(
+      "BEGIN:VEVENT",
+      `UID:${escapeICS(ev.id)}@physicoin.app`,
+      `DTSTAMP:${nowStamp}`,
+      `DTSTART:${dtStart}`,
+      `DTEND:${dtEnd}`,
+      `SUMMARY:${escapeICS(ev.title)}`,
+      `DESCRIPTION:${escapeICS(`${ev.title} — ${ev.venue} · ${watDisplay} · ${scopeLabel} · ${link}`)}`,
+      `LOCATION:${escapeICS(ev.venue || "TBA")}`,
+      `URL:${escapeICS(link)}`,
+      "STATUS:CONFIRMED",
+      `X-WAT-TIME:${escapeICS(watDisplay)}`,
+      `X-SCOPE:${escapeICS(scopeLabel)}`,
+      "END:VEVENT"
+    );
+  }
+  lines.push("END:VCALENDAR");
+  return lines.join("\r\n");
+}
+
 // Calendar Streak: 3/week badge canonical only 14d half reset
 export const CAL_STREAK_WEEK=3; export const CAL_HALF_DAYS=14;
 export function calStreakBadge(canonicalLogs:number[], streak:number, lastIso:string|null):{ badge:boolean; decayed:number }{

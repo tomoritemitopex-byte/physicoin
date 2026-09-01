@@ -147,6 +147,8 @@ export async function ensureEvents(): Promise<void> {
   try { await c`ALTER TABLE physi_events ADD COLUMN IF NOT EXISTS prev_venue TEXT`; } catch {}
   try { await c`ALTER TABLE physi_events ADD COLUMN IF NOT EXISTS prev_event_time TIME`; } catch {}
   try { await c`ALTER TABLE physi_events ADD COLUMN IF NOT EXISTS prev_event_date DATE`; } catch {}
+  try { await c`ALTER TABLE physi_events ADD COLUMN IF NOT EXISTS prof_name TEXT`; } catch {}
+  try { await c`CREATE INDEX IF NOT EXISTS physi_events_prof_idx ON physi_events (lower(prof_name))`; } catch {}
   await c`CREATE INDEX IF NOT EXISTS physi_events_dt_idx ON physi_events (event_date DESC, event_time DESC)`;
   await c`CREATE INDEX IF NOT EXISTS physi_events_status_idx2 ON physi_events (status)`;
   await c`CREATE UNIQUE INDEX IF NOT EXISTS physi_events_tvd_uidx ON physi_events (lower(title), lower(venue), event_date)`;

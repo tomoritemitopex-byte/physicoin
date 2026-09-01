@@ -96,12 +96,22 @@ async function handleTimetable(req: Request): Promise<Response> {
       const status = "pending";
       const authority_points = 0;
       const scope = String(b.scope_type || "general").toLowerCase();
+      // prof_name: explicit or extracted from title
+      let profName: string | null = null;
+      try {
+        const rawProf = String((b as any).prof_name || (b as any).profName || "").trim();
+        if (rawProf) profName = rawProf.slice(0, 80);
+        else {
+          const { extractProfName } = await import("@/lib/profReliability");
+          profName = extractProfName(String(b.title || ""));
+        }
+      } catch {}
       const required_points = (scope === "global" || scope === "university" || scope === "faculty" || scope === "department") ? 5.0 : 3.0;
       const isZkAttested = b.is_zk_attested === true || b.isZkAttested === true || false;
       try {
         const r = await sql`\
-        INSERT INTO physi_events (title, venue, event_date, event_time, scope_type, scope_value, status, authority_points, required_points, created_by, severity, prev_venue, prev_event_time, prev_event_date, is_zk_attested)
-        VALUES (${String(b.title)}, ${String(b.venue)}, ${String(b.event_date)}, ${String(b.event_time)}, ${String(b.scope_type)}, ${(b.scope_value as string) ?? null}, ${status}, ${authority_points}, ${required_points}, ${(b.created_by as string) ?? null}, ${sev}, ${prevVenue}, ${prevTime}, ${prevDate}, ${isZkAttested})
+        INSERT INTO physi_events (title, venue, event_date, event_time, scope_type, scope_value, status, authority_points, required_points, created_by, severity, prev_venue, prev_event_time, prev_event_date, is_zk_attested, prof_name)
+        VALUES (${String(b.title)}, ${String(b.venue)}, ${String(b.event_date)}, ${String(b.event_time)}, ${String(b.scope_type)}, ${(b.scope_value as string) ?? null}, ${status}, ${authority_points}, ${required_points}, ${(b.created_by as string) ?? null}, ${sev}, ${prevVenue}, ${prevTime}, ${prevDate}, ${isZkAttested}, ${profName})
         RETURNING *`;
         // also log history if prev exists
         if (prevVenue || prevTime) {
