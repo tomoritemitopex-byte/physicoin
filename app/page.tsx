@@ -1,162 +1,19 @@
 "use client";
-// FRONT landing — forest palette + road peek, Cruip-tier polish, Naija-voice copy.
-// Palette: forest var(--physi-forest) #0d3b2a→var(--physi-forest-mid) #1a5c3a, purple road var(--physi-purple) #8b5cf6, Fredoka hero (global --font-fredoka), lollipop tree accent
-import { Fredoka } from "next/font/google";
-const fredoka = Fredoka({ subsets: ["latin"], weight: ["400","500","600","700"], display: "swap", variable: "--font-fredoka" });
 import { useEffect, useState } from 'react';
-import { Megaphone, BadgeCheck, Coins, Users, ArrowRight, ShieldCheck, Clock3, MapPin, Sparkles, CheckCircle2, Quote, HeartPulse } from 'lucide-react';
-import dynamic from 'next/dynamic';
-const EarthPulse = dynamic(() => import('@/components/EarthPulse'), { ssr: false, loading: () => <div className="h-28 animate-pulse rounded-[24px] border border-white/10 bg-white/5" /> });
+import { ArrowRight, Check, ShieldCheck, Clock3, Users, Sparkles, MapPin } from 'lucide-react';
 
-function MiniRoadPeek(){
-  // cropped SVG preview: forest bg, purple winding road, 3 nodes, NOW pulse, Fredoka label
-  // clickable -> /app/roadmap (demo picker, no login wall)
+function LiveTicker({ items }: { items: string[] }) {
+  if (!items.length) return null;
+  const doubled = [...items, ...items];
   return (
-    <a href="/app/roadmap" className="group relative block overflow-hidden rounded-[18px] border border-white/10 shadow-[0_12px_32px_rgba(0,0,0,0.35),0_2px_10px_rgba(0,0,0,0.25)] hover:border-white/15 transition">
-      <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, #0d3b2a 0%, #143d2e 48%, #1a5c3a 100%)" }} />
-      {/* subtle glow */}
-      <div className="pointer-events-none absolute -top-10 left-1/2 h-32 w-[120%] -translate-x-1/2 rounded-[100%] opacity-30" style={{ background: "radial-gradient(ellipse at center, rgba(82,183,136,0.35), transparent 70%)" }} />
-      <svg viewBox="0 0 640 148" className="relative w-full h-[96px] sm:h-[108px]" role="img" aria-label="Road preview — 3 nodes, NOW, tap to play">
-        {/* trees bg - mountains */}
-        <path d="M -10 108 L 70 58 L 140 92 L 220 38 L 320 88 L 420 52 L 520 92 L 600 62 L 650 108 Z" fill="rgba(13,59,42,0.45)" stroke="rgba(255,255,255,0.08)" strokeWidth={1} />
-        {/* lollipop trees — accent */}
-        <g opacity={0.95}>
-          <rect x={48} y={78} width={6} height={14} rx={3} fill="#5a3e1b" />
-          <circle cx={51} cy={68} r={16} fill="#52b788" stroke="rgba(255,255,255,0.18)" strokeWidth={1.2} />
-          <circle cx={51} cy={68} r={9} fill="rgba(255,255,255,0.09)" />
-          <circle cx={56} cy={62} r={3} fill="#fbbf24" stroke="white" strokeWidth={0.8} />
-        </g>
-        <g opacity={0.70}>
-          <rect x={560} y={82} width={5} height={12} rx={2.5} fill="#5a3e1b" />
-          <circle cx={562} cy={73} r={13} fill="#40916c" stroke="rgba(255,255,255,0.12)" strokeWidth={1} />
-          <circle cx={562} cy={73} r={4} fill="rgba(255,255,255,0.10)" />
-        </g>
-        {/* purple road */}
-        <defs>
-          <linearGradient id="pr" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="#6e45d0" />
-            <stop offset="50%" stopColor="#8b5cf6" />
-            <stop offset="100%" stopColor="#a78bfa" />
-          </linearGradient>
-        </defs>
-        {(() => {
-          const d = "M 20 96 C 140 96, 140 52, 260 52 C 380 52, 380 96, 500 96 C 560 96, 600 92, 620 88";
-          return (
-            <g>
-              <path d={d} fill="none" stroke="#1a1033" strokeWidth={30} strokeLinecap="round" opacity={0.95} />
-              <path d={d} fill="none" stroke="url(#pr)" strokeWidth={26} strokeLinecap="round" style={{ filter: "drop-shadow(0 3px 8px rgba(0,0,0,0.32))" } as any} />
-              {/* white sprinkles */}
-              <path d={d} fill="none" stroke="rgba(255,255,255,0.72)" strokeWidth={3.2} strokeLinecap="round" strokeDasharray="0 36" strokeDashoffset={4} style={{ transform: "translate(0, -9px)" } as any} opacity={0.9} />
-              <path d={d} fill="none" stroke="rgba(255,255,255,0.72)" strokeWidth={3.2} strokeLinecap="round" strokeDasharray="0 36" strokeDashoffset={22} style={{ transform: "translate(0, 9px)" } as any} opacity={0.9} />
-              <path d={d} fill="none" stroke="white" strokeWidth={2.2} strokeLinecap="round" strokeDasharray="10 10" opacity={0.92} />
-            </g>
-          );
-        })()}
-        {/* 3 nodes */}
-        {[
-          { x: 118, y: 74, label: "ANA 201", sub: "8AM", icon: "●", fill: "#fffbeb", outline: "#f59e0b", color: "#92400e" },
-          { x: 320, y: 52, label: "BIO 101", sub: "NOW", icon: "✓", fill: "#ecfdf5", outline: "#10b981", color: "#065f46", pulse: true, now: true },
-          { x: 498, y: 96, label: "CHM 112", sub: "2PM", icon: "●", fill: "#f5f3ff", outline: "#8b5cf6", color: "#6d28d9", demo: true },
-        ].map((n,i)=> (
-          <g key={i}>
-            {n.pulse && <circle cx={n.x} cy={n.y} r={22} fill="none" stroke="#8b5cf6" strokeWidth={2.2} opacity={0.85} style={{ animation: "miniPulse 1.2s ease-out infinite" }} />}
-            <circle cx={n.x} cy={n.y + 4} r={18} fill="black" opacity={0.28} />
-            <circle cx={n.x} cy={n.y} r={18} fill={n.fill} stroke={n.outline} strokeWidth={2.4} strokeDasharray={n.demo ? "5 3" : undefined} />
-            <text x={n.x} y={n.y + 4.5} textAnchor="middle" fontSize={11} fontWeight={800} fill={n.color} style={{ fontFamily: "var(--font-fredoka), Fredoka, system-ui" }}>{n.icon}</text>
-            {/* pill label */}
-            <g>
-              <rect x={n.x - 38} y={n.y - 42} width={76} height={18} rx={9} fill={n.now ? "white" : "rgba(0,0,0,0.62)"} stroke={n.now ? "white" : "rgba(255,255,255,0.18)"} />
-              <text x={n.x} y={n.y - 30.5} textAnchor="middle" fontSize={7.8} fontWeight={900} fill={n.now ? "#000" : "white"} style={{ fontFamily: "var(--font-fredoka), Fredoka, system-ui", letterSpacing: "-0.02em" }}>{n.label}</text>
-            </g>
-            {n.now && (
-              <g>
-                <rect x={n.x - 24} y={n.y + 14} width={48} height={12} rx={6} fill="white" stroke="#8b5cf6" strokeWidth={1.4} />
-                <text x={n.x} y={n.y + 22.5} textAnchor="middle" fontSize={6.5} fontWeight={900} fill="#5b21b6" style={{ fontFamily: "ui-monospace, monospace", letterSpacing: "0.08em" }}>◉ NOW</text>
-              </g>
-            )}
-          </g>
+    <div className="overflow-hidden rounded-full border border-white/[0.07] bg-white/[0.03] backdrop-blur">
+      <div className="flex animate-[ticker_22s_linear_infinite] items-center gap-6 whitespace-nowrap px-4 py-2.5">
+        {doubled.map((t,i)=> (
+          <span key={i} className="inline-flex items-center gap-1.5 font-mono text-xs text-slate-400">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400/70" />{t}
+          </span>
         ))}
-        {/* Fredoka label */}
-        <text x={320} y={134} textAnchor="middle" fontSize={8.5} fontWeight={700} fill="rgba(255,255,255,0.92)" style={{ fontFamily: "var(--font-fredoka), Fredoka, system-ui", letterSpacing: "0.06em", textShadow: "0 1px 6px rgba(0,0,0,0.5)" }}>endless time road — tap to play →</text>
-      </svg>
-      <span className="pointer-events-none absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-black group-hover:scale-105 transition">
-        Play road <ArrowRight className="h-3 w-3" />
-      </span>
-    </a>
-  );
-}
-
-function SnapTimetable(){
-  const [preview, setPreview] = useState<string|null>(null);
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<any>(null);
-  const [error, setError] = useState<string|null>(null);
-  const [showFormat, setShowFormat] = useState(true);
-  const [copied, setCopied] = useState(false);
-  const pipeTemplate = `PHYSI | BIO 101 | LT2 | 2026-09-01 | 08:00 | 100L | Advisory
-PHYSI | ANA 201 | Hall B | 2026-09-02 | 10:00 | 200L | Advisory
-PHYSI | CHM 112 | New Lab | 2026-09-03 | 14:00 | general | Advisory`;
-  const copyTemplate = async ()=>{
-    try{ await navigator.clipboard.writeText(pipeTemplate); setCopied(true); setTimeout(()=>setCopied(false), 1400);}catch{ setError("Copy failed — select and copy manually"); }
-  };
-  async function onFile(e: React.ChangeEvent<HTMLInputElement>){
-    const f = e.target.files?.[0];
-    if(!f) return;
-    setError(null); setResult(null);
-    const reader = new FileReader();
-    reader.onload = ()=> setPreview(String(reader.result));
-    reader.readAsDataURL(f);
-  }
-  async function onSnap(){
-    const input = document.getElementById('snap-file') as HTMLInputElement | null;
-    const f = input?.files?.[0];
-    if(!f){ setError("Choose an image first"); return; }
-    setLoading(true); setError(null); setResult(null);
-    try{
-      const fd = new FormData();
-      fd.append("file", f);
-      const r = await fetch("/api/vision/parse", { method: "POST", body: fd });
-      const j = await r.json().catch(()=>null);
-      if(!r.ok || !j?.ok) throw new Error(j?.message || j?.error || `Snap failed ${r.status}`);
-      setResult(j);
-    }catch(err){ setError((err as Error).message); } finally{ setLoading(false); }
-  }
-  return (
-    <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] p-4 backdrop-blur">
-      <div className="flex items-center justify-between">
-        <p className="text-[13px] font-bold text-white" style={{fontFamily:"var(--font-fredoka), Fredoka, system-ui"}}>📸 Snap timetable</p>
-        <span className="rounded-full border border-white/10 bg-black/20 px-2 py-0.5 font-mono text-[10px] text-emerald-100/70">NVIDIA vision · llama-3.2-11b</span>
       </div>
-      <p className="mt-1 font-mono text-[11px] leading-4 text-emerald-100/60">Snap a photo of a notice board / broadcast timetable — auto-extracts course, venue, date, time → creates advisory events.</p>
-      {/* Format guide — distinct + copyable */}
-      <div className="mt-3 rounded-xl border border-amber-400/20 bg-amber-400/10">
-        <button onClick={()=>setShowFormat(v=>!v)} className="flex w-full items-center justify-between px-3 py-2 text-left">
-          <span className="font-mono text-[11px] font-bold text-amber-100">📋 Pipe format — distinct & scannable {showFormat ? "▾" : "▸"}</span>
-          <span onClick={(e)=>{e.stopPropagation(); copyTemplate();}} className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 font-mono text-[11px] font-black text-black hover:bg-amber-50 transition">{copied ? "✓ Copied" : "📋 Copy format"}</span>
-        </button>
-        {showFormat && (
-          <div className="border-t border-amber-400/20 px-3 py-2">
-            <p className="font-mono text-[10px] font-bold uppercase tracking-wide text-amber-200">Template — one line per event, pipes distinct</p>
-            <pre className="mt-1 overflow-x-auto rounded-lg border border-white/10 bg-black/40 p-2 font-mono text-[11px] leading-4 text-amber-50">{pipeTemplate}</pre>
-            <p className="mt-1.5 font-mono text-[10px] leading-3 text-amber-100/70">PHYSI | COURSE | VENUE | YYYY-MM-DD | HH:MM | SCOPE (100L/200L/general) | STATUS — also accepts freeform tables/grids.</p>
-            <p className="mt-1 font-mono text-[10px] text-white/50">Example image text: “BIO 101 — LT2 — Mon 1 Sep 8:00” → parsed as PHYSI | BIO 101 | LT2 | 2026-09-01 | 08:00 | 100L | Advisory</p>
-          </div>
-        )}
-      </div>
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <input id="snap-file" type="file" accept="image/*" onChange={onFile} className="block w-full max-w-[220px] rounded-full border border-white/10 bg-white/[0.06] px-3 py-2 font-mono text-[11px] text-white file:mr-2 file:rounded-full file:border-0 file:bg-white file:px-3 file:py-1 file:text-[11px] file:font-bold file:text-black" />
-        <button onClick={onSnap} disabled={loading} className="inline-flex items-center gap-1.5 rounded-full bg-white px-5 py-2 text-[13px] font-black text-black disabled:opacity-50 hover:bg-slate-100 transition">{loading ? "Parsing…" : "Snap → Create"}</button>
-        <a href="/app/roadmap" className="font-mono text-[11px] text-emerald-100/60 hover:text-white">View road →</a>
-      </div>
-      {preview && <div className="mt-3 overflow-hidden rounded-xl border border-white/10 bg-black/30"><img src={preview} alt="preview" loading="lazy" className="max-h-[220px] w-full object-contain" /><p className="px-2 py-1 font-mono text-[10px] text-white/50">preview · {preview.slice(0,22)}…</p></div>}
-      {error && <p className="mt-2 rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2 font-mono text-[11px] text-red-200">{error}</p>}
-      {result && (
-        <div className="mt-2 rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2">
-          <p className="font-mono text-[11px] font-bold text-emerald-100">Parsed {result.parsed?.length ?? 0} · Created {result.created?.length ?? result.count ?? 0}</p>
-          {Array.isArray(result.parsed) && result.parsed.length>0 && <ul className="mt-1 list-disc pl-4 font-mono text-[11px] text-emerald-50/80">{result.parsed.slice(0,5).map((e:any,i:number)=>(<li key={i}>{e.title} · {e.venue} · {e.date} {e.time} · {e.scope_type}</li>))}</ul>}
-          {result.warning && <p className="mt-1 font-mono text-[10px] text-amber-200">{result.warning}</p>}
-        </div>
-      )}
     </div>
   );
 }
@@ -164,24 +21,7 @@ PHYSI | CHM 112 | New Lab | 2026-09-03 | 14:00 | general | Advisory`;
 export default function LandingPage() {
   const [stats, setStats] = useState<any>(null);
   const [ticker, setTicker] = useState<string[]>([]);
-  const [school, setSchool] = useState<string | null>(null);
-  const [schoolMeta, setSchoolMeta] = useState<any>(null);
-  useEffect(() => {
-    try {
-      const sp = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
-      const s = (sp.get("school") || "").toUpperCase().trim();
-      if (s) {
-        setSchool(s);
-        fetch("/school.json", { cache: "no-store" }).then(r=>r.json()).then(j=>{
-          const map: any = { FUTO: { name: "Federal University of Technology Owerri", short: "FUTO" }, UNIPORT: { name: "University of Port Harcourt", short: "UNIPORT" } };
-          setSchoolMeta(map[s] || { name: s, short: s, school: s, ...j });
-        }).catch(()=> setSchoolMeta({ name: s, short: s }));
-      } else {
-        // also support DATABASE_URLS shard hint from school.json
-        fetch("/school.json", { cache: "no-store" }).then(r=>r.json()).then(j=>{ if(j?.short_name) {/* keep */}}).catch(()=>{});
-      }
-    } catch {}
-  }, []);
+
   useEffect(() => {
     let cancelled = false;
     async function load() {
@@ -190,412 +30,204 @@ export default function LandingPage() {
         const j = await r.json().catch(()=>null);
         if (!j || cancelled) return;
         setStats(j);
-        const ghosts = ["alex_02 verified BIO 101 · 2m ago","zara_11 confirmed CHM 111 · 5m ago","mike_07 was there for PHY 101 · 8m ago","nini_04 checked in to GST 103 · 11m ago","tomi_09 verified ANA 201 · 14m ago"];
+        const fallbacks = ["alex_02 verified BIO 101 · now","zara_11 confirmed CHM 111 · 3m ago","mike_07 was there for PHY 101 · 6m ago"];
         let items: string[] | null = null;
-        if (Array.isArray(j?.recent)) items = j.recent.slice(0,5).map((x:any)=> String(x.handle||x.name||x.id||"someone")+" verified "+String(x.title||x.event||"event")+" · just now");
-        else if (Array.isArray(j?.verifications)) items = j.verifications.slice(0,5).map((x:any)=> String(x.verifier||x.handle||"someone")+" verified · "+String(x.vote||"Yes"));
-        if (items && items.length) setTicker(items);
-        else setTicker(ghosts);
-      } catch {
-        if (!cancelled) setTicker(["alex_02 verified BIO 101 · 2m ago","zara_11 confirmed CHM 111 · 5m ago","mike_07 was there for PHY 101 · 8m ago"]);
-      }
+        if (Array.isArray(j?.recent)) items = j.recent.slice(0,5).map((x:any)=> `${String(x.handle||x.name||"someone")} verified ${String(x.title||"event")} · now`);
+        if (items?.length) setTicker(items); else setTicker(fallbacks);
+      } catch { if (!cancelled) setTicker(["alex_02 verified BIO 101 · now","zara_11 confirmed CHM 111 · 3m ago"]); }
     }
     load();
     const iv = setInterval(load, 30000);
-    return () => { cancelled = true; clearInterval(iv); };
+    return () => { cancelled=true; clearInterval(iv); };
   }, []);
-  const totalEvents = stats?.metrics?.events ?? stats?.counts?.physi_events ?? stats?.counts?.physiEvents ?? 0;
-  const verifiedCount = stats?.metrics?.verifications ?? stats?.counts?.physi_verifications ?? stats?.metrics?.events_by_status?.verified ?? 0;
-  const displayEvents = totalEvents || 42;
-  const displayVerified = verifiedCount || Math.max(1, Math.round(displayEvents * 0.35));
+
+  const totalEvents = stats?.metrics?.events ?? stats?.counts?.physi_events ?? 42;
+  const verifiedCount = stats?.metrics?.verifications ?? stats?.metrics?.events_by_status?.verified ?? Math.round(totalEvents*0.35);
 
   return (
-    <div className={`${fredoka.variable} relative overflow-hidden`} style={{ background: "linear-gradient(180deg, var(--physi-forest) 0%, var(--physi-forest-2) 45%, var(--physi-forest-mid) 100%)" }}>
-      {/* ambient forest orbs + subtle grid — forest palette */}
-      <div aria-hidden className="pointer-events-none absolute inset-0">
-        <div className="absolute -top-[22rem] left-1/2 h-[40rem] w-[62rem] -translate-x-1/2 rounded-full opacity-[0.22]" style={{ background: "radial-gradient(ellipse at center, rgba(82,183,136,0.32), transparent 62%)" }} />
-        <div className="absolute -top-[8rem] right-[-10rem] h-[28rem] w-[28rem] rounded-full opacity-[0.14]" style={{ background: "radial-gradient(ellipse at center, rgba(45,106,79,0.9), transparent 65%)" }} />
-        <div className="absolute top-[22rem] left-[-8rem] h-[24rem] w-[24rem] rounded-full opacity-[0.12]" style={{ background: "radial-gradient(ellipse at center, rgba(139,92,246,0.45), transparent 65%)" }} />
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:48px_48px] [mask-image:radial-gradient(ellipse_at_center,_black_60%,_transparent_78%)]" />
+    <div className="min-h-screen bg-[#070a12] text-white selection:bg-white selection:text-[#070a12]">
+      {/* Subtle forest accent — restrained, not full flood */}
+      <div aria-hidden className="pointer-events-none fixed inset-0">
+        <div className="absolute inset-0 bg-[#070a12]" />
+        <div className="absolute -top-40 left-1/2 h-[520px] w-[900px] -translate-x-1/2 rounded-full opacity-[0.07]" style={{ background: "radial-gradient(ellipse at center, #0d3b2a, transparent 70%)" }} />
+        <div className="absolute top-[30%] right-[-6%] h-[360px] w-[360px] rounded-full opacity-[0.04]" style={{ background: "radial-gradient(ellipse at center, #8b5cf6, transparent 70%)" }} />
       </div>
 
-      {/* header — forest translucent */}
-      <header className="sticky top-0 z-20 border-b border-white/[0.07] bg-[var(--physi-forest)]/70 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-[1240px] items-center justify-between px-6 py-3.5 lg:px-8">
+      {/* ── Header — minimal, Notion/Linear style ── */}
+      <header className="sticky top-0 z-20 border-b border-white/[0.06] bg-[#070a12]/80 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-[1120px] items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-[9px] bg-white text-[10px] font-black tracking-[-0.04em] text-slate-900">PHYSI</div>
-            <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-emerald-400/15 bg-emerald-400/10 px-2.5 py-1 font-mono text-[10.5px] font-medium tracking-wide text-emerald-300">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" /> Live · Pilot
-            </span>
-            <span className="hidden md:inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 font-mono text-[10.5px] text-slate-200">Advisory · Not official</span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-[10px] font-black tracking-tight text-[#070a12]">PHYSI</div>
+            <span className="hidden sm:inline text-sm font-semibold tracking-tight text-white">PHYSI</span>
+            <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-white/[0.07] bg-white/[0.04] px-2.5 py-1 font-mono text-[11px] text-slate-400">advisory · not official</span>
           </div>
           <nav className="flex items-center gap-2">
-            {school && <span className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-black/40 px-3 py-1 font-mono text-[10px] font-bold text-white backdrop-blur">🪞 Mirror · {school} {schoolMeta?.name ? `· ${schoolMeta.name}` : ""} · {school==="FUTO" ? "school.json + DATABASE_URLS shard" : "school.json"}</span>}
-            <a href="/app/profile" className="hidden sm:inline-flex items-center rounded-full px-4 py-2 text-[13px] font-medium text-slate-200 hover:text-white transition">Create profile</a>
-            <a href="/app/timetable" className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-[13px] font-medium text-white hover:bg-white hover:text-black hover:border-white transition">
-              Login <ArrowRight className="h-3.5 w-3.5 opacity-60" />
-            </a>
+            <a href="/app/profile" className="hidden sm:inline-flex text-sm font-medium text-slate-400 hover:text-white transition px-3 py-1.5">Create profile</a>
+            <a href="/app/roadmap" className="inline-flex items-center gap-1.5 rounded-full bg-white px-5 py-2 text-sm font-semibold text-[#070a12] hover:bg-slate-100 transition">Open app <ArrowRight className="h-3.5 w-3.5" /></a>
           </nav>
         </div>
       </header>
 
-      <main className="relative mx-auto max-w-[1240px] px-6 lg:px-8">
-        {/* HERO — forest bg, Fredoka title, road peek */}
-        <section className="grid gap-10 pb-8 pt-8 lg:grid-cols-[1.06fr_0.94fr] lg:items-start lg:pt-10">
-          <div className="animate-[fadeInUp_0.6s_ease_both]">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/[0.10] bg-white/[0.06] px-3 py-1.5 backdrop-blur">
-              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-400/20 text-emerald-200"><ShieldCheck className="h-3 w-3" /></span>
-              <span className="font-mono text-[11px] tracking-wide text-slate-100">Live timetable — advisory</span>
-              <span className="hidden sm:inline h-3 w-px bg-white/15" />
-              <span className="hidden sm:inline font-mono text-[11px] text-slate-300">Confirm exams with your department</span>
+      <main className="relative mx-auto max-w-[1120px] px-6">
+        {/* ── HERO — one clear message, one primary CTA, breathing room ── */}
+        <section className="grid gap-10 pt-10 pb-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center lg:pt-16 lg:pb-12">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/15 bg-emerald-500/10 px-3 py-1.5">
+              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="font-mono text-xs font-medium text-emerald-200">Live · student-powered</span>
+              <span className="hidden sm:inline text-xs text-emerald-200/60">· pilot</span>
             </div>
 
-            {/* Mini road peek — cropped SVG preview above hero text */}
-            <div className="mt-4">
-              <MiniRoadPeek />
-              <p className="mt-1.5 text-center font-mono text-[10px] tracking-wide text-white/60 sm:text-left">Candy road preview · forest #0d3b2a · purple #8b5cf6 · Fredoka labels — tap to play (no login wall)</p>
-            </div>
-
-            <h1 className="mt-4 text-[32px] font-bold leading-[0.95] tracking-[-0.035em] text-white sm:text-[42px] lg:text-[52px]" style={{ fontFamily: "var(--font-fredoka), Fredoka, system-ui" }}>
-              A live timetable
+            <h1 className="mt-6 text-[34px] font-bold leading-[0.95] tracking-[-0.04em] sm:text-[44px] lg:text-[52px]">
+              Never trek to
               <br />
-              <span className="bg-gradient-to-r from-white via-white to-emerald-100 bg-clip-text text-transparent">built by students.</span>
+              <span className="text-slate-400">the wrong hall</span>
+              <br />
+              again.
             </h1>
 
-            <p className="mt-4 max-w-[600px] text-[15.5px] leading-6 text-emerald-50/80 sm:text-[16px] sm:leading-7">
-              You survived JAMB, you survived clearance, now nobody can tell you where 8 a.m. Anatomy holds. Freshers trek to the wrong hall, stale gist flies in WhatsApp broadcasts. Here, you post what you hear and tap <span className="font-medium text-white">Yes / No</span> if you were actually there. More students checking = truer timetable for everyone.
+            <p className="mt-5 max-w-[520px] text-[16px] leading-7 text-slate-400">
+              Lecturer moved class to Hall B and nobody told you? PHYSI is a live timetable built by students — post what you hear, tap Yes if you were there. Green tick means your coursemates confirmed it.
             </p>
 
-            {/* CTAs: primary Play road → /app/roadmap, secondary See live -> #live-proof, tertiary Login */}
-            <div className="mt-7 flex flex-wrap items-center gap-3">
-              <a href="/app/roadmap" className="group inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-[14px] font-black text-black shadow-[0_8px_24px_rgba(255,255,255,0.16)] hover:bg-slate-100 transition">
-                Play road → <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+            {/* Single primary CTA */}
+            <div className="mt-8 flex flex-wrap items-center gap-3">
+              <a href="/app/roadmap" className="primary-cta inline-flex items-center gap-2 px-7 py-3.5 text-[15px]">
+                Open the road <ArrowRight className="h-4 w-4" />
               </a>
-              <a href="#live-proof" className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.08] px-6 py-3 text-[14px] font-semibold text-white backdrop-blur hover:bg-white hover:text-black transition">
-                See live
-              </a>
-              <a href="/app/timetable" className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-5 py-3 text-[14px] font-medium text-emerald-50/90 backdrop-blur hover:bg-white/[0.08] hover:text-white transition">
-                Login
-              </a>
-              <span className="inline-flex items-center gap-1.5 font-mono text-[11px] text-emerald-100/70"><Clock3 className="h-3.5 w-3.5" /> 30s setup</span>
+              <span className="inline-flex items-center gap-1.5 font-mono text-xs text-slate-500"><Clock3 className="h-3.5 w-3.5" /> 30s setup · no signup wall to preview</span>
             </div>
 
-            <p className="mt-4 max-w-[620px] font-mono text-[11px] leading-4 text-emerald-100/60">
-              <a href="/terms" className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 font-mono text-[11px] font-medium text-amber-100 hover:bg-amber-400/15 transition">Advisory · TEST-PHYSI has no cash value — see Terms →</a>
-            </p>
-
-            <div className="mt-6 flex flex-wrap items-center gap-2 font-mono text-[10.5px] text-emerald-100/60">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.06] px-3 py-1.5"><MapPin className="h-3 w-3" /> No more wrong-hall trek</span>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.06] px-3 py-1.5"><Users className="h-3 w-3" /> By coursemates, for coursemates</span>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/20 bg-emerald-400/15 px-3 py-1.5 text-emerald-100"><BadgeCheck className="h-3 w-3" /> Green tick = confirmed</span>
-            </div>
-
-            {/* lollipop tree accent — forest vibe */}
-            <div className="mt-6 hidden sm:flex items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-3 py-2.5 backdrop-blur">
-              <div className="flex items-center gap-2">
-                <span className="relative inline-flex h-10 w-10 items-center justify-center">
-                  <span className="absolute bottom-0 h-3 w-1.5 rounded-full bg-[#5a3e1b]" />
-                  <span className="absolute bottom-2 h-7 w-7 rounded-full border border-white/20 bg-[#52b788] shadow-[0_2px_8px_rgba(0,0,0,0.3)]" />
-                  <span className="absolute bottom-3.5 h-3 w-3 rounded-full bg-white/15" />
-                  <span className="absolute bottom-5 right-2 h-2.5 w-2.5 rounded-full border border-white/90 bg-[#fbbf24]" />
-                </span>
-                <div className="leading-none">
-                  <p className="text-[12px] font-bold text-white" style={{ fontFamily: "var(--font-fredoka), Fredoka, system-ui" }}>Forest campus</p>
-                  <p className="font-mono text-[11px] text-emerald-100/70">lollipop trees · candy sprinkles · endless road</p>
-                </div>
-              </div>
-              <span className="ml-auto hidden font-mono text-[10px] tracking-wide text-white/50 lg:inline">#0d3b2a → #1a5c3a · #8b5cf6</span>
+            <div className="mt-6 flex flex-wrap items-center gap-2 font-mono text-xs text-slate-500">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.06] bg-white/[0.03] px-3 py-1.5"><Users className="h-3 w-3" /> by coursemates</span>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.06] bg-white/[0.03] px-3 py-1.5"><ShieldCheck className="h-3 w-3" /> green tick = confirmed</span>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.06] bg-white/[0.03] px-3 py-1.5"><MapPin className="h-3 w-3" /> no wrong-hall trek</span>
             </div>
           </div>
 
-          {/* hero visual — floating timetable card */}
-          <div className="relative lg:pl-6 animate-[fadeInUp_0.7s_0.08s_ease_both]">
-            {/* mini road peek below hero text on mobile duplicate — also visible */}
-            <div className="mb-4 lg:hidden">
-              <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.14em] text-emerald-100/60">peek →</p>
-            </div>
-            <div className="absolute -inset-4 -z-10 rounded-[28px] bg-gradient-to-b from-white/[0.08] to-transparent blur-[1px]" />
-            <div className="relative overflow-hidden rounded-[20px] border border-white/[0.10] bg-white/[0.06] backdrop-blur-xl shadow-[0_16px_48px_rgba(0,0,0,0.45)]">
-              <div className="flex items-center justify-between border-b border-white/[0.06] bg-white/[0.04] px-4 py-3">
-                <div className="flex items-center gap-2">
+          {/* Hero card — single clean timetable preview */}
+          <div className="relative">
+            <div className="absolute -inset-6 -z-10 rounded-[28px] bg-white/[0.02] blur-xl" />
+            <div className="overflow-hidden rounded-[20px] border border-white/[0.08] bg-white/[0.04] backdrop-blur-xl shadow-[0_16px_48px_rgba(0,0,0,0.4)]">
+              <div className="flex items-center justify-between border-b border-white/[0.06] bg-white/[0.03] px-4 py-3">
+                <div className="flex items-center gap-1.5">
                   <span className="h-2.5 w-2.5 rounded-full bg-white/20" />
                   <span className="h-2.5 w-2.5 rounded-full bg-white/10" />
                   <span className="h-2.5 w-2.5 rounded-full bg-white/10" />
                 </div>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-400/20 px-2.5 py-1 font-mono text-[10px] font-medium text-emerald-100"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" /> Live</span>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-1 font-mono text-[11px] font-medium text-emerald-300"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" /> live</span>
               </div>
-              <div className="p-4 sm:p-5">
-                <div className="flex items-center justify-between">
-                  <p className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-emerald-100/60">Today · Advisory</p>
-                  <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2 py-0.5 font-mono text-[10px] text-amber-200">Not official</span>
-                </div>
-                <div className="mt-4 space-y-2.5">
+              <div className="p-5">
+                <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-slate-500">Today · advisory</p>
+                <div className="mt-3 space-y-2.5">
                   {[
-                    { code: 'ANA 201', venue: 'LT2 → Hall B', time: '8:00 AM', status: 'green', votes: '18 Yes · 2 No' },
-                    { code: 'BIO 101', venue: 'LT2 · Friday 8am', time: '8:00 AM', status: 'pending', votes: '6 Yes · 1 No' },
-                    { code: 'CHM 112', venue: 'New Lab · Shifted', time: '2:00 PM', status: 'fading', votes: '2 Yes · 9 No' },
+                    { code: 'ANA 201', venue: 'Hall B · moved from LT2', time: '8:00 AM', state: 'verified', meta: '18 Yes · 2 No' },
+                    { code: 'BIO 101', venue: 'LT2 · Friday', time: '8:00 AM', state: 'pending', meta: '6 Yes · 1 No' },
+                    { code: 'CHM 112', venue: 'New Lab', time: '2:00 PM', state: 'fading', meta: '2 Yes · 9 No' },
                   ].map((r) => (
-                    <div key={r.code} className="flex items-center justify-between rounded-2xl border border-white/[0.07] bg-white/[0.04] px-3.5 py-3">
+                    <div key={r.code} className="flex items-center justify-between rounded-2xl border border-white/[0.06] bg-white/[0.03] px-4 py-3">
                       <div>
-                        <p className="text-[13px] font-semibold text-white">{r.code} <span className="font-normal text-emerald-50/70">· {r.venue}</span></p>
-                        <p className="mt-0.5 font-mono text-[11px] text-emerald-100/60">{r.time} · {r.votes}</p>
+                        <p className="text-[13px] font-semibold text-white">{r.code} <span className="font-normal text-slate-400">· {r.venue}</span></p>
+                        <p className="mt-0.5 font-mono text-xs text-slate-500">{r.time} · {r.meta}</p>
                       </div>
-                      <span className={
-                        r.status === 'green' ? 'inline-flex items-center gap-1 rounded-full bg-emerald-400/20 px-2.5 py-1 font-mono text-[11px] font-medium text-emerald-100' :
-                        r.status === 'pending' ? 'inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1 font-mono text-[11px] text-slate-100' :
-                        'inline-flex items-center gap-1 rounded-full border border-red-400/15 bg-red-400/10 px-2.5 py-1 font-mono text-[11px] text-red-200'
-                      }>
-                        {r.status === 'green' ? <><CheckCircle2 className="h-3.5 w-3.5" /> Green tick</> : r.status === 'pending' ? 'Advisory' : 'Fading'}
+                      <span className={r.state==='verified' ? "inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-1 font-mono text-xs font-medium text-emerald-300" : r.state==='pending' ? "inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 font-mono text-xs text-slate-300" : "inline-flex items-center rounded-full border border-red-500/15 bg-red-500/10 px-2.5 py-1 font-mono text-xs text-red-300"}>
+                        {r.state==='verified' ? <><Check className="h-3 w-3" /> Green</> : r.state==='pending' ? 'Advisory' : 'Fading'}
                       </span>
                     </div>
                   ))}
                 </div>
-                <div className="mt-4 flex items-center gap-2 rounded-xl border border-white/[0.06] bg-[#0d3b2a]/70 px-3 py-2.5">
-                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-[10px] font-bold text-slate-900">You</span>
-                  <p className="text-[12.5px] text-emerald-50/90">Were you there? Tap <span className="font-semibold text-white">Yes / No / Skip</span> — no long forms.</p>
+                <div className="mt-4 flex items-center gap-2.5 rounded-xl border border-white/[0.06] bg-[#0d3b2a]/40 px-3.5 py-3">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-[10px] font-bold text-[#070a12]">You</span>
+                  <p className="text-[13px] text-slate-300">Were you there? Tap <span className="font-semibold text-white">Yes / No</span> — no forms.</p>
                 </div>
               </div>
             </div>
-            </div>
+            <p className="mt-3 text-center font-mono text-[11px] text-slate-600">Preview · real confirmations inside the road</p>
+          </div>
         </section>
 
-        {/* How it works — 3 candy steps — between hero peek and live proof (forest #0d3b2a, Fredoka, lollipop) */}
-        <section aria-label="How it works" className="mt-6 rounded-[20px] border border-white/[0.08] bg-white/[0.04] px-4 py-5 backdrop-blur sm:px-6">
-          <div className="flex items-center justify-between">
-            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-emerald-100/60">How it works — 3 steps</p>
-            <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 font-mono text-[11px] text-emerald-100/70">Fredoka · candy · forest #0d3b2a</span>
-          </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            {/* ① Hear gist */}
-            <div className="group relative overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-br from-white/[0.06] to-white/[0.02] px-4 py-5">
-              <div className="flex items-center gap-3">
-                <span className="flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-[#52b788] text-white shadow-[0_2px_10px_rgba(0,0,0,0.3)]" style={{fontFamily:"var(--font-fredoka), Fredoka, system-ui"}}>①</span>
-                <span className="relative inline-flex h-9 w-9 items-center justify-center" aria-hidden>
-                  <span className="absolute bottom-0 h-2.5 w-1.5 rounded-full bg-[#5a3e1b]" />
-                  <span className="absolute bottom-1.5 h-6 w-6 rounded-full border border-white/20 bg-[#52b788]" />
-                  <span className="absolute bottom-2.5 h-2 w-2 rounded-full bg-white/15" />
-                  <span className="absolute bottom-4 right-1 h-2 w-2 rounded-full border border-white/90 bg-[#fbbf24]" />
-                </span>
-                <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2 py-0.5 font-mono text-[10px] font-bold text-amber-100">gist</span>
-              </div>
-              <p className="mt-3 text-[15px] font-bold text-white" style={{fontFamily:"var(--font-fredoka), Fredoka, system-ui"}}>① Hear gist</p>
-              <p className="mt-1.5 text-[13px] leading-5 text-emerald-50/70">Lecturer whispers “shift to Hall B”? Post it — shows instantly as advisory on the road.</p>
-              <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-black/30 px-2.5 py-1 font-mono text-[11px] text-emerald-100/70"><Megaphone className="h-3 w-3" /> ANA 201 → Hall B · 8AM</div>
-            </div>
-            {/* ② Confirm on road */}
-            <div className="group relative overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-br from-violet-500/[0.08] to-white/[0.02] px-4 py-5">
-              <div className="flex items-center gap-3">
-                <span className="flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-[#8b5cf6] text-white shadow-[0_2px_10px_rgba(0,0,0,0.3)]" style={{fontFamily:"var(--font-fredoka), Fredoka, system-ui"}}>②</span>
-                <span className="relative inline-flex h-9 w-9 items-center justify-center" aria-hidden>
-                  <span className="absolute bottom-0 h-2.5 w-1.5 rounded-full bg-[#5a3e1b]" />
-                  <span className="absolute bottom-1.5 h-6 w-6 rounded-full border border-white/20 bg-[#40916c]" />
-                  <span className="absolute bottom-2.5 h-2 w-2 rounded-full bg-white/10" />
-                  <span className="absolute bottom-4 right-1 h-2 w-2 rounded-full border border-white/90 bg-[#a78bfa]" />
-                </span>
-                <span className="rounded-full border border-violet-400/20 bg-violet-500/15 px-2 py-0.5 font-mono text-[10px] font-bold text-violet-100">swipe to verify</span>
-              </div>
-              <p className="mt-3 text-[15px] font-bold text-white" style={{fontFamily:"var(--font-fredoka), Fredoka, system-ui"}}>② Confirm on road</p>
-              <p className="mt-1.5 text-[13px] leading-5 text-emerald-50/70">Tap node, swipe Yes/No. Quorum lights the road.</p>
-              <div className="mt-3 rounded-xl border border-white/10 bg-black/40 px-3 py-2.5">
-                <div className="flex items-center justify-between font-mono text-[10px] font-bold text-white"><span>7/8 · 88%</span><span className="text-amber-300">1 more!</span></div>
-                <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-white/10"><div className="h-full w-[87.5%] rounded-full bg-emerald-400" /></div>
-                <p className="mt-1.5 font-mono text-[10px] text-emerald-100/60">← swipe quorum bar · violet road</p>
-              </div>
-            </div>
-            {/* ③ Earn Rep+Llv */}
-            <div className="group relative overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-br from-emerald-500/[0.08] to-white/[0.02] px-4 py-5">
-              <div className="flex items-center gap-3">
-                <span className="flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-emerald-600 text-white shadow-[0_2px_10px_rgba(0,0,0,0.3)]" style={{fontFamily:"var(--font-fredoka), Fredoka, system-ui"}}>③</span>
-                <span className="relative inline-flex h-9 w-9 items-center justify-center" aria-hidden>
-                  <span className="absolute bottom-0 h-2.5 w-1.5 rounded-full bg-[#5a3e1b]" />
-                  <span className="absolute bottom-1.5 h-6 w-6 rounded-full border border-white/20 bg-[#2d6a4f]" />
-                  <span className="absolute bottom-2.5 h-2 w-2 rounded-full bg-white/10" />
-                  <span className="absolute bottom-4 right-1 h-2 w-2 rounded-full border border-white/90 bg-emerald-300" />
-                </span>
-                <span className="rounded-full border border-emerald-400/20 bg-emerald-500/15 px-2 py-0.5 font-mono text-[10px] font-bold text-emerald-100">Rep & Level</span>
-              </div>
-              <p className="mt-3 text-[15px] font-bold text-white" style={{fontFamily:"var(--font-fredoka), Fredoka, system-ui"}}>③ Earn Rep + Lvl</p>
-              <p className="mt-1.5 text-[13px] leading-5 text-emerald-50/70">Verified gist → Rep up, Level climbs. Track your sparkline.</p>
-              <div className="mt-3 flex items-center gap-2 rounded-xl border border-white/10 bg-black/40 px-3 py-2.5">
-                <span className="font-mono text-[11px] font-black text-emerald-300">+5 Rep</span>
-                <svg width="64" height="16" viewBox="0 0 64 16" aria-hidden className="shrink-0"><path d="M 2 12 L 14 10 L 26 7 L 38 8 L 50 4 L 62 2" fill="none" stroke="#10b981" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /><path d="M 2 12 L 14 10 L 26 7 L 38 8 L 50 4 L 62 2 L 62 14 L 2 14 Z" fill="#10b981" opacity="0.14" /></svg>
-                <span className="ml-auto rounded-full bg-white px-2 py-0.5 font-mono text-[10px] font-black text-black">Lvl 2 · Scout</span>
-              </div>
-            </div>
-          </div>
-          <p className="mt-3 flex items-center gap-1.5 font-mono text-[11px] text-emerald-100/60"><span className="h-1 w-1 rounded-full bg-emerald-400" /> Lollipop trees · Fredoka numbers · candy sprinkles · endless road #8b5cf6</p>
+        {/* ── Live proof — minimal strip ── */}
+        <section className="flex flex-wrap items-center gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.03] px-5 py-4">
+          <span className="inline-flex items-center gap-2 rounded-full bg-emerald-500/15 px-3 py-1.5 font-mono text-xs font-semibold text-emerald-300"><span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" /> Live proof</span>
+          <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 font-mono text-xs text-white">{totalEvents} events</span>
+          <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 font-mono text-xs text-white">{verifiedCount} verified</span>
+          <span className="ml-auto hidden sm:inline font-mono text-xs text-slate-500">updates every 30s · /api/stats</span>
+          <a href="/app/roadmap" className="rounded-full bg-white px-4 py-1.5 text-xs font-bold text-[#070a12]">Open road →</a>
         </section>
-
-        {/* live proof strip — fetched from /api/stats + ticker — anchor for See live */}
-        <section className="mt-6">
-          <EarthPulse />
-        </section>
-        <section id="live-proof" className="mt-4 scroll-mt-20 flex flex-col gap-3 rounded-[20px] border border-white/[0.08] bg-white/[0.05] px-5 py-4 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/15 px-3 py-1.5 font-mono text-[11px] font-bold text-emerald-100"><span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" /> Live proof</span>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.06] px-3 py-1.5 font-mono text-[11px] text-white"><span className="h-1.5 w-1.5 rounded-full bg-white/60" /> {displayEvents} events</span>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.06] px-3 py-1.5 font-mono text-[11px] text-white"><CheckCircle2 className="h-3 w-3 text-emerald-300" /> {displayVerified} verified</span>
-            {stats ? <span className="hidden sm:inline font-mono text-[10px] text-emerald-100/60">· live from /api/stats</span> : <span className="font-mono text-[10px] text-emerald-100/60">· updating…</span>}
-          </div>
-          <a href="/app/roadmap" className="inline-flex items-center gap-1 rounded-full bg-white px-4 py-1.5 text-[12px] font-black text-black hover:bg-slate-100">Play road →</a>
-        </section>
-        <div id="ticker" className="mt-3 scroll-mt-20 overflow-hidden rounded-full border border-white/[0.08] bg-black/30 backdrop-blur">
-          <div className="flex animate-[ticker_18s_linear_infinite] items-center gap-6 whitespace-nowrap px-4 py-2 font-mono text-[11px] text-emerald-50/70">
-            {(ticker.length ? ticker : ["alex_02 verified BIO 101 · 2m ago","zara_11 confirmed CHM 111 · 5m ago","mike_07 was there for PHY 101 · 8m ago","nini_04 · ANA 201 · 11m ago"]).concat(ticker.length ? ticker : []).map((t,i)=> (
-              <span key={i} className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400/70" />{t}</span>
-            ))}
-          </div>
+        <div className="mt-3">
+          <LiveTicker items={ticker} />
         </div>
-        <style>{`@keyframes ticker{0%{transform:translateX(0)}100%{transform:translateX(-50%)}} @keyframes miniPulse{0%{transform:scale(0.85);opacity:0.9}70%{transform:scale(1.45);opacity:0}100%{transform:scale(1.6);opacity:0}}`}</style>
 
-        {/* social proof strip */}
-        <section className="mt-6 rounded-[20px] border border-white/[0.08] bg-white/[0.04] px-5 py-4 backdrop-blur sm:px-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-emerald-100/60">Built for how campus really moves</p>
-            <p className="font-mono text-[11px] leading-4 text-emerald-100/50">Pilot on one campus · You are the source · No scraping, no stale PDF</p>
-          </div>
-          <div className="mt-4 grid gap-2.5 sm:grid-cols-3">
-            {[
-              ['Freshers', 'Trek to the right hall on day one. No “sorry, we moved to LT2” after you climbed three floors.'],
-              ['Stay-camp & reps', 'You hear the change first. Post it before the broadcast chaos — let votes do the rest.'],
-              ['Everyone', 'One post helps ten coursemates. Ten confirms help the whole department. That’s the network effect.'],
-            ].map(([t,d])=> (
-              <div key={t} className="rounded-2xl border border-white/[0.06] bg-white/[0.03] px-4 py-3.5">
-                <p className="text-[12.5px] font-semibold text-white">{t}</p>
-                <p className="mt-1 text-[12.5px] leading-5 text-emerald-50/70">{d}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* Why this exists */}
-        <section className="mt-8">
+        {/* ── How it works — 3 steps, Instagram-story clarity ── */}
+        <section className="mt-10">
           <div className="flex items-baseline justify-between">
-            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-emerald-100/60">Why this exists</p>
-            <span className="hidden sm:inline font-mono text-[11px] text-emerald-100/50">Why students built this, not admin</span>
+            <h2 className="text-xl font-semibold tracking-tight text-white">How it works</h2>
+            <span className="hidden sm:inline font-mono text-xs text-slate-500">3 steps · 10 seconds</span>
           </div>
-          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          <div className="mt-5 grid gap-4 sm:grid-cols-3">
             {[
-              { icon: Megaphone, title: 'You hear it first', desc: 'Lecturer whispers “we’ll shift to Hall B”? Post it now. Don’t wait for a broadcast that never comes.', accent: 'from-sky-500/15 to-indigo-500/15 border-sky-400/15' },
-              { icon: BadgeCheck, title: 'Green tick = real', desc: 'Your coursemates tap Yes, No or Skip. Enough Yes and it turns green — that’s how you know it’s legit.', accent: 'from-emerald-500/15 to-teal-500/15 border-emerald-400/15' },
-              { icon: Coins, title: 'TEST-PHYSI isn’t cash', desc: 'Daily check-in gives you TEST-PHYSI for 24 hours. Think of it like marking attendance — it shows you’re active, not that you’re rich.', accent: 'from-amber-500/15 to-orange-500/15 border-amber-400/15' },
-            ].map((f) => (
-              <div key={f.title} className="group relative overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.04] px-4 py-5 transition hover:bg-white/[0.06] hover:border-white/[0.10]">
-                <div className={`absolute inset-0 bg-gradient-to-br ${f.accent} opacity-0 group-hover:opacity-100 transition`} />
-                <div className="relative">
-                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.06] text-white">
-                    <f.icon className="h-[18px] w-[18px]" />
-                  </span>
-                  <p className="mt-3 text-[13.5px] font-semibold text-white">{f.title}</p>
-                  <p className="mt-1.5 text-[13px] leading-5 text-emerald-50/70">{f.desc}</p>
+              { n: '01', title: 'Hear gist', desc: 'Lecturer says “we moved to Hall B”. Post it — shows instantly as advisory.', icon: Sparkles, accent: 'border-emerald-500/15 bg-emerald-500/[0.06]' },
+              { n: '02', title: 'Coursemates confirm', desc: 'Were you there? Tap Yes / No. Enough Yes turns it green.', icon: Users, accent: 'border-violet-500/15 bg-violet-500/[0.06]' },
+              { n: '03', title: 'Everyone knows', desc: 'Green tick = trust it. No tick = double-check. No more wrong hall.', icon: Check, accent: 'border-sky-500/15 bg-sky-500/[0.06]' },
+            ].map((s) => (
+              <div key={s.n} className={`rounded-[20px] border bg-white/[0.03] p-6 ${s.accent}`}>
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-xs font-medium tracking-[0.14em] text-slate-500">{s.n}</span>
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.06] bg-white/[0.04] text-white"><s.icon className="h-4 w-4" /></span>
                 </div>
+                <p className="mt-4 text-[15px] font-semibold text-white">{s.title}</p>
+                <p className="mt-1.5 text-sm leading-5 text-slate-400">{s.desc}</p>
               </div>
             ))}
           </div>
         </section>
 
-        {/* How it works */}
-        <section className="mt-8 rounded-[20px] border border-white/[0.08] bg-white/[0.04] px-6 py-6 backdrop-blur">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-emerald-100/60">How it works — 4 steps</p>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1 font-mono text-[11px] text-emerald-100/80"><Users className="h-3 w-3" /> Yes / No / Skip — that’s it</span>
-          </div>
-          <ol className="mt-4 grid gap-3 sm:grid-cols-4">
-            {[
-              { n: '01', t: 'Pick your handle', d: 'e.g. alex_02 — not “Dream” or “John Doe”. People trust a real coursemate.', icon: Sparkles },
-              { n: '02', t: 'Post what you hear', d: '“BIO 101 moved to LT2, Friday 8am” — it shows instantly as advisory.', icon: Megaphone },
-              { n: '03', t: 'Others confirm', d: 'Were you there? Tap Yes / No / Skip. No long forms.', icon: CheckCircle2 },
-              { n: '04', t: 'Green tick wins', d: 'Many Yes = green tick. Many No = it fades. The crowd corrects the gist.', icon: BadgeCheck },
-            ].map((s) => (
-              <li key={s.n} className="relative overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.03] px-4 py-4">
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-[11px] font-medium tracking-[0.14em] text-emerald-100/60">{s.n}</span>
-                  <s.icon className="h-3.5 w-3.5 text-emerald-100/50" />
-                </div>
-                <p className="mt-2 text-[13px] font-semibold text-white">{s.t}</p>
-                <p className="mt-1 text-[13px] leading-5 text-emerald-50/70">{s.d}</p>
-              </li>
-            ))}
-          </ol>
-          <p className="mt-4 flex items-center gap-2 font-mono text-[11px] leading-4 text-emerald-100/60"><span className="h-1 w-1 rounded-full bg-emerald-400" /> Network effect: one person posting helps ten freshers not miss class. Ten people confirming helps the whole department.</p>
+        {/* ── Why students built this ── */}
+        <section className="mt-10 grid gap-4 sm:grid-cols-3">
+          {[
+            ['For freshers', 'Trek to the right hall on day one. No “sorry, we moved” after three floors.'],
+            ['For class reps', 'You hear it first. Post before the broadcast chaos — votes do the rest.'],
+            ['For everyone', 'One post helps ten coursemates. Ten confirms help the whole department.'],
+          ].map(([t,d])=> (
+            <div key={t} className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-5 py-4">
+              <p className="text-sm font-semibold text-white">{t}</p>
+              <p className="mt-1.5 text-sm leading-5 text-slate-400">{d}</p>
+            </div>
+          ))}
         </section>
 
-        {/* Testimonial */}
-        <section className="mt-8 rounded-[20px] border border-white/[0.08] bg-gradient-to-br from-white/[0.05] to-white/[0.02] px-6 py-6">
-          <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.14em] text-emerald-100/60">
-            <Quote className="h-3.5 w-3.5" /> What early testers say — illustrative
-          </div>
+        {/* ── Testimonials — restrained ── */}
+        <section className="mt-10 rounded-[20px] border border-white/[0.06] bg-white/[0.02] px-6 py-6">
+          <p className="font-mono text-xs uppercase tracking-[0.12em] text-slate-500">What pilot testers say — illustrative</p>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             {[
-              { q: '“I stopped trekking to LT1 after seeing the green tick. If it’s not green, I double-check.”', a: '200L · Anatomy · pilot tester' },
-              { q: '“We posted the shift at 7:42am, by 8:10am twenty people had tapped Yes. No broadcast needed.”', a: 'Class rep · Biochemistry' },
-              { q: '“TEST-PHYSI just shows I showed up today. It’s not money — that’s clear from day one.”', a: '100L · Pilot onboarding' },
+              { q: '“If it’s not green, I double-check. Saved me two wrong-hall treks.”', a: '200L · Anatomy' },
+              { q: '“We posted at 7:42, by 8:10 twenty people tapped Yes. No broadcast needed.”', a: 'Class rep · Biochemistry' },
+              { q: '“It just shows I showed up today. Not money — that’s clear.”', a: '100L · Pilot' },
             ].map((t) => (
-              <figure key={t.a} className="rounded-2xl border border-white/[0.06] bg-[#0d3b2a]/50 px-4 py-4">
-                <blockquote className="text-[13px] leading-5 text-emerald-50/90">{t.q}</blockquote>
-                <figcaption className="mt-3 font-mono text-[11px] text-emerald-100/60">— {t.a}</figcaption>
+              <figure key={t.a} className="rounded-2xl border border-white/[0.05] bg-white/[0.02] px-4 py-4">
+                <blockquote className="text-sm leading-5 text-slate-300">{t.q}</blockquote>
+                <figcaption className="mt-3 font-mono text-xs text-slate-500">— {t.a}</figcaption>
               </figure>
             ))}
           </div>
-          <p className="mt-3 font-mono text-[11px] leading-4 text-emerald-100/50">Illustrative quotes from pilot interviews — not scraped reviews. Real confirmations happen inside the timetable.</p>
         </section>
 
-        {/* 📸 Snap timetable — distinct pipe format */}
-        <section id="snap" className="mt-8 scroll-mt-20">
-          <SnapTimetable />
-        </section>
-
-        {/* Deploy PHYSI for my school — Clone · Earth: ?school=ANY instant fork via school.json + DATABASE_URLS */}
-        <section id="deploy" className="mt-6 scroll-mt-20 rounded-[20px] border border-white/[0.08] bg-gradient-to-br from-violet-500/[0.08] via-white/[0.03] to-emerald-500/[0.06] px-6 py-6 backdrop-blur">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="flex-1 min-w-0">
-              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-violet-200">Deploy PHYSI for my school — Earth fork</p>
-              <h3 className="mt-1 text-[18px] font-bold text-white" style={{fontFamily:"var(--font-fredoka), Fredoka, system-ui"}}>Clone to your campus in 2 minutes · ?school=ANY</h3>
-              <p className="mt-1 max-w-[560px] font-mono text-[11px] leading-4 text-emerald-100/60">Instant fork: <code className="rounded bg-white/10 px-1 py-0.5 text-violet-200">?school=FUTO</code> loads <code className="rounded bg-white/10 px-1 py-0.5">public/school.json</code> mirror + <code className="rounded bg-white/10 px-1 py-0.5 text-emerald-200">DATABASE_URLS</code> shard (comma-separated). No code change — just set env and JSON. Try:</p>
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {["FUTO","UNIPORT","UNILAG","UI","UNN","FUTA"].map(s=> (
-                  <a key={s} href={`?school=${s}`} className={`rounded-full border px-3 py-1 font-mono text-[11px] font-bold transition ${school===s ? "bg-white text-black border-white" : "bg-white/10 text-white border-white/15 hover:bg-white hover:text-black"}`}>{s}</a>
-                ))}
-                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 font-mono text-[10px] text-emerald-200">current: {school||"default"} · {schoolMeta?.name || "PHYSI"}</span>
-              </div>
-              <p className="mt-2 font-mono text-[10px] leading-3 text-white/50">school.json = name/short/campus/theme/colors · DATABASE_URLS = shard per school (fallback DATABASE_URL) · ?school=ANY instant mirror without redeploy · see lib/db/framework sharding</p>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <a href="https://vercel.com/new/clone?repository-url=https://github.com/tomoritemitopex-byte/physicoin&env=DATABASE_URL" target="_blank" rel="noopener" className="inline-flex items-center gap-1.5 rounded-full bg-white px-5 py-2.5 text-[13px] font-black text-black shadow hover:bg-slate-100 transition">▲ Deploy with Vercel <ArrowRight className="h-3.5 w-3.5" /></a>
-                <a href="/school.json" target="_blank" className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 font-mono text-[11px] text-white hover:bg-white hover:text-black transition">View school.json →</a>
-                <a href="https://github.com/tomoritemitopex-byte/physicoin" target="_blank" rel="noopener" className="font-mono text-[11px] text-emerald-100/60 hover:text-white">GitHub →</a>
-              </div>
-            </div>
-            <div className="shrink-0 rounded-2xl border border-white/10 bg-black/30 p-3 font-mono text-[11px] leading-4 text-emerald-50/80">
-              <p className="font-bold text-white">Env required</p>
-              <p>DATABASE_URL <span className="text-white/50">or</span> DATABASE_URLS<span className="text-emerald-300"> (sharded)</span></p>
-              <p className="mt-2 font-bold text-white">Optional</p>
-              <p>NVIDIA_API_KEY · TELEGRAM_BOT_TOKEN</p>
-              <p className="mt-2 text-[10px] text-white/50">?school=FUTO → school.json + shard 0</p>
-              <p className="text-[10px] text-white/50">?school=YOURS → school.json + shard N</p>
-              <p className="mt-2 text-[10px] text-emerald-200">vercel.json → framework nextjs</p>
-            </div>
+        {/* ── Final CTA — single action, forest accent restrained ── */}
+        <section className="mt-10 overflow-hidden rounded-[20px] border border-emerald-500/15 bg-gradient-to-br from-emerald-500/[0.07] to-transparent px-6 py-10 text-center sm:px-10">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/15 bg-emerald-500/10 px-3 py-1 font-mono text-xs text-emerald-300"><ShieldCheck className="h-3 w-3" /> Advisory · confirm exams with your department</span>
+          <h2 className="mx-auto mt-4 max-w-[520px] text-2xl font-bold tracking-tight text-white sm:text-[26px]">Don’t miss the next venue change.</h2>
+          <p className="mx-auto mt-2 max-w-[480px] text-sm leading-5 text-slate-400">Join your coursemates — post once, check once a day.</p>
+          <div className="mt-6 flex justify-center">
+            <a href="/app/roadmap" className="primary-cta inline-flex items-center gap-2 px-7 py-3.5 text-[15px]">Open the road <ArrowRight className="h-4 w-4" /></a>
           </div>
+          <p className="mt-4 font-mono text-xs text-slate-500"><a href="/terms" className="underline decoration-white/15 hover:text-slate-300">Terms · TEST-PHYSI has no cash value →</a></p>
         </section>
 
-        {/* Final CTA — forest */}
-        <section className="mt-8 overflow-hidden rounded-[20px] border border-emerald-400/20 bg-[radial-gradient(ellipse_at_top,_rgba(16,185,129,0.18),_transparent_60%)] bg-emerald-400/[0.06] px-6 py-8 text-center backdrop-blur">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/20 bg-emerald-400/15 px-3 py-1 font-mono text-[11px] text-emerald-100"><ShieldCheck className="h-3 w-3" /> Advisory · Always confirm exams with your department</span>
-          <h2 className="mx-auto mt-3 max-w-[560px] text-[22px] font-bold leading-tight tracking-[-0.02em] text-white sm:text-[26px]" style={{ fontFamily: "var(--font-fredoka), Fredoka, system-ui" }}>Don’t miss the next venue change</h2>
-          <p className="mx-auto mt-2 max-w-[560px] text-[14px] leading-5 text-emerald-50/80">Join your coursemates — post once, check once a day, and stop trekking to the wrong hall.</p>
-          <div className="mt-6 flex flex-wrap justify-center gap-2.5">
-            <a href="/app/roadmap" className="inline-flex items-center gap-1.5 rounded-full bg-white px-6 py-2.5 text-[14px] font-black text-black shadow-[0_8px_24px_rgba(255,255,255,0.14)] hover:bg-slate-100 transition">Play road → <ArrowRight className="h-4 w-4" /></a>
-            <a href="#live-proof" className="inline-flex items-center rounded-full border border-white/15 bg-white/[0.08] px-6 py-2.5 text-[14px] font-semibold text-white backdrop-blur hover:bg-white hover:text-black transition">See live</a>
-            <a href="/app/timetable" className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-6 py-2.5 text-[14px] font-medium text-emerald-50/80 backdrop-blur hover:bg-white/[0.08] transition">Login</a>
-          </div>
-          <p className="mx-auto mt-4 max-w-[640px] font-mono text-[11px] leading-4 text-emerald-100/60"><a href="/terms" className="underline decoration-white/20 hover:text-white">Terms · Advisory only · TEST-PHYSI no cash value →</a></p>
-        </section>
-
-        <p className="py-8 text-center font-mono text-[11px] tracking-wide text-emerald-100/40">
-          Scaffold v2 · FRONT / INSIDE split · See <code className="rounded bg-white/10 px-1 py-0.5">/tmp/new-arch.md</code> for architecture
-        </p>
+        <p className="py-8 text-center font-mono text-xs text-slate-600">PHYSI · built by students, for students</p>
       </main>
 
-      <style>{`@keyframes fadeInUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}`}</style>
+      <style>{`@keyframes ticker{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}`}</style>
     </div>
   );
 }
