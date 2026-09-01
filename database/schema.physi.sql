@@ -25,16 +25,27 @@ CREATE TABLE IF NOT EXISTS physi_events (
   event_time TIME NOT NULL,
   scope_type TEXT NOT NULL,
   scope_value TEXT,
-  status TEXT NOT NULL DEFAULT 'personal',
+  status TEXT NOT NULL DEFAULT 'pending',
   authority_points NUMERIC(10,2) NOT NULL DEFAULT 0,
   required_points NUMERIC(10,2) NOT NULL DEFAULT 0,
   created_by UUID REFERENCES physi_users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  -- mempool/RBF: slot expiry (24h) + severity + prev diff + prof
+  expires_at TIMESTAMPTZ NOT NULL DEFAULT NOW() + INTERVAL '24 hours',
+  severity TEXT NOT NULL DEFAULT 'move' CHECK (severity IN ('move','shift','cancelled')),
+  prev_venue TEXT,
+  prev_event_time TIME,
+  prev_event_date DATE,
+  prof_name TEXT,
+  is_zk_attested BOOLEAN NOT NULL DEFAULT false
 );
 CREATE INDEX IF NOT EXISTS physi_events_date_time_idx ON physi_events (event_date DESC, event_time DESC);
 CREATE INDEX IF NOT EXISTS physi_events_status_idx ON physi_events (status);
 CREATE UNIQUE INDEX IF NOT EXISTS physi_events_title_venue_date_uidx ON physi_events (lower(title), lower(venue), event_date);
+CREATE INDEX IF NOT EXISTS physi_events_expires_idx ON physi_events (expires_at) WHERE status='pending';
+CREATE INDEX IF NOT EXISTS physi_events_prof_idx ON physi_events (lower(prof_name));
+CREATE INDEX IF NOT EXISTS physi_events_zk_idx ON physi_events (is_zk_attested);
 
 CREATE TABLE IF NOT EXISTS physi_verifications (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -142,4 +153,49 @@ CREATE TABLE IF NOT EXISTS physi_hall_alias_votes (
   PRIMARY KEY (alias_id, voter_id)
 );
 CREATE INDEX IF NOT EXISTS physi_hall_alias_votes_voter_idx ON physi_hall_alias_votes (voter_id);
+
+-- Prof Deduper — peer voting on canonical prof name (missing from original schema)
+CREATE TABLE IF NOT EXISTS physi_prof_aliases (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  alias TEXT NOT NULL,
+  canonical TEXT NOT NULL,
+  prof_group_key TEXT NOT NULL DEFAULT '',
+  programme TEXT,
+  level TEXT,
+  vote_count INT NOT NULL DEFAULT 0,
+  votes_yes INT NOT NULL DEFAULT 0,
+  votes_no INT NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','resolved','rejected')),
+  resolved_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS physi_prof_aliases_status_idx ON physi_prof_aliases (status);
+CREATE INDEX IF NOT EXISTS physi_prof_aliases_alias_idx ON physi_prof_aliases (lower(alias));
+CREATE INDEX IF NOT EXISTS physi_prof_aliases_canonical_idx ON physi_prof_aliases (lower(canonical));
+CREATE INDEX IF NOT EXISTS physi_prof_aliases_group_idx ON physi_prof_aliases (prof_group_key);
+CREATE UNIQUE INDEX IF NOT EXISTS physi_prof_aliases_pair_uidx ON physi_prof_aliases (lower(alias), lower(canonical), COALESCE(prof_group_key,''));
+CREATE UNIQUE INDEX IF NOT EXISTS physi_prof_aliases_group_canonical_uidx ON physi_prof_aliases (prof_group_key, lower(canonical));
+CREATE TABLE IF NOT EXISTS physi_prof_alias_votes (
+  alias_id UUID NOT NULL REFERENCES physi_prof_aliases(id) ON DELETE CASCADE,
+  voter_id UUID NOT NULL REFERENCES physi_users(id) ON DELETE CASCADE,
+  vote_value SMALLINT NOT NULL CHECK (vote_value IN (-1, 1)),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (alias_id, voter_id)
+);
+CREATE INDEX IF NOT EXISTS physi_prof_alias_votes_voter_idx ON physi_prof_alias_votes (voter_id);
+
+-- N+1 query bomb fix: cached vote weight + cohort pattern
+ALTER TABLE physi_users ADD COLUMN IF NOT EXISTS vote_count_total INT NOT NULL DEFAULT 0;
+ALTER TABLE physi_users ADD COLUMN IF NOT EXISTS vote_weight_cached NUMERIC(3,2) NOT NULL DEFAULT 1.00;
+ALTER TABLE physi_users ADD COLUMN IF NOT EXISTS cohort_pattern_cached JSONB;
+ALTER TABLE physi_users ADD COLUMN IF NOT EXISTS cohort_pattern_updated_at TIMESTAMPTZ;
+
+-- Mempool expiry index already added above (physi_events_expires_idx)
+-- Status default is 'pending' (canonical) — 'personal' was legacy drift, now unified.
+
+-- Existing verifications extra columns (ensure idempotent)
+ALTER TABLE physi_verifications ADD COLUMN IF NOT EXISTS is_witness BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE physi_verifications ADD COLUMN IF NOT EXISTS squad_boost BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE physi_verifications ADD COLUMN IF NOT EXISTS award NUMERIC(3,2) NOT NULL DEFAULT 0.3;
+
 

@@ -119,6 +119,11 @@ export async function ensureUsers(): Promise<void> {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`;
   await c`CREATE UNIQUE INDEX IF NOT EXISTS physi_users_nick_uidx ON physi_users (lower(nickname))`;
+  // N+1 fix: cached vote weight + cohort pattern (5min TTL via cohort_pattern_updated_at)
+  try { await c`ALTER TABLE physi_users ADD COLUMN IF NOT EXISTS vote_count_total INT NOT NULL DEFAULT 0`; } catch {}
+  try { await c`ALTER TABLE physi_users ADD COLUMN IF NOT EXISTS vote_weight_cached NUMERIC(3,2) NOT NULL DEFAULT 1.00`; } catch {}
+  try { await c`ALTER TABLE physi_users ADD COLUMN IF NOT EXISTS cohort_pattern_cached JSONB`; } catch {}
+  try { await c`ALTER TABLE physi_users ADD COLUMN IF NOT EXISTS cohort_pattern_updated_at TIMESTAMPTZ`; } catch {}
 }
 
 export async function ensureEvents(): Promise<void> {
@@ -149,6 +154,8 @@ export async function ensureEvents(): Promise<void> {
   try { await c`ALTER TABLE physi_events ADD COLUMN IF NOT EXISTS prev_event_date DATE`; } catch {}
   try { await c`ALTER TABLE physi_events ADD COLUMN IF NOT EXISTS prof_name TEXT`; } catch {}
   try { await c`CREATE INDEX IF NOT EXISTS physi_events_prof_idx ON physi_events (lower(prof_name))`; } catch {}
+  try { await c`ALTER TABLE physi_events ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ NOT NULL DEFAULT NOW() + INTERVAL '24 hours'`; } catch {}
+  try { await c`CREATE INDEX IF NOT EXISTS physi_events_expires_idx ON physi_events (expires_at) WHERE status='pending'`; } catch {}
   await c`CREATE INDEX IF NOT EXISTS physi_events_dt_idx ON physi_events (event_date DESC, event_time DESC)`;
   await c`CREATE INDEX IF NOT EXISTS physi_events_status_idx2 ON physi_events (status)`;
   await c`CREATE UNIQUE INDEX IF NOT EXISTS physi_events_tvd_uidx ON physi_events (lower(title), lower(venue), event_date)`;
