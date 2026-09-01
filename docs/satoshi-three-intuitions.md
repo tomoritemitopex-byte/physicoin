@@ -1,4 +1,8 @@
-# Satoshi Three Intuitions — Implementation
+# Satoshi Three Intuitions — Implementation ( + Student Reframe )
+
+> **Students see:** Ghost Mode 👻 · Where's Class? 📍 · Keep The Fire 🔥  
+> **Devs see:** Ghost Witness · Scope Mining · ZK Authority (Satoshi P2)  
+> Full student-friendly spec: [`./satoshi-student-intuitions.md`](./satoshi-student-intuitions.md) — no jargon, real pain points, ship in <1 week.
 
 This doc covers Ghost Witness, Scope Mining, ZK Authority (Satoshi P2).
 

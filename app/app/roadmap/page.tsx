@@ -2144,7 +2144,7 @@ function RoadmapInner() {
                 <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
                 {wat.timePart} WAT
               </span>
-              <span className="hidden font-mono text-[10px] text-white/40 sm:inline">· {wat.wday} {wat.datePart} · pure forest 0 chrome</span>
+              <span className="hidden font-mono text-[10px] text-white/40 sm:inline">· {wat.wday} {wat.datePart}</span>
             </div>
             <div className="pointer-events-auto flex items-center gap-1.5">
               <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-black/20 px-2 py-1 font-mono text-[10px] font-bold text-white/50">top pure forest</span>
@@ -2155,7 +2155,7 @@ function RoadmapInner() {
         {/* ⋯ More drawer — collapses Squad/Lecturer/Bazaar/Oracle + Rep/Streak */}
         {moreOpen && (
           <div className="pointer-events-none absolute left-1/2 top-[54px] z-30 flex w-full max-w-[900px] -translate-x-1/2 justify-center px-3 sm:px-6">
-            <div className="pointer-events-auto w-full max-w-[560px] rounded-2xl border border-white/10 bg-white/[0.08] 85 p-3 backdrop-blur-[16px] shadow-[0_16px_40px_rgba(0,0,0,0.6)]">
+            <div className="pointer-events-auto w-full max-w-[560px] rounded-2xl border border-white/10 bg-white/[0.06] 85 p-4 backdrop-blur-[16px] shadow-[0_10px_28px_rgba(0,0,0,0.38)]">
               <div className="flex items-center justify-between">
                 <p className="font-mono text-[11px] font-bold tracking-wide text-white">More</p>
                 <button onClick={()=> setMoreOpen(false)} className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-bold text-white">✕</button>
@@ -2191,7 +2191,7 @@ function RoadmapInner() {
 
         {/* second row — decluttered: centered NOW only (share/bazaar/stake moved to ⋯ More) */}
         <div className="pointer-events-none absolute left-1/2 top-[54px] z-20 flex w-full max-w-[560px] -translate-x-1/2 justify-center px-3 sm:px-6">
-          <button onClick={() => scrollToNow(true)} className="pointer-events-auto rounded-full border border-violet-400/30 bg-violet-500/20 px-3 py-1.5 text-[11px] font-bold text-violet-200 backdrop-blur hover:bg-violet-500 hover:text-white transition">◎ NOW</button>
+          <button onClick={() => scrollToNow(true)} className="pointer-events-auto rounded-full border border-white/10 bg-white px-3.5 py-1.5 text-[11px] font-black text-[#0d3b2a] backdrop-blur hover:bg-slate-50 transition shadow-sm">◎ NOW</button>
         </div>
 
         <p className="absolute left-1/2 top-[92px] z-10 -translate-x-1/2 whitespace-nowrap rounded-full border border-white/10 bg-black/70 px-3 py-1 font-mono text-[10px] tracking-wide text-slate-400 backdrop-blur sm:hidden">
@@ -2199,7 +2199,7 @@ function RoadmapInner() {
         </p>
         {/* Quest bar - 3 dots with progress fill + daily quest ring */}
         <div className="pointer-events-none absolute left-1/2 top-[116px] z-20 flex w-full max-w-[560px] -translate-x-1/2 justify-center px-3 sm:top-[108px] sm:px-6">
-          <div className="pointer-events-auto flex w-full items-center gap-2 rounded-full border border-white/10 bg-white/[0.08] 75 px-3 py-2 backdrop-blur-[16px] shadow-[0_8px_24px_rgba(0,0,0,0.5)] sm:px-4">
+          <div className="pointer-events-auto flex w-full items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] 75 px-3 py-2 backdrop-blur-[16px] shadow-[0_4px_16px_rgba(0,0,0,0.28)] sm:px-4">
             <span className={`hidden ${fredoka.className} text-[14px] font-black tracking-tight text-amber-300 sm:inline`}>QUEST</span>
             <div className="relative flex flex-1 items-center justify-between gap-1">
               <div className="absolute left-[14px] right-[14px] top-1/2 h-[4px] -translate-y-1/2 rounded-full bg-white/10" />
@@ -2256,7 +2256,7 @@ function RoadmapInner() {
         )}
         {/* unified Filters ▾ drawer at 126px — hides Filters+Search behind single toggle */}
         <div className="pointer-events-none absolute left-1/2 top-[126px] z-20 flex w-full max-w-[560px] -translate-x-1/2 justify-center px-3">
-          <button onClick={()=> setFiltersOpen(o=>!o)} className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-black/75 px-4 py-2 font-mono text-[11px] font-bold text-white backdrop-blur-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)]">Filters {filtersOpen ? '▴' : '▾'} <span className="rounded-full bg-white/15 px-1.5 py-0.5 text-[10px]">{filter} · {viewMode}</span></button>
+          <button onClick={()=> setFiltersOpen(o=>!o)} className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-black/55 px-4 py-2 font-mono text-[11px] font-bold text-white backdrop-blur-xl shadow-[0_4px_16px_rgba(0,0,0,0.28)]">Filters {filtersOpen ? '▴' : '▾'} <span className="rounded-full bg-white/15 px-1.5 py-0.5 text-[10px]">{filter} · {viewMode}</span></button>
         </div>
         {filtersOpen && (
           <div className="pointer-events-none absolute left-1/2 top-[162px] z-20 flex w-full max-w-[560px] -translate-x-1/2 flex-col gap-2 px-3">
@@ -2358,7 +2358,7 @@ function RoadmapInner() {
           </div>
         )}
         {/* SCROLLABLE ROAD CONTAINER — endless winding purple road — subtle 3D emboss */}
-        <div className={`road-3d-wrap relative mx-auto flex h-[calc(100vh-64px)] w-full max-w-[560px] justify-center overflow-hidden pt-[112px] sm:pt-[104px] ${viewMode!=="map" ? "hidden" : ""}`} style={{ perspective: "800px", perspectiveOrigin: "50% 28%" }}>
+        <div className={`road-3d-wrap relative mx-auto flex h-[calc(100vh-64px)] w-full max-w-[560px] justify-center overflow-hidden pt-[132px] sm:pt-[118px] ${viewMode!=="map" ? "hidden" : ""}`} style={{ perspective: "800px", perspectiveOrigin: "50% 28%" }}>
           {/* depth gradients on sides — 3D vignette */}
           <div className="pointer-events-none absolute inset-y-0 left-0 w-[18%] z-[4]" style={{ background: "linear-gradient(to right, rgba(0,0,0,0.38) 0%, rgba(0,0,0,0.18) 42%, transparent 100%)" }} />
           <div className="pointer-events-none absolute inset-y-0 right-0 w-[18%] z-[4]" style={{ background: "linear-gradient(to left, rgba(0,0,0,0.38) 0%, rgba(0,0,0,0.18) 42%, transparent 100%)" }} />
@@ -2873,7 +2873,7 @@ function RoadmapInner() {
               const active = selectedId===baseId || selectedId===item.id;
               return (
                 <button key={item.id} onClick={()=>{ setSelectedId(baseId); setSheetOpen(true); if(isDemo) setToast((item as any).hint); }}
-                  className={`text-left rounded-[18px] border p-4 backdrop-blur-[16px] transition ${active ? "border-white bg-white text-black shadow" : verified ? "border-emerald-400/25 bg-emerald-500/[0.08] backdrop-blur-[16px] text-white" : "border-white/[0.06] bg-white/[0.03] text-white hover:bg-white/[0.05]"}`}>
+                  className={`text-left rounded-[20px] border p-5 backdrop-blur-[16px] transition ${active ? "border-white bg-white text-black shadow" : verified ? "border-emerald-400/20 bg-emerald-500/[0.05] backdrop-blur-[16px] text-white" : "border-white/[0.05] bg-white/[0.02] text-white hover:bg-white/[0.04]"}`}>
                   <div className="flex items-center gap-2">
                     <span className={`flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-black ${verified? "bg-emerald-500 text-white" : isPersonal? "bg-zinc-600 text-white" : isDemo? "bg-[#8b5cf6] text-white border-2 border-dashed border-white/60" : "bg-amber-500 text-white"}`}>{verified?"✓": isPersonal?"◐": isDemo?"✦":"●"}</span>
                     <span className={`text-[13px] font-bold leading-tight ${active?"text-black":"text-white"}`}>{title}</span>
@@ -2955,7 +2955,7 @@ function RoadmapInner() {
         />
         {/* Secondary FAB — tap to open classic create (kept for non-voice, still decluttered) */}
         <div className="fixed bottom-[88px] right-20 z-40 flex flex-col items-end gap-2 sm:bottom-[92px] sm:right-20">
-          <button onClick={()=>setFabOpen(true)} aria-label="Create event" title="Create event (tap) · hold right FAB for voice whisper" className={`flex h-[46px] w-[46px] items-center justify-center rounded-full border border-white/20 backdrop-blur text-lg font-bold shadow-[0_4px_16px_rgba(0,0,0,0.3)] transition ${fabFlash ? "fab-gold-flash bg-amber-400 text-black border-amber-300" : "bg-white/[0.08] text-white hover:bg-white hover:text-black"}`}>
+          <button onClick={()=>setFabOpen(true)} aria-label="Create event" title="Create event" className={`flex h-[40px] w-[40px] items-center justify-center rounded-full border border-white/10 backdrop-blur text-base font-bold shadow-[0_2px_10px_rgba(0,0,0,0.22)] transition muted-chrome ${fabFlash ? "fab-gold-flash bg-amber-400 text-black border-amber-300" : "bg-white/[0.05] text-white/80 hover:bg-white hover:text-black"}`}>
             +
           </button>
         </div>
