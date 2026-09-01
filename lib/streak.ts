@@ -5,7 +5,7 @@
 // Manual mining is bonus +0.5 Rep on top.
 import { decayByHalfLife } from "@/lib/rep";
 export const STREAK_HALF_DAYS=7;
-export const STREAK_AUTO_BUMP_SOURCES = ["verify","scope_vote","bunk_report","prof_sighting","event_post"] as const;
+export const STREAK_AUTO_BUMP_SOURCES = ["verify","scope_vote","bunk_report","event_post"] as const;
 export const MANUAL_MINING_BONUS_REP = 0.5;
 const K_LAST="physi_streak_last"; const K_VAL="physi_streak_val"; const K_RESCUE="physi_streak_rescue";
 function todayWAT():string{ try{ return new Intl.DateTimeFormat("en-CA",{timeZone:"Africa/Lagos",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date()); }catch{ return new Date().toISOString().slice(0,10); } }

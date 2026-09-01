@@ -474,14 +474,13 @@ export async function ensureAllTables(): Promise<void> {
   const run = async () => {
     await ensureUsers();
     await ensureEvents();
-    await Promise.all([ensureVerifications(), ensureMiningLogs(), ensureCanonicalLog(), ensureEventHistory(), ensureScopeVotes(), ensureScopeResolution(), ensureGhostWitness(), ensureScopeMiningColumns(), ensureZkAuthority(), ensureSquadTables(), ensureBunkTables(), ensureNotesTables(), ensureHallAliases(), ensureProfAliases(), ensureProfSightings()]);
+    await Promise.all([ensureVerifications(), ensureMiningLogs(), ensureCanonicalLog(), ensureEventHistory(), ensureScopeVotes(), ensureScopeResolution(), ensureGhostWitness(), ensureScopeMiningColumns(), ensureZkAuthority(), ensureSquadTables(), ensureBunkTables(), ensureNotesTables(), ensureHallAliases(), ensureProfAliases()]);
     // ensure columns idempotently after tables exist
     await ensureGhostWitness();
     await ensureScopeMiningColumns();
     await ensureZkAuthority();
     await ensureHallAliases();
     await ensureProfAliases();
-    await ensureProfSightings();
   };
   try {
     await run();
@@ -490,28 +489,6 @@ export async function ensureAllTables(): Promise<void> {
     await new Promise((r) => setTimeout(r, 350));
     await run();
   }
-}
-
-export async function ensureProfSightings(): Promise<void> {
-  const c = getSql() ?? sql;
-  if (!c) return;
-  await c`
-    CREATE TABLE IF NOT EXISTS physi_prof_sightings (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      prof_name TEXT NOT NULL,
-      prof_group_key TEXT NOT NULL DEFAULT '',
-      building TEXT NOT NULL DEFAULT '',
-      venue TEXT NOT NULL DEFAULT '',
-      event_id UUID REFERENCES physi_events(id) ON DELETE SET NULL,
-      sighted_by UUID REFERENCES physi_users(id) ON DELETE SET NULL,
-      sighted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )`;
-  await c`CREATE INDEX IF NOT EXISTS physi_prof_sightings_prof_idx ON physi_prof_sightings (prof_group_key)`;
-  await c`CREATE INDEX IF NOT EXISTS physi_prof_sightings_building_idx ON physi_prof_sightings (building)`;
-  await c`CREATE INDEX IF NOT EXISTS physi_prof_sightings_time_idx ON physi_prof_sightings (sighted_at DESC)`;
-  try { await c`ALTER TABLE physi_prof_sightings ADD COLUMN IF NOT EXISTS building TEXT DEFAULT ''`; } catch {}
-  try { await c`ALTER TABLE physi_prof_sightings ADD COLUMN IF NOT EXISTS venue TEXT DEFAULT ''`; } catch {}
-  try { await c`ALTER TABLE physi_prof_sightings ADD COLUMN IF NOT EXISTS prof_group_key TEXT DEFAULT ''`; } catch {}
 }
 
 // Compat aliases — old imports keep working
@@ -526,7 +503,6 @@ export const ensureScopeVotesTable = ensureScopeVotes;
 export const ensureScopeResolutionTable = ensureScopeResolution;
 export const ensureHallAliasesTable = ensureHallAliases;
 export const ensureProfAliasesTable = ensureProfAliases;
-export const ensureProfSightingsTable = ensureProfSightings;
 export const ensureGhostWitnessTable = ensureGhostWitness;
 export const ensureZkAuthorityTable = ensureZkAuthority;
 export const ensureScopeMiningColumnsTable = ensureScopeMiningColumns;

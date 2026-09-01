@@ -48,9 +48,7 @@ function RoadmapInner() {
   const [pickerBusy, setPickerBusy] = useState(false);
   const [pickerErr, setPickerErr] = useState<string | null>(null);
   const [pendingVote, setPendingVote] = useState<{ id: string; v: "YES"|"NO"|"CANCEL" } | null>(null);
-  const [sightingBusy, setSightingBusy] = useState<string | null>(null);
   const [hallOpts, setHallOpts] = useState<string[]>([]);
-  const [profSightings, setProfSightings] = useState<Record<string, {label:string, ago:number}>>({});
   const [repeatBusy, setRepeatBusy] = useState(false);
 
   const fetchFeed = useCallback(async () => {
@@ -78,21 +76,6 @@ function RoadmapInner() {
       else setHallOpts(["LT1","LT2","Hall B","Anatomy Hall","New Lab","LT3","200L Hall"]);
     }).catch(()=> setHallOpts(["LT1","LT2","Hall B","Anatomy Hall"]));
   }, [form.scope_value]);
-  // prof sightings: fetch recent sightings for visible events
-  useEffect(()=> {
-    if(!events.length) return;
-    const ids = events.slice(0,8).map(e=>e.id);
-    Promise.all(ids.map(id=> fetch(`/api/prof/sighting?event_id=${encodeURIComponent(id)}`,{cache:"no-store"}).then(r=>r.json()).catch(()=>null))).then(results=>{
-      const map:Record<string,{label:string,ago:number}>={};
-      results.forEach((j,i)=>{
-        if(j?.sightings?.length){
-          const s=j.sightings[0];
-          map[ids[i]] = { label: `${s.prof_name}: ${s.building||s.venue} (verified ${s.ago_min ?? 0} min ago)`, ago: s.ago_min ?? 0 };
-        }
-      });
-      if(Object.keys(map).length) setProfSightings(map);
-    });
-  }, [events]);
 
   const setView = (v: string) => {
     const p = new URLSearchParams(sp.toString()); p.set("view", v); router.replace(`/app/roadmap?${p.toString()}`);
@@ -174,40 +157,11 @@ function RoadmapInner() {
       const r = await fetch("/api/verify", { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify({ verifier_id: pid, event_id: id, vote: v }) });
       const j = await r.json(); if (!r.ok || j.ok===false) throw new Error(j.error || "vote failed");
       try { const { autoBumpStreak } = await import("@/lib/streak"); autoBumpStreak("verify"); } catch {}
-      // prof sighting on YES: record prof location
-      if (v==="YES") {
-        try {
-          const evRow = events.find(e=>e.id===id) as any;
-          if (evRow?.venue && evRow?.prof_name) {
-            await fetch("/api/prof/sighting",{method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify({ prof_name: evRow.prof_name, building: evRow.venue, venue: evRow.venue, event_id: id, sighted_by: pid })}).catch(()=>null);
-          }
-        } catch {}
-      }
       setToast(v==="YES" ? "You confirmed — thanks!" : v==="NO" ? "Marked not there" : "Skipped");
       fetchFeed();
     } catch (e: any) { setToast(e.message); } finally { setVoteBusy(null); }
   }
 
-  async function profSighting(id: string) {
-    const pid = getProfileId();
-    if (!pid) { setPickerOpen(true); return; }
-    setSightingBusy(id);
-    try {
-      // Bunk Radar: prof sighting = 'happening' signal; also counts as YES verify
-      const evRow = events.find(e=>e.id===id) as any;
-      const profName = evRow?.prof_name || evRow?.title || "";
-      const venue = evRow?.venue || "";
-      if (profName && venue) {
-        await fetch("/api/prof/sighting",{method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify({ prof_name: profName, building: venue, venue, event_id: id, sighted_by: pid })}).catch(()=>null);
-      }
-      const bunk = await fetch("/api/bunk", { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify({ event_id: id, reporter_id: pid, vote: "happening" }) }).then(r=>r.json()).catch(()=>null);
-      // also verify YES so quorum green tick can happen
-      const ver = await fetch("/api/verify", { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify({ verifier_id: pid, event_id: id, vote: "YES", is_witness: true }) }).then(r=>r.json()).catch(()=>null);
-      try { const { autoBumpStreak } = await import("@/lib/streak"); autoBumpStreak("verify"); } catch {}
-      setToast("Prof spotted — bunk cleared + verified ✓");
-      fetchFeed();
-    } catch (e: any) { setToast(e.message || "sighting failed"); } finally { setSightingBusy(null); }
-  }
 
   async function handlePickerConfirm(e?: React.FormEvent) {
     if (e) e.preventDefault();
@@ -391,7 +345,6 @@ function RoadmapInner() {
                 <button onClick={()=>vote(selected.id,"YES")} disabled={!!voteBusy} className="rounded-full bg-emerald-500 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-600 disabled:opacity-50">{voteBusy===selected.id+"YES" ? "…" : "Yes ✓"}</button>
                 <button onClick={()=>vote(selected.id,"NO")} disabled={!!voteBusy} className="rounded-full border border-white/10 bg-white/[0.05] px-5 py-2 text-sm font-medium text-slate-200 hover:bg-white hover:text-[#070a12] disabled:opacity-50">{voteBusy===selected.id+"NO" ? "…" : "No ✕"}</button>
                 <button onClick={()=>vote(selected.id,"CANCEL")} disabled={!!voteBusy} className="rounded-full border border-white/10 bg-white/[0.02] px-5 py-2 text-sm text-slate-400 hover:bg-white/[0.06] disabled:opacity-50">Skip</button>
-                <button onClick={()=>profSighting(selected.id)} disabled={!!sightingBusy} className="rounded-full border border-violet-500/20 bg-violet-500/10 px-4 py-2 text-sm font-medium text-violet-300 hover:bg-violet-500 hover:text-white disabled:opacity-50">{sightingBusy===selected.id ? "…" : "👁 Prof spotted"}</button>
               </div>
             </div>
           )}
@@ -432,7 +385,6 @@ function RoadmapInner() {
                         <span className="inline-flex items-center gap-1 rounded-full bg-white/[0.06] px-2 py-1 text-slate-300"><MapPin className="h-3 w-3" />{ev.venue}</span>
                         <span className="inline-flex items-center gap-1 font-mono text-xs text-slate-500"><Clock3 className="h-3 w-3" />{ev.event_date.slice(0,10)} · {String(ev.event_time).slice(0,5)} WAT</span>
                         {ev.scope_value && <span className="rounded-full border border-white/10 px-2 py-0.5 font-mono text-[11px]">{ev.scope_type} · {ev.scope_value}</span>}
-                        {profSightings[ev.id] && <span className="rounded-full border border-violet-500/20 bg-violet-500/10 px-2 py-0.5 font-mono text-[11px] text-violet-300">{profSightings[ev.id].label}</span>}
                       </p>
                       <div className="mt-3 flex items-center gap-2">
                         <div className="h-1.5 flex-1 max-w-[200px] overflow-hidden rounded-full bg-white/10"><div className={`h-full rounded-full ${v ? "bg-emerald-400" : "bg-amber-400"}`} style={{ width:`${p}%`}} /></div>
@@ -447,7 +399,6 @@ function RoadmapInner() {
                     <button onClick={()=>vote(ev.id,"YES")} disabled={!!voteBusy} className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3.5 py-1.5 text-sm font-medium text-emerald-300 hover:bg-emerald-500 hover:text-white disabled:opacity-50">{voteBusy===ev.id+"YES" ? "…" : "Yes ✓"}</button>
                     <button onClick={()=>vote(ev.id,"NO")} disabled={!!voteBusy} className="rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-1.5 text-sm text-slate-200 hover:bg-white hover:text-[#070a12] disabled:opacity-50">{voteBusy===ev.id+"NO" ? "…" : "No ✕"}</button>
                     <button onClick={()=>vote(ev.id,"CANCEL")} disabled={!!voteBusy} className="rounded-full border border-white/10 bg-white/[0.02] px-3.5 py-1.5 text-sm text-slate-400 hover:bg-white/[0.06] disabled:opacity-50">Skip</button>
-                    <button onClick={()=>profSighting(ev.id)} disabled={!!sightingBusy} className="rounded-full border border-violet-500/20 bg-violet-500/10 px-3 py-1.5 text-xs font-medium text-violet-300 hover:bg-violet-500 hover:text-white disabled:opacity-50">{sightingBusy===ev.id ? "…" : "👁 Spotted"}</button>
                   </div>
                 </div>
                 <div className="h-1 bg-white/[0.04]"><div className={`h-full ${v ? "bg-emerald-400" : "bg-amber-400/60"}`} style={{ width:`${p}%`}} /></div>
