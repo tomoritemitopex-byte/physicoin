@@ -471,6 +471,45 @@ export async function ensureEventHistory(): Promise<void> {
   await c`CREATE INDEX IF NOT EXISTS physi_event_hist_event_idx ON physi_event_history (event_id, changed_at DESC)`;
 }
 
+export async function ensureSlotClaims(): Promise<void> {
+  const c = getSql() ?? sql;
+  if (!c) return;
+  await ensureEvents();
+  await c`
+    CREATE TABLE IF NOT EXISTS physi_slot_claims (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      slot_key TEXT NOT NULL,
+      event_id UUID REFERENCES physi_events(id) ON DELETE CASCADE,
+      claimer_id UUID REFERENCES physi_users(id) ON DELETE SET NULL,
+      venue TEXT NOT NULL,
+      event_time TIME NOT NULL,
+      title TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      vote_weight_yes NUMERIC(10,2) NOT NULL DEFAULT 0,
+      vote_weight_no NUMERIC(10,2) NOT NULL DEFAULT 0
+    )`;
+  await c`CREATE INDEX IF NOT EXISTS physi_slot_claims_slot_idx ON physi_slot_claims (slot_key)`;
+  await c`CREATE INDEX IF NOT EXISTS physi_slot_claims_event_idx ON physi_slot_claims (event_id)`;
+  try { await c`ALTER TABLE physi_events ADD COLUMN IF NOT EXISTS slot_key TEXT`; } catch {}
+  try { await c`CREATE INDEX IF NOT EXISTS physi_events_slot_idx ON physi_events (slot_key) WHERE status='pending'`; } catch {}
+}
+
+export async function ensureHeaders(): Promise<void> {
+  const c = getSql() ?? sql;
+  if (!c) return;
+  await c`
+    CREATE TABLE IF NOT EXISTS physi_headers (
+      date DATE PRIMARY KEY,
+      merkle_root TEXT NOT NULL,
+      ghost_tip_root TEXT NOT NULL,
+      prev_hash TEXT NOT NULL,
+      hmac TEXT NOT NULL,
+      count INT NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`;
+  await c`CREATE INDEX IF NOT EXISTS physi_headers_created_idx ON physi_headers (created_at DESC)`;
+}
+
 /**
  * Idempotent bootstrap — safe to call on every request.
  * Parallel leaves, ordered root; single retry for cold start (500ms wake).
@@ -481,13 +520,15 @@ export async function ensureAllTables(): Promise<void> {
   const run = async () => {
     await ensureUsers();
     await ensureEvents();
-    await Promise.all([ensureVerifications(), ensureMiningLogs(), ensureCanonicalLog(), ensureEventHistory(), ensureScopeVotes(), ensureScopeResolution(), ensureGhostWitness(), ensureScopeMiningColumns(), ensureZkAuthority(), ensureSquadTables(), ensureBunkTables(), ensureNotesTables(), ensureHallAliases(), ensureProfAliases()]);
+    await Promise.all([ensureVerifications(), ensureMiningLogs(), ensureCanonicalLog(), ensureEventHistory(), ensureScopeVotes(), ensureScopeResolution(), ensureGhostWitness(), ensureScopeMiningColumns(), ensureZkAuthority(), ensureSquadTables(), ensureBunkTables(), ensureNotesTables(), ensureHallAliases(), ensureProfAliases(), ensureSlotClaims(), ensureHeaders()]);
     // ensure columns idempotently after tables exist
     await ensureGhostWitness();
     await ensureScopeMiningColumns();
     await ensureZkAuthority();
     await ensureHallAliases();
     await ensureProfAliases();
+    await ensureSlotClaims();
+    await ensureHeaders();
   };
   try {
     await run();

@@ -75,6 +75,14 @@ async function handleTimetable(req: Request): Promise<Response> {
         return NextResponse.json({ ok: false, code: "BAD_INPUT", message: getErrorMessage("BAD_INPUT") }, { status: 400 });
       }
       const b = body as Record<string, unknown>;
+      // Auth: HMAC session token extracts user_id (not from body)
+      try {
+        const { getAuthUserId } = await import("@/lib/auth");
+        const authUid = getAuthUserId(req as Request, b.created_by as string | null);
+        if (authUid) (b as any).created_by = authUid;
+        // also support changed_by for PATCH history
+        if ((b as any).changed_by && authUid) (b as any).changed_by = authUid;
+      } catch {}
       if (!b?.title || !b?.venue || !b?.event_date || !b?.event_time || !b?.scope_type) {
         return NextResponse.json(
           { ok: false, code: "BAD_INPUT", message: getErrorMessage("BAD_INPUT") },
@@ -111,25 +119,48 @@ async function handleTimetable(req: Request): Promise<Response> {
       try { const { expireMempool } = await import("@/lib/mempool"); await expireMempool(sql); } catch {}
       const isZkAttested = b.is_zk_attested === true || b.isZkAttested === true || false;
       // duplicate cross-reference: if title+venue+date within 7d exists, return duplicate_suggestion (unless force=true)
-      // mempool double-spend: if same slot already pending, return existing mempool entry (RBF — don't create duplicate row)
+      // mempool double-spend: if same slot already pending, persist competing claim (RBF) — don't drop data
       if (!b.force && b.title && b.event_date && b.event_time) {
         try {
-          const { getCompetingClaims } = await import("@/lib/mempool");
+          const { getCompetingClaims, slotKey } = await import("@/lib/mempool");
           const slot = { scope_value: (b.scope_value as string) ?? null, event_date: String(b.event_date), event_time: String(b.event_time), title: String(b.title) };
           const competing = await getCompetingClaims(sql, slot);
           if (competing.length) {
             const existing = competing[0];
-            const conflicts_with = competing.map((c: any) => ({ id: c.id, venue: c.venue, event_time: c.event_time, title: c.title }));
-            // also include the attempted new venue as contender for tip display
+            const sk = slotKey(slot);
+            try { const { ensureSlotClaims } = await import("@/lib/db"); await ensureSlotClaims(); } catch {}
+            // backfill existing pending events into slot_claims if not present
+            try {
+              for (const c of competing) {
+                await sql`INSERT INTO physi_slot_claims (slot_key, event_id, claimer_id, venue, event_time, title) VALUES (${sk}, ${c.id}, ${c.created_by}, ${String(c.venue)}, ${String(c.event_time).slice(0,5)}, ${String(c.title)}) ON CONFLICT DO NOTHING`;
+              }
+            } catch {}
+            // insert your competing claim
+            let yourClaim: any = null;
+            try {
+              const cr: any = await sql`INSERT INTO physi_slot_claims (slot_key, event_id, claimer_id, venue, event_time, title) VALUES (${sk}, ${existing.id}, ${(b.created_by as string) ?? null}, ${String(b.venue)}, ${String(b.event_time).slice(0,5)}, ${String(b.title)}) RETURNING *`;
+              yourClaim = cr[0] ?? null;
+            } catch {
+              // if insert fails due to duplicate venue, still fetch claims
+              try {
+                const cr2: any = await sql`INSERT INTO physi_slot_claims (slot_key, claimer_id, venue, event_time, title) VALUES (${sk}, ${(b.created_by as string) ?? null}, ${String(b.venue)}, ${String(b.event_time).slice(0,5)}, ${String(b.title)}) RETURNING *`;
+                yourClaim = cr2[0] ?? null;
+              } catch {}
+            }
+            // also ensure every pending event has slot_key for grouping
+            try { await sql`UPDATE physi_events SET slot_key=${sk} WHERE id=${existing.id} AND slot_key IS NULL`; } catch {}
+            let allClaims: any[] = [];
+            try { allClaims = await sql`SELECT id, slot_key, event_id, claimer_id, venue, event_time, title, created_at, vote_weight_yes, vote_weight_no FROM physi_slot_claims WHERE slot_key=${sk} ORDER BY created_at` as any; } catch { allClaims = competing.map((c:any)=>({ venue:c.venue, event_time:c.event_time, title:c.title, id:c.id })); }
             return NextResponse.json({
-              ok: false,
-              code: "MEMPOOL_CONFLICT",
-              message: "Slot already claimed — competing claim exists. Vote on existing entry.",
+              ok: true,
+              event_id: existing.id,
+              claims: allClaims,
+              your_claim_id: yourClaim?.id ?? null,
               existing_event_id: existing.id,
               existing,
-              conflicts_with: [...conflicts_with, { venue: String(b.venue), event_time: String(b.event_time), title: String(b.title), pending: true }],
-              hint: "This timetable slot (scope+date+time±30m+title) already has a pending claim. Your venue is a competing claim — vote on the existing entry to tip the winner.",
-            }, { status: 409 });
+              hint: "Slot already claimed — your competing venue was stored. Vote to tip the winner.",
+              mempool: { slot: sk, tip: { id: existing.id, venue: existing.venue }, contenders: allClaims.slice(1) },
+            }, { status: 200 });
           }
         } catch {}
       }
@@ -155,10 +186,14 @@ async function handleTimetable(req: Request): Promise<Response> {
         } catch {}
       }
       try {
+        const { slotKey } = await import("@/lib/mempool");
+        const sk2 = slotKey({ scope_value: (b.scope_value as string) ?? null, event_date: String(b.event_date), event_time: String(b.event_time), title: String(b.title) });
         const r = await sql`\
-        INSERT INTO physi_events (title, venue, event_date, event_time, scope_type, scope_value, status, authority_points, required_points, created_by, severity, prev_venue, prev_event_time, prev_event_date, is_zk_attested, prof_name, expires_at)
-        VALUES (${String(b.title)}, ${String(b.venue)}, ${String(b.event_date)}, ${String(b.event_time)}, ${String(b.scope_type)}, ${(b.scope_value as string) ?? null}, ${status}, ${authority_points}, ${required_points}, ${(b.created_by as string) ?? null}, ${sev}, ${prevVenue}, ${prevTime}, ${prevDate}, ${isZkAttested}, ${profName}, NOW() + INTERVAL '24 hours')
+        INSERT INTO physi_events (title, venue, event_date, event_time, scope_type, scope_value, status, authority_points, required_points, created_by, severity, prev_venue, prev_event_time, prev_event_date, is_zk_attested, prof_name, expires_at, slot_key)
+        VALUES (${String(b.title)}, ${String(b.venue)}, ${String(b.event_date)}, ${String(b.event_time)}, ${String(b.scope_type)}, ${(b.scope_value as string) ?? null}, ${status}, ${authority_points}, ${required_points}, ${(b.created_by as string) ?? null}, ${sev}, ${prevVenue}, ${prevTime}, ${prevDate}, ${isZkAttested}, ${profName}, NOW() + INTERVAL '24 hours', ${sk2})
         RETURNING *`;
+        // also create initial slot claim for this event
+        try { await sql`INSERT INTO physi_slot_claims (slot_key, event_id, claimer_id, venue, event_time, title) VALUES (${sk2}, ${r[0].id}, ${(b.created_by as string) ?? null}, ${String(b.venue)}, ${String(b.event_time).slice(0,5)}, ${String(b.title)}) ON CONFLICT DO NOTHING`; } catch {}
         // also log history if prev exists
         if (prevVenue || prevTime) {
           try { await sql`INSERT INTO physi_event_history (event_id, prev_venue, prev_event_date, prev_event_time, new_venue, new_event_date, new_event_time, changed_by) VALUES (${r[0].id}, ${prevVenue}, ${prevDate}, ${prevTime}, ${String(b.venue)}, ${String(b.event_date)}, ${String(b.event_time)}, ${(b.created_by as string) ?? null})`; } catch {}

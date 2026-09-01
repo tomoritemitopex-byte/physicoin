@@ -138,6 +138,12 @@ async function handleVerify(req: Request): Promise<Response> {
         logError("VERIFY_SUBMIT_FAILED", e, { route: "/api/verify", phase: "ensure" });
       }
       const b = await req.json().catch(() => null);
+      // Auth: extract verifier_id from HMAC session (not body)
+      const { getAuthUserId } = await import("@/lib/auth");
+      const authUid = getAuthUserId(req as Request, b?.verifier_id || b?.verifierId);
+      if (!authUid) return NextResponse.json({ ok:false, code:"UNAUTHORIZED", message:"Missing session token. POST /api/auth/session to obtain one." }, { status:401 });
+      // override body verifier_id with authenticated id
+      if (b) b.verifier_id = authUid;
       if (!b?.verifier_id || !b?.event_id || !b?.vote) {
         return NextResponse.json({ ok: false, code: "BAD_INPUT", message: getErrorMessage("BAD_INPUT") }, { status: 400 });
       }
@@ -232,6 +238,23 @@ async function handleVerify(req: Request): Promise<Response> {
         const verification = (txResults as any[])[0]?.[0] ?? null;
         const quorum = { promoted: promote, demoted: demote, yesW, noW, total, ratio };
         const result = { verification, quorum };
+
+        // RBF: also tally vote into physi_slot_claims if event is in active mempool
+        try {
+          const evSlotRows: any[] = await sql`SELECT slot_key, venue, status FROM physi_events WHERE id=${b.event_id} LIMIT 1` as any;
+          const sk = evSlotRows[0]?.slot_key;
+          const venue = evSlotRows[0]?.venue;
+          const st = evSlotRows[0]?.status;
+          if (sk && st === 'pending') {
+            if (b.vote === 'YES') {
+              try { await sql`UPDATE physi_slot_claims SET vote_weight_yes = vote_weight_yes + ${w} WHERE slot_key=${sk} AND lower(venue)=lower(${venue})`; } catch {}
+              try { await sql`UPDATE physi_slot_claims SET vote_weight_yes = vote_weight_yes + ${w} WHERE event_id=${b.event_id}`; } catch {}
+            } else if (b.vote === 'NO') {
+              try { await sql`UPDATE physi_slot_claims SET vote_weight_no = vote_weight_no + ${w} WHERE slot_key=${sk} AND lower(venue)=lower(${venue})`; } catch {}
+              try { await sql`UPDATE physi_slot_claims SET vote_weight_no = vote_weight_no + ${w} WHERE event_id=${b.event_id}`; } catch {}
+            }
+          }
+        } catch {}
 
         // fire-and-forget notify on promotion (never blocks response)
         if (result.quorum.promoted) {

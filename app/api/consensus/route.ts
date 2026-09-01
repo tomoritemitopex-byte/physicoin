@@ -194,46 +194,65 @@ export async function GET(req: NextRequest) {
           return [] as any[];
         }
       })(),
-      // mempool: pending physi_events grouped by slot (RBF — one entry per UTXO)
+      // mempool: pending physi_events + physi_slot_claims grouped by slot (RBF — tip vs contenders with vote tallies)
       (async () => {
         try {
           const { groupBySlot } = await import("@/lib/mempool");
-          const rows = (await sql`SELECT id, title, venue, event_date, event_time, scope_value, status, created_at, expires_at, created_by FROM physi_events WHERE status='pending' ORDER BY created_at DESC LIMIT 100`) as any[];
+          const rows = (await sql`SELECT id, title, venue, event_date, event_time, scope_value, status, created_at, expires_at, created_by, COALESCE(slot_key,'') as slot_key FROM physi_events WHERE status='pending' ORDER BY created_at DESC LIMIT 100`) as any[];
           if (!rows.length) return [] as any[];
+          // also fetch slot_claims to show competing venues that were stored via RBF
+          let slotClaims: any[] = [];
+          try { slotClaims = await sql`SELECT id, slot_key, event_id, claimer_id, venue, event_time, title, created_at, vote_weight_yes, vote_weight_no FROM physi_slot_claims ORDER BY created_at DESC LIMIT 200` as any; } catch { slotClaims = []; }
           const grouped = groupBySlot(rows);
+          // merge slot_claims into grouped map (by slot_key)
+          for (const sc of slotClaims) {
+            const sk = String(sc.slot_key || "");
+            if (!sk) continue;
+            if (!grouped.has(sk)) grouped.set(sk, []);
+            // avoid duplicate venue already in grouped from events
+            const existing = grouped.get(sk)!;
+            const dup = existing.some((e:any) => String(e.venue).toLowerCase() === String(sc.venue).toLowerCase() && String(e.title).toLowerCase() === String(sc.title).toLowerCase());
+            if (!dup) {
+              existing.push({ id: sc.event_id || sc.id, title: sc.title, venue: sc.venue, event_date: sk.split("::")[1] || "", event_time: sc.event_time, scope_value: sk.split("::")[0] || null, created_at: sc.created_at, expires_at: null, slot_key: sk, vote_weight_yes: sc.vote_weight_yes, vote_weight_no: sc.vote_weight_no, _claim: true });
+            }
+          }
           const mempoolItems: any[] = [];
           for (const [slotKey, claims] of Array.from(grouped.entries())) {
-            if (claims.length <= 1) continue; // only show competing slots (RBF contested)
-            // tip = earliest claim; contenders = rest
-            const sorted = [...claims].sort((a,b)=> new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+            if (claims.length <= 1) continue;
+            // tip = highest vote_weight_yes or earliest if tie
+            const sorted = [...claims].sort((a,b)=>{
+              const aw = Number(a.vote_weight_yes ?? 0);
+              const bw = Number(b.vote_weight_yes ?? 0);
+              if (bw !== aw) return bw - aw;
+              return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+            });
             const tip = sorted[0];
             const contenders = sorted.slice(1);
-            // compute quorum progress: we treat each claim as 1 vote for its venue; show leading count
-            // fetch verifications for tip vs contenders would be heavy; use claim counts as proxy for tip display
             const total = claims.length;
+            const tipYes = Number(tip.vote_weight_yes ?? 1);
+            const contenderYes = contenders.reduce((s:number,c:any)=> s + Number(c.vote_weight_yes ?? 0), 0);
             mempoolItems.push({
               id: `mempool:${slotKey}`,
               type: "mempool",
               alias: String(tip.title || ""),
               canonical: String(tip.venue || ""),
-              votes_yes: 1,
-              votes_no: contenders.length,
+              votes_yes: tipYes,
+              votes_no: contenderYes || contenders.length,
               total,
-              total_weight: total,
+              total_weight: tipYes + contenderYes,
               quorum_progress: Math.min(100, Math.round((total / QUORUM_MIN) * 100)),
-              yes_pct: Math.round((1/total)*100),
+              yes_pct: total ? Math.round((tipYes/(tipYes+ (contenderYes||contenders.length)))*100) : 0,
               programme: tip.scope_value ?? null,
               level: null,
               group_key: slotKey,
               created_at: tip.created_at ? new Date(tip.created_at).toISOString() : new Date().toISOString(),
               expires_at: tip.expires_at ? new Date(tip.expires_at).toISOString() : null,
               status: "pending",
-              // RBF specific: tip + contenders for "leading 6/8 vs 2/8" display
               mempool: {
                 slot: slotKey,
-                tip: { id: tip.id, venue: tip.venue, event_time: tip.event_time, title: tip.title },
-                contenders: contenders.map((c:any)=>({ id:c.id, venue:c.venue, event_time:c.event_time, title:c.title })),
-                tip_label: `${tip.venue} (leading 1/${total} — ${contenders.map((c:any)=>c.venue).join(" vs ")})`,
+                tip: { id: tip.id, venue: tip.venue, event_time: tip.event_time, title: tip.title, vote_weight_yes: tip.vote_weight_yes },
+                contenders: contenders.map((c:any)=>({ id:c.id, venue:c.venue, event_time:c.event_time, title:c.title, vote_weight_yes: c.vote_weight_yes })),
+                tip_label: `${tip.venue} (leading ${tipYes}/${total} — ${contenders.map((c:any)=>c.venue).join(" vs ")})`,
               },
             });
           }
