@@ -24,6 +24,12 @@ export async function POST(req: NextRequest) {
     try { await ensureAllTables(); } catch {}
 
     const b = await req.json().catch(() => null);
+    // Auth: extract voter_id from HMAC session token
+    try {
+      const { getAuthUserId } = await import("@/lib/auth");
+      const authUid = getAuthUserId(req as unknown as Request, b?.voter_id || b?.voterId);
+      if (authUid) (b as any).voter_id = authUid;
+    } catch {}
     if (!b?.voter_id || !b?.scope_a || !b?.scope_b)
       return NextResponse.json({ ok: false, code: "BAD_INPUT", message: getErrorMessage("BAD_INPUT") }, { status: 400 });
 
