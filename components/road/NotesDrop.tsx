@@ -2,10 +2,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { BUILDINGS } from "@/lib/campus";
 
-/**
- * NotesDrop — photo upload + OCR + map drops + blur preview (1 coin to unlock)
- * Student copy: "Notes drop" / "Snap your notes" / "Show for 1 coin"
- */
 type NoteRow = {
   id: string; title: string; building_id: string; level: string; lat?: number | null; lng?: number | null;
   ocr_text: string; preview_blur?: string; blurred: boolean; has_image?: boolean; created_at: string; cost?: number;
@@ -21,6 +17,7 @@ export default function NotesDrop({ userId }: { userId?: string | null }) {
   const [uploading, setUploading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [filterBuilding, setFilterBuilding] = useState<string>("");
+  const [loading, setLoading] = useState(true);
 
   const uid = (() => {
     if (userId) return userId;
@@ -36,10 +33,10 @@ export default function NotesDrop({ userId }: { userId?: string | null }) {
       const r = await fetch(`/api/notes?${qs.toString()}`, { cache: "no-store" });
       const j = await r.json().catch(() => null);
       if (j?.ok) setNotes(j.notes || []);
-    } catch {}
+    } catch {} finally { setLoading(false); }
   }, [filterBuilding, uid]);
 
-  useEffect(() => { fetchNotes(); }, [fetchNotes]);
+  useEffect(() => { fetchNotes(); const iv = setInterval(fetchNotes, 15000); return () => clearInterval(iv); }, [fetchNotes]);
 
   function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0] || null;
@@ -81,7 +78,6 @@ export default function NotesDrop({ userId }: { userId?: string | null }) {
         throw new Error(j?.message || "Unlock failed");
       }
       setMsg(j.cost === 0 ? j.message : "Unlocked — 1 coin used");
-      // refresh single note to show full text
       try {
         const rr = await fetch(`/api/notes?note_id=${encodeURIComponent(noteId)}&viewer_id=${encodeURIComponent(uid)}`, { cache: "no-store" });
         const jj = await rr.json().catch(() => null);
@@ -129,32 +125,39 @@ export default function NotesDrop({ userId }: { userId?: string | null }) {
       </div>
 
       <div className="mt-3 space-y-2">
-        {notes.slice(0, 12).map(n => {
-          const b = BUILDINGS.find(x => x.id === n.building_id);
-          return (
-            <div key={n.id} className="overflow-hidden rounded-[14px] border border-white/10 bg-black/20">
-              <div className="flex items-center gap-2 px-3 py-2">
-                <span className="flex h-7 w-7 items-center justify-center rounded-full text-[13px] text-white" style={{ background: b?.color || "#0d3b2a" }}>{b?.icon || "📝"}</span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[13px] font-black text-white">{n.title}</p>
-                  <p className="font-mono text-[11px] text-white/60">{b?.code || n.building_id} · {n.level} · {new Date(n.created_at).toLocaleDateString([], { day: "2-digit", month: "short" })}</p>
+        {loading ? (
+          <div className="space-y-2">
+            {[0, 1, 2].map(i => <div key={i} className="h-[84px] animate-pulse rounded-[14px] bg-white/[0.04] border border-white/10" />)}
+          </div>
+        ) : notes.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-white/10 bg-white/[0.03] px-3 py-6 text-center font-mono text-[11px] text-white/50">No notes yet — be first to drop one for your level</p>
+        ) : (
+          notes.slice(0, 12).map(n => {
+            const b = BUILDINGS.find(x => x.id === n.building_id);
+            return (
+              <div key={n.id} className="overflow-hidden rounded-[14px] border border-white/10 bg-black/20">
+                <div className="flex items-center gap-2 px-3 py-2">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full text-[13px] text-white" style={{ background: b?.color || "#0d3b2a" }}>{b?.icon || "📝"}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[13px] font-black text-white">{n.title}</p>
+                    <p className="font-mono text-[11px] text-white/60">{b?.code || n.building_id} · {n.level} · {new Date(n.created_at).toLocaleDateString([], { day: "2-digit", month: "short" })}</p>
+                  </div>
+                  {n.blurred ? (
+                    <button onClick={() => doUnlock(n.id)} className="shrink-0 rounded-full bg-white px-3 py-1.5 font-mono text-[11px] font-black text-black hover:bg-amber-50">Show · 1 coin</button>
+                  ) : (
+                    <span className="shrink-0 rounded-full bg-emerald-500 px-3 py-1 font-mono text-[11px] font-black text-white">Revealed</span>
+                  )}
                 </div>
-                {n.blurred ? (
-                  <button onClick={() => doUnlock(n.id)} className="shrink-0 rounded-full bg-white px-3 py-1.5 font-mono text-[11px] font-black text-black hover:bg-amber-50">Show · 1 coin</button>
-                ) : (
-                  <span className="shrink-0 rounded-full bg-emerald-500 px-3 py-1 font-mono text-[11px] font-black text-white">Revealed</span>
-                )}
+                <div className="border-t border-white/10 px-3 py-2">
+                  <p className={`font-mono text-[12px] leading-5 ${n.blurred ? "text-white/50 blur-[5px] select-none" : "text-white/80"}`} style={n.blurred ? { filter: "blur(6px)" } : undefined}>
+                    {n.ocr_text?.slice(0, 420) || "No text yet"}
+                  </p>
+                  {n.blurred && <p className="mt-1 font-mono text-[10px] text-amber-200">Tap “Show · 1 coin” to reveal — your coins are earned by checking in.</p>}
+                </div>
               </div>
-              <div className="border-t border-white/10 px-3 py-2">
-                <p className={`font-mono text-[12px] leading-5 ${n.blurred ? "text-white/50 blur-[5px] select-none" : "text-white/80"}`} style={n.blurred ? { filter: "blur(6px)" } : undefined}>
-                  {n.ocr_text?.slice(0, 420) || "No text yet"}
-                </p>
-                {n.blurred && <p className="mt-1 font-mono text-[10px] text-amber-200">Tap “Show · 1 coin” to reveal — your coins are earned by checking in.</p>}
-              </div>
-            </div>
-          );
-        })}
-        {notes.length === 0 && <p className="rounded-xl border border-dashed border-white/10 bg-white/[0.03] px-3 py-4 text-center font-mono text-[11px] text-white/50">No notes yet — be first to drop one for your level</p>}
+            );
+          })
+        )}
       </div>
       {msg && <p className="mt-2 rounded-xl bg-white px-3 py-2 font-mono text-[11px] font-bold text-black">{msg}</p>}
     </div>

@@ -171,7 +171,7 @@ export default function CampusMap({ events, onVerify }: { events: EventRow[]; on
       if (!cancel) setPollTick((t) => t + 1);
     }
     poll();
-    const iv = setInterval(poll, 12000);
+    const iv = setInterval(poll, 15000);
     return () => {
       cancel = true;
       clearInterval(iv);

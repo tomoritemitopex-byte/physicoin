@@ -1,10 +1,6 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 
-/**
- * BunkRadar — live class status + no-show alerts
- * Student copy: "Is class holding?" / "Lecturer didn't show" / "Heads up"
- */
 type BunkEvent = {
   id: string; title: string; venue: string; event_date: string; event_time: string;
   no_show_count?: number; live_status?: string; alert?: boolean; status?: string;
@@ -12,8 +8,9 @@ type BunkEvent = {
 
 export default function BunkRadar({ userId }: { userId?: string | null }) {
   const [events, setEvents] = useState<BunkEvent[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
+  const [initial, setInitial] = useState(true);
 
   const uid = (() => {
     if (userId) return userId;
@@ -22,12 +19,11 @@ export default function BunkRadar({ userId }: { userId?: string | null }) {
   })();
 
   const fetchBunk = useCallback(async () => {
-    setLoading(true);
     try {
       const r = await fetch("/api/bunk", { cache: "no-store" });
       const j = await r.json().catch(() => null);
       if (j?.ok) setEvents(j.events || []);
-    } catch {} finally { setLoading(false); }
+    } catch {} finally { setLoading(false); setInitial(false); }
   }, []);
 
   useEffect(() => { fetchBunk(); const iv = setInterval(fetchBunk, 15000); return () => clearInterval(iv); }, [fetchBunk]);
@@ -69,27 +65,36 @@ export default function BunkRadar({ userId }: { userId?: string | null }) {
           <h3 className="text-[16px] font-black text-white">Is class holding?</h3>
           <p className="font-mono text-[11px] text-white/60">Anonymous heads-up — 3 confirmations triggers an alert</p>
         </div>
-        <button onClick={fetchBunk} className="rounded-full border border-white/10 bg-white/5 px-3 py-1 font-mono text-[11px] font-bold text-white hover:bg-white hover:text-black">{loading ? "…" : "↻ Refresh"}</button>
+        <button onClick={fetchBunk} className="rounded-full border border-white/10 bg-white/5 px-3 py-1 font-mono text-[11px] font-bold text-white hover:bg-white hover:text-black">{loading && !initial ? "…" : "↻ Refresh"}</button>
       </div>
 
       <div className="mt-3 space-y-2">
-        {events.slice(0, 8).map(ev => (
-          <div key={ev.id} className={`flex items-center gap-2 rounded-[14px] border p-2 ${ev.alert ? "border-red-400/30 bg-red-500/10" : "border-white/10 bg-black/20"}`}>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-[13px] font-black text-white">{ev.title} <span className="font-mono text-[11px] font-medium text-white/60">· {ev.venue}</span></p>
-              <p className="font-mono text-[11px] text-white/60">{String(ev.event_date).slice(0, 10)} · {String(ev.event_time).slice(0, 5)} · {ev.no_show_count ? `${ev.no_show_count} say no-show` : "no reports yet"}</p>
-              <div className="mt-1">{badge(ev)}</div>
-            </div>
-            <div className="flex shrink-0 flex-col gap-1">
-              <button onClick={() => confirmNoShow(ev.id)} className="rounded-full bg-white px-3 py-1.5 font-mono text-[11px] font-black text-black hover:bg-red-50">Lecturer didn't show</button>
-              <button onClick={() => confirmHappening(ev.id)} className="rounded-full border border-white/15 bg-white/5 px-3 py-1 font-mono text-[10px] font-bold text-white hover:bg-white hover:text-black">It's holding</button>
-            </div>
+        {initial ? (
+          <div className="space-y-2">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="h-[76px] animate-pulse rounded-[14px] bg-white/[0.04] border border-white/10" />
+            ))}
           </div>
-        ))}
-        {events.length === 0 && !loading && <p className="rounded-xl border border-dashed border-white/10 bg-white/[0.03] px-3 py-4 text-center font-mono text-[11px] text-white/50">No classes found yet — add one on the road</p>}
+        ) : events.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-white/10 bg-white/[0.03] px-3 py-4 text-center font-mono text-[11px] text-white/50">No classes found yet — add one on the road</p>
+        ) : (
+          events.slice(0, 8).map(ev => (
+            <div key={ev.id} className={`flex items-center gap-2 rounded-[14px] border p-2 ${ev.alert ? "border-red-400/30 bg-red-500/10" : "border-white/10 bg-black/20"}`}>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[13px] font-black text-white">{ev.title} <span className="font-mono text-[11px] font-medium text-white/60">· {ev.venue}</span></p>
+                <p className="font-mono text-[11px] text-white/60">{String(ev.event_date).slice(0, 10)} · {String(ev.event_time).slice(0, 5)} · {ev.no_show_count ? `${ev.no_show_count} say no-show` : "no reports yet"}</p>
+                <div className="mt-1">{badge(ev)}</div>
+              </div>
+              <div className="flex shrink-0 flex-col gap-1">
+                <button onClick={() => confirmNoShow(ev.id)} className="rounded-full bg-white px-3 py-1.5 font-mono text-[11px] font-black text-black hover:bg-red-50">Lecturer didn't show</button>
+                <button onClick={() => confirmHappening(ev.id)} className="rounded-full border border-white/15 bg-white/5 px-3 py-1 font-mono text-[10px] font-bold text-white hover:bg-white hover:text-black">It&apos;s holding</button>
+              </div>
+            </div>
+          ))
+        )}
       </div>
       {msg && <p className="mt-2 rounded-xl bg-white px-3 py-2 font-mono text-[11px] font-bold text-black">{msg}</p>}
-      <p className="mt-2 font-mono text-[10px] text-white/40">Tip: if you're at the venue and no lecturer after 15 mins, tap “Lecturer didn't show” — others get a heads-up.</p>
+      <p className="mt-2 font-mono text-[10px] text-white/40">Tip: if you&apos;re at the venue and no lecturer after 15 mins, tap “Lecturer didn&apos;t show” — others get a heads-up.</p>
     </div>
   );
 }

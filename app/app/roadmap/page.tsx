@@ -2,6 +2,8 @@
 import { useEffect, useState, useCallback, useMemo, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Search, Plus, X, Map as MapIcon, List, Clock3, MapPin } from "lucide-react";
+import Onboarding from "@/components/Onboarding";
+import { RoadSkeleton, MapSkeleton } from "@/components/Skeletons";
 
 type EventRow = {
   id: string; title: string; venue: string; event_date: string; event_time: string;
@@ -58,7 +60,7 @@ function RoadmapInner() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { fetchFeed(); }, [fetchFeed]);
+  useEffect(() => { fetchFeed(); const iv = setInterval(fetchFeed, 15000); return () => clearInterval(iv); }, [fetchFeed]);
   useEffect(() => { if (!toast) return; const t = setTimeout(()=>setToast(null), 2600); return ()=>clearTimeout(t); }, [toast]);
   useEffect(() => { setFilter(filterParam); }, [filterParam]);
 
@@ -133,6 +135,7 @@ function RoadmapInner() {
 
   return (
     <div className="mx-auto max-w-[1280px] px-4 py-6 sm:px-6 lg:px-8">
+      <Onboarding />
       {/* Header — one clear title, single primary action */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
@@ -205,7 +208,7 @@ function RoadmapInner() {
 
       {/* Content */}
       {loading ? (
-        <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{[0,1,2,3,4,5].map(i=> <div key={i} className="h-32 animate-pulse rounded-2xl border border-white/[0.06] bg-white/[0.03]" />)}</div>
+        view==="map" ? <MapSkeleton /> : <RoadSkeleton />
       ) : err ? (
         <div className="mt-6 rounded-2xl border border-red-500/15 bg-red-500/10 px-4 py-4 text-sm text-red-200">{err} <button onClick={fetchFeed} className="ml-2 underline">Retry</button></div>
       ) : filtered.length===0 ? (

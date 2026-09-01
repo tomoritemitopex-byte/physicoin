@@ -19,6 +19,7 @@ export default function FindMyPeople({ userId, programme, level }: { userId?: st
   const [pinging, setPinging] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [waveInboxOpen, setWaveInboxOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const uid = (() => {
     if (userId) return userId;
@@ -33,10 +34,10 @@ export default function FindMyPeople({ userId, programme, level }: { userId?: st
       const r = await fetch(`/api/squad?${qs.toString()}`, { cache: "no-store" });
       const j = await r.json().catch(() => null);
       if (j?.ok) { setHeat(j.heat || {}); setDots(j.dots || []); setWaves(j.waves || []); }
-    } catch {}
+    } catch {} finally { setLoading(false); }
   }, [prog, lvl, uid]);
 
-  useEffect(() => { fetchHeat(); const iv = setInterval(fetchHeat, 10000); return () => clearInterval(iv); }, [fetchHeat]);
+  useEffect(() => { fetchHeat(); const iv = setInterval(fetchHeat, 15000); return () => clearInterval(iv); }, [fetchHeat]);
 
   async function doPing() {
     if (!uid) { setMsg("Create your profile first (top of the page)"); return; }
@@ -105,6 +106,13 @@ export default function FindMyPeople({ userId, programme, level }: { userId?: st
       </div>
 
       {/* Heat dots on mini campus strip */}
+      {loading ? (
+        <div className="mt-3 grid grid-cols-4 gap-2">
+          {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+            <div key={i} className="h-[72px] animate-pulse rounded-[14px] bg-white/[0.04]" />
+          ))}
+        </div>
+      ) : (
       <div className="mt-3 grid grid-cols-4 gap-2">
         {BUILDINGS.slice(0, 8).map(b => {
           const c = heat[b.id] ?? 0;
@@ -119,6 +127,7 @@ export default function FindMyPeople({ userId, programme, level }: { userId?: st
           );
         })}
       </div>
+      )}
 
       {/* Dots row — ghost avatars */}
       {dots.length > 0 && (
