@@ -23,6 +23,9 @@ import { fetchGhostDots, isGhostOptOut, setGhostOptOut } from "@/lib/ghostRoad";
 import { vaultNt, VAULT_HALF_DAYS } from "@/lib/shardsync";
 import { anyBlastLink } from "@/lib/anyBlast";
 import { buildFusionGroups, anonHash, GHOST_DOT_BG } from "@/lib/fusion";
+import FindMyPeople from "@/components/road/FindMyPeople";
+import BunkRadar from "@/components/road/BunkRadar";
+import NotesDrop from "@/components/road/NotesDrop";
 const RepExplainer = dynamic(()=> import("@/components/road/RepExplainer"), { ssr: false, loading: ()=> null }) as any;
 const RepBoard = dynamic(()=> import("@/components/road/RepBoard"), { ssr: false, loading: ()=> null }) as any;
 const ShareCard = dynamic(()=> import("@/components/road/ShareCard"), { ssr: false, loading: ()=> null });
@@ -2352,8 +2355,14 @@ function RoadmapInner() {
         {/* ── Campus Map: buildings → levels → timetable + ephemeral ghost avatars (no DB) ── */}
         {viewMode === "map" && (
           <div className="pointer-events-auto absolute left-1/2 z-20 w-full max-w-[560px] -translate-x-1/2 px-3 sm:px-6" style={{ top: filtersOpen ? 272 : 168, maxHeight: "calc(100vh - 250px)", overflow: "auto" }}>
-            <div className="rounded-[22px] border border-white/10 p-3 backdrop-blur-xl shadow-[0_16px 40px_rgba(0,0,0,0.5)]" style={{ background: "rgba(13,59,42,0.55)", backdropFilter: "blur(16px) saturate(1.22)", WebkitBackdropFilter: "blur(16px) saturate(1.22)" }}>
+            <div className="rounded-[22px] border border-white/10 p-3 backdrop-blur-xl shadow-[0_16px_40px_rgba(0,0,0,0.5)]" style={{ background: "rgba(13,59,42,0.55)", backdropFilter: "blur(16px) saturate(1.22)", WebkitBackdropFilter: "blur(16px) saturate(1.22)" }}>
               <CampusMap events={events as any} onVerify={(ev) => { fetchFeed(); setFacepileTick((t) => t + 1); }} />
+              {/* ── Student Intuitions: Find My People / Bunk Radar / Notes Drop ── */}
+              <div className="mt-4 space-y-3">
+                <FindMyPeople userId={myUserId} />
+                <BunkRadar userId={myUserId} />
+                <NotesDrop userId={myUserId} />
+              </div>
             </div>
           </div>
         )}
@@ -2856,6 +2865,10 @@ function RoadmapInner() {
         <div className="pointer-events-none absolute left-1/2 top-[104px] z-[15] h-[96px] w-[96%] max-w-[560px] -translate-x-1/2 rounded-t-[28px]" style={{ background: "linear-gradient(to bottom, rgba(13,59,42,0.98) 0%, rgba(13,59,42,0.84) 34%, rgba(13,59,42,0.42) 68%, transparent 100%)" }} />
         <div className="pointer-events-none absolute bottom-0 left-1/2 z-[15] h-[140px] w-[96%] max-w-[560px] -translate-x-1/2 rounded-b-[28px]" style={{ background: "linear-gradient(to top, rgba(13,59,42,0.98) 0%, rgba(13,59,42,0.72) 36%, transparent 100%)" }} />
         <div className={`relative mx-auto flex h-[calc(100vh-64px)] w-full max-w-[560px] flex-col overflow-auto pt-[132px] sm:pt-[124px] pb-[320px] px-3 sm:px-4 gap-3 ${viewMode!=="list" ? "hidden" : ""}`}>
+            {/* Student Intuitions — also in List view */}
+            <FindMyPeople userId={myUserId} />
+            <BunkRadar userId={myUserId} />
+            <NotesDrop userId={myUserId} />
             <div className="rounded-2xl border border-white/10 bg-black/60 backdrop-blur px-4 py-3 flex items-center justify-between">
               <p className="font-mono text-[11px] font-bold text-white">List — same filteredRoadItems as Map</p>
               <span className="font-mono text-[10px] text-slate-400">{filteredRoadItems.length} items · {filter} · WAT</span>

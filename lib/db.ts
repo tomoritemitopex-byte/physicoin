@@ -272,6 +272,96 @@ export async function ensureZkAuthority(): Promise<void> {
   await c`CREATE INDEX IF NOT EXISTS physi_events_zk_idx ON physi_events (is_zk_attested)`;
 }
 
+// ── Student intuitions: Find My People (squad locator), Bunk Radar, Notes Drop ──
+export async function ensureSquadTables(): Promise<void> {
+  const c = getSql() ?? sql;
+  if (!c) return;
+  await ensureUsers();
+  await ensureGhostWitness();
+  await c`
+    CREATE TABLE IF NOT EXISTS physi_squad_pings (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES physi_users(id) ON DELETE CASCADE,
+      programme TEXT NOT NULL DEFAULT 'PHYS',
+      level TEXT NOT NULL DEFAULT '100L',
+      building_id TEXT NOT NULL DEFAULT 'phys',
+      lat DOUBLE PRECISION,
+      lng DOUBLE PRECISION,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ NOT NULL DEFAULT NOW() + INTERVAL '12 minutes'
+    )`;
+  await c`CREATE INDEX IF NOT EXISTS physi_squad_pings_prog_idx ON physi_squad_pings (programme, level)`;
+  await c`CREATE INDEX IF NOT EXISTS physi_squad_pings_building_idx ON physi_squad_pings (building_id)`;
+  await c`CREATE INDEX IF NOT EXISTS physi_squad_pings_expires_idx ON physi_squad_pings (expires_at)`;
+  await c`CREATE INDEX IF NOT EXISTS physi_squad_pings_user_idx ON physi_squad_pings (user_id, created_at DESC)`;
+  // one active ping per user (upsert will delete old)
+  await c`
+    CREATE TABLE IF NOT EXISTS physi_squad_waves (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      from_user UUID NOT NULL REFERENCES physi_users(id) ON DELETE CASCADE,
+      to_user UUID NOT NULL REFERENCES physi_users(id) ON DELETE CASCADE,
+      message TEXT NOT NULL DEFAULT '👋',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ NOT NULL DEFAULT NOW() + INTERVAL '5 minutes'
+    )`;
+  await c`CREATE INDEX IF NOT EXISTS physi_squad_waves_to_idx ON physi_squad_waves (to_user, expires_at DESC)`;
+  await c`CREATE INDEX IF NOT EXISTS physi_squad_waves_from_idx ON physi_squad_waves (from_user)`;
+}
+
+export async function ensureBunkTables(): Promise<void> {
+  const c = getSql() ?? sql;
+  if (!c) return;
+  await ensureUsers();
+  await ensureEvents();
+  await c`
+    CREATE TABLE IF NOT EXISTS physi_bunk_reports (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      event_id UUID NOT NULL REFERENCES physi_events(id) ON DELETE CASCADE,
+      reporter_id UUID REFERENCES physi_users(id) ON DELETE SET NULL,
+      vote TEXT NOT NULL DEFAULT 'no_show' CHECK (vote IN ('no_show','happening')),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`;
+  await c`CREATE UNIQUE INDEX IF NOT EXISTS physi_bunk_reports_pair_uidx ON physi_bunk_reports (event_id, reporter_id) WHERE reporter_id IS NOT NULL`;
+  await c`CREATE INDEX IF NOT EXISTS physi_bunk_reports_event_idx ON physi_bunk_reports (event_id, created_at DESC)`;
+  await c`CREATE INDEX IF NOT EXISTS physi_bunk_reports_time_idx ON physi_bunk_reports (created_at DESC)`;
+}
+
+export async function ensureNotesTables(): Promise<void> {
+  const c = getSql() ?? sql;
+  if (!c) return;
+  await ensureUsers();
+  await ensureGhostWitness();
+  await c`
+    CREATE TABLE IF NOT EXISTS physi_notes_drops (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      uploader_id UUID REFERENCES physi_users(id) ON DELETE SET NULL,
+      title TEXT NOT NULL,
+      building_id TEXT NOT NULL DEFAULT 'phys',
+      level TEXT NOT NULL DEFAULT '100L',
+      lat DOUBLE PRECISION,
+      lng DOUBLE PRECISION,
+      ocr_text TEXT NOT NULL DEFAULT '',
+      image_data TEXT NOT NULL DEFAULT '',
+      preview_blur TEXT NOT NULL DEFAULT '',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`;
+  await c`CREATE INDEX IF NOT EXISTS physi_notes_drops_building_idx ON physi_notes_drops (building_id)`;
+  await c`CREATE INDEX IF NOT EXISTS physi_notes_drops_level_idx ON physi_notes_drops (level)`;
+  await c`CREATE INDEX IF NOT EXISTS physi_notes_drops_created_idx ON physi_notes_drops (created_at DESC)`;
+  // unlock tracking: who paid to unblur
+  await c`
+    CREATE TABLE IF NOT EXISTS physi_notes_unlocks (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      note_id UUID NOT NULL REFERENCES physi_notes_drops(id) ON DELETE CASCADE,
+      user_id UUID NOT NULL REFERENCES physi_users(id) ON DELETE CASCADE,
+      cost NUMERIC(5,2) NOT NULL DEFAULT 1,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(note_id, user_id)
+    )`;
+  await c`CREATE INDEX IF NOT EXISTS physi_notes_unlocks_user_idx ON physi_notes_unlocks (user_id)`;
+  await c`CREATE INDEX IF NOT EXISTS physi_notes_unlocks_note_idx ON physi_notes_unlocks (note_id)`;
+}
+
 export async function ensureEventHistory(): Promise<void> {
   const c = getSql() ?? sql;
   if (!c) return;
@@ -302,7 +392,7 @@ export async function ensureAllTables(): Promise<void> {
   const run = async () => {
     await ensureUsers();
     await ensureEvents();
-    await Promise.all([ensureVerifications(), ensureMiningLogs(), ensureCanonicalLog(), ensureEventHistory(), ensureScopeVotes(), ensureScopeResolution(), ensureGhostWitness(), ensureScopeMiningColumns(), ensureZkAuthority()]);
+    await Promise.all([ensureVerifications(), ensureMiningLogs(), ensureCanonicalLog(), ensureEventHistory(), ensureScopeVotes(), ensureScopeResolution(), ensureGhostWitness(), ensureScopeMiningColumns(), ensureZkAuthority(), ensureSquadTables(), ensureBunkTables(), ensureNotesTables()]);
     // ensure columns idempotently after tables exist
     await ensureGhostWitness();
     await ensureScopeMiningColumns();
@@ -330,5 +420,8 @@ export const ensureScopeResolutionTable = ensureScopeResolution;
 export const ensureGhostWitnessTable = ensureGhostWitness;
 export const ensureZkAuthorityTable = ensureZkAuthority;
 export const ensureScopeMiningColumnsTable = ensureScopeMiningColumns;
+export const ensureSquadTablesTable = ensureSquadTables;
+export const ensureBunkTablesTable = ensureBunkTables;
+export const ensureNotesTablesTable = ensureNotesTables;
 export const ensureTables = ensureAllTables;
 export const dbUnavailableResponse = dbNotConfigured;
