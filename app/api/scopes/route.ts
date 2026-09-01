@@ -11,6 +11,7 @@ import { logError, getErrorMessage } from "@/lib/adapters/error";
 import { GHOST_ACTIONS, prepareGhostChainQueries, buildGhostChainSigs } from "@/lib/ghostWitness";
 import { awardScopeRewards, buildScopeRewardDetails, prepareScopeRewardQueries } from "@/lib/scopeMining";
 import { weightFromTotal, weightedQuorumStatus, scopeWeightedStatus } from "@/lib/voteWeight";
+import { getCohesionMultipliers } from "@/lib/cohortTrust";
 
 // Satoshi P2: Quorum thresholds — 8 peers minimum, 70% agreement
 const QUORUM_MIN = 8;
@@ -103,7 +104,7 @@ export async function POST(req: NextRequest) {
       if (idx >= 0) votesForRewards[idx] = { voter_id: String(b.voter_id), vote_value: voteValue };
       else votesForRewards.push({ voter_id: String(b.voter_id), vote_value: voteValue });
 
-      // weighted quorum: weight each voter by history
+      // weighted quorum: weight each voter by history × cohort trust (anonymous)
       let weightedYes = 0, weightedNo = 0;
       try {
         const uniqIds = Array.from(new Set(votesForRewards.map(v => String(v.voter_id))));
@@ -119,10 +120,15 @@ export async function POST(req: NextRequest) {
             weightMap.set(uid, weightFromTotal(c1+c2+c3+c4));
           } catch { weightMap.set(uid, 1); }
         }));
+        // cohort trust multiplier (anonymous, server-side only) — 1.3x if shares pattern with any peer
+        let cohortMap = new Map<string, number>();
+        try { cohortMap = await getCohesionMultipliers(sql, uniqIds); } catch {}
         for (const v of votesForRewards) {
           const w = weightMap.get(String(v.voter_id)) ?? 1;
-          if (Number(v.vote_value) === 1) weightedYes += w;
-          else weightedNo += w;
+          const cm = cohortMap.get(String(v.voter_id)) ?? 1;
+          const totalW = w * cm;
+          if (Number(v.vote_value) === 1) weightedYes += totalW;
+          else weightedNo += totalW;
         }
       } catch {
         weightedYes = projectedYes; weightedNo = projectedNo;

@@ -1,12 +1,13 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import ConsensusVoteButton from "@/components/ui/ConsensusVoteButton";
+import { calculateDepth } from "@/lib/truthDepth";
+import { useCohortInfo } from "@/hooks/useCohortInfo";
 
 /**
- * ConsensusMap — single visualization of ALL pending truth coordination.
- * Student-native vocabulary: halls / lecturers / courses — not blocks/mempool/mining.
- * Graph + list hybrid: clustered nodes with vote progress, inline voting, resolution animation.
- * 15s polling for live updates.
+ * ConsensusMap — Truth Depth + Anonymous Coherence
+ * Depth meter: pulsing waves when fresh, solid when locked, emerald gradient.
+ * Cohort: anonymous peer count only.
  */
 
 type ConsensusItem = {
@@ -44,21 +45,65 @@ function timeAgo(iso: string): string {
   return `${Math.floor(s / 86400)}d ago`;
 }
 
+function DepthMeter({ item }: { item: ConsensusItem }) {
+  const d = calculateDepth(item.votes_yes, item.votes_no, item.total_weight ?? item.total);
+  const pct = Math.round(d.depth * 100);
+  const isFresh = d.phase === "fresh";
+  const isClosing = d.depth > 0.7;
+  const isLocked = d.phase === "locked";
+  const nearLock = d.depth >= 0.85;
+
+  return (
+    <div className="mt-2 space-y-1">
+      <div className="flex items-center justify-between font-mono text-[10px]">
+        <span className={`${isClosing ? "font-bold text-emerald-300 animate-pulse" : isFresh ? "text-slate-400" : "text-slate-300"}`}>
+          {d.label} · {pct}% depth
+          {isClosing && " · closing in"}
+        </span>
+        <span className={nearLock ? "font-bold text-amber-300" : "text-slate-500"}>
+          {nearLock ? "Just 1 more vote to lock this" : `${Math.max(0, 8 - item.total)} more to quorum`}
+        </span>
+      </div>
+      {/* Depth bar with waves */}
+      <div className="relative h-1.5 overflow-hidden rounded-full bg-white/10">
+        {/* pulsing wave overlay when fresh */}
+        {isFresh && (
+          <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.8s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+        )}
+        {/* closing pulse */}
+        {isClosing && !isLocked && (
+          <div className="absolute inset-0 animate-pulse bg-emerald-400/20" />
+        )}
+        <div
+          className={`relative h-full transition-all duration-700 ease-out ${isLocked ? "bg-emerald-600" : isClosing ? "bg-emerald-500" : d.depth > 0.3 ? "bg-emerald-400" : "bg-emerald-200"} ${isClosing ? "shadow-[0_0_8px_rgba(16,185,129,0.5)]" : ""}`}
+          style={{ width: `${pct}%`, backgroundColor: isLocked ? "#059669" : isClosing ? "#10b981" : d.depth > 0.3 ? "#34d399" : "#a7f3d0" }}
+        />
+      </div>
+      {/* subtle phase dots */}
+      <div className="flex gap-1">
+        {(["fresh", "building", "closing", "locked"] as const).map((ph) => (
+          <span key={ph} className={`h-1 flex-1 rounded-full ${d.phase === ph ? "opacity-100" : "opacity-20"} ${ph === "fresh" ? "bg-emerald-200" : ph === "building" ? "bg-emerald-400" : ph === "closing" ? "bg-emerald-500" : "bg-emerald-600"}`} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function NodePair({ item, selected, onSelect }: { item: ConsensusItem; selected: boolean; onSelect: () => void }) {
   const t = TYPE_LABEL[item.type] ?? TYPE_LABEL.hall;
   const total = item.votes_yes + item.votes_no;
   const nearQuorum = total >= 6;
-  const progress = item.quorum_progress;
-  const yesPct = item.yes_pct;
+  const d = calculateDepth(item.votes_yes, item.votes_no, item.total_weight ?? total);
+  const pct = Math.round(d.depth * 100);
 
   return (
     <button
       onClick={onSelect}
       className={`group relative flex w-full items-center gap-2 rounded-2xl border px-3 py-3 text-left transition ${
         selected ? "border-white/20 bg-white/[0.07] shadow-lg" : "border-white/[0.06] bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/10"
-      } ${nearQuorum ? "ring-1 " + t.ring : ""}`}
+      } ${nearQuorum ? "ring-1 " + t.ring : ""} ${d.depth > 0.7 ? "ring-1 ring-emerald-400/20" : ""}`}
     >
-      <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${t.dot} ${nearQuorum ? "animate-pulse" : ""}`} />
+      <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${t.dot} ${nearQuorum || d.depth > 0.7 ? "animate-pulse" : ""}`} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <span className="truncate text-sm font-semibold text-white">{item.alias}</span>
@@ -67,16 +112,22 @@ function NodePair({ item, selected, onSelect }: { item: ConsensusItem; selected:
         </div>
         <div className="mt-1 flex items-center gap-2">
           <span className={`rounded-full border px-1.5 py-0.5 font-mono text-[10px] leading-none ${selected ? "border-white/15 text-white" : "border-white/10 text-slate-400"}`}>{t.short}</span>
-          <span className="font-mono text-xs text-slate-400">
-            {total}/8 · {yesPct}%
+          <span className={`font-mono text-xs ${d.depth > 0.7 ? "font-bold text-emerald-300" : "text-slate-400"}`}>
+            {total}/8 · {pct}% depth
           </span>
-          {nearQuorum && <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 font-mono text-[10px] font-bold text-amber-300">close</span>}
+          {d.depth > 0.7 && <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 font-mono text-[10px] font-bold text-emerald-300 animate-pulse">closing in</span>}
+          {d.depth >= 0.85 && <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 font-mono text-[10px] font-bold text-amber-300">1 more!</span>}
         </div>
-        <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/10">
-          <div className="h-full bg-emerald-400 transition-all duration-500" style={{ width: `${progress}%` }} />
+        {/* Depth meter mini */}
+        <div className="relative mt-2 h-1 overflow-hidden rounded-full bg-white/10">
+          {d.phase === "fresh" && <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.8s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-white/15 to-transparent" />}
+          <div
+            className="h-full transition-all duration-500"
+            style={{ width: `${pct}%`, backgroundColor: d.color }}
+          />
         </div>
       </div>
-      <span className={`shrink-0 rounded-full px-2 py-1 font-mono text-xs font-semibold ${progress >= 100 ? "bg-emerald-500 text-white" : "bg-white/10 text-slate-300"}`}>
+      <span className={`shrink-0 rounded-full px-2 py-1 font-mono text-xs font-semibold ${d.phase === "locked" ? "bg-emerald-600 text-white" : d.depth > 0.7 ? "bg-emerald-500 text-white" : "bg-white/10 text-slate-300"}`}>
         {item.votes_yes}/{item.votes_no}
       </span>
     </button>
@@ -84,7 +135,6 @@ function NodePair({ item, selected, onSelect }: { item: ConsensusItem; selected:
 }
 
 function ClusterRail({ items, selectedId, onSelect }: { items: ConsensusItem[]; selectedId: string | null; onSelect: (id: string) => void }) {
-  // Group by type for visual clusters; hall chain style: [LT 1] ←→ [LT 2] ←→ [Theatre A]
   const byType = useMemo(() => {
     const m: Record<string, ConsensusItem[]> = { hall: [], prof: [], scope: [] };
     for (const it of items) (m[it.type] ?? (m[it.type] = [])).push(it);
@@ -116,7 +166,6 @@ function ClusterRail({ items, selectedId, onSelect }: { items: ConsensusItem[]; 
               <span className="font-mono text-xs uppercase tracking-wide text-slate-400">{t.label}s · {arr.length} pending</span>
               <span className="h-px flex-1 bg-white/5" />
             </div>
-            {/* Hall dedup cluster: interconnected strip; others: grid */}
             {k === "hall" && arr.length > 1 ? (
               <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
                 {arr.map((it) => (
@@ -157,9 +206,10 @@ export default function ConsensusMap({ pollMs = 15000 }: { pollMs?: number }) {
     }
   }, []);
 
+  const { data: cohort } = useCohortInfo(myPid);
+
   const fetchConsensus = useCallback(async () => {
     try {
-      // Prefer programme/level filter when available (hall dedup relevance)
       let qs = "";
       try {
         const raw = localStorage.getItem("physi_profile");
@@ -175,7 +225,6 @@ export default function ConsensusMap({ pollMs = 15000 }: { pollMs?: number }) {
       const j = await r.json();
       if (!r.ok || j.ok === false) throw new Error(j.error || "couldn't load");
       const next: ConsensusItem[] = j.items ?? [];
-      // Detect resolutions: ids that disappeared since last fetch (were pending, now gone)
       setItems((prev) => {
         if (prev.length > 0) {
           const nextIds = new Set(next.map((x) => x.id));
@@ -250,6 +299,18 @@ export default function ConsensusMap({ pollMs = 15000 }: { pollMs?: number }) {
           <p className="font-mono text-xs uppercase tracking-[0.12em] text-slate-500">Truth coordination · live</p>
           <h2 className="mt-1 text-base font-bold tracking-tight text-white">Consensus Map</h2>
           <p className="mt-1 max-w-[520px] text-sm leading-5 text-slate-400">All pending decisions your coursemates are settling — halls, lecturers, courses. Tap to weigh in.</p>
+          {cohort && cohort.count > 0 && (
+            <p className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 font-mono text-xs text-emerald-200">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
+              {cohort.count} anonymous peers share your pattern · 1.3× trust
+              <span className="text-emerald-300/60">· {Math.round(cohort.pattern_strength * 100)}% strength</span>
+            </p>
+          )}
+          {cohort && cohort.count === 0 && (
+            <p className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 font-mono text-xs text-slate-400">
+              No cohort peers yet — verify a few events to find your pattern
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 font-mono text-xs text-emerald-300">
@@ -274,7 +335,7 @@ export default function ConsensusMap({ pollMs = 15000 }: { pollMs?: number }) {
             {f.label}
           </button>
         ))}
-        <span className="ml-auto hidden font-mono text-xs text-slate-500 sm:inline">15s live · most votes first</span>
+        <span className="ml-auto hidden font-mono text-xs text-slate-500 sm:inline">15s live · depth meter</span>
       </div>
 
       {err && <p className="px-5 pb-2 font-mono text-xs text-amber-300">{err}</p>}
@@ -294,33 +355,31 @@ export default function ConsensusMap({ pollMs = 15000 }: { pollMs?: number }) {
           {/* Graph + list */}
           <div className="border-white/[0.06] px-5 py-4 lg:border-r">
             <div className="mb-3 flex items-center justify-between">
-              <span className="font-mono text-xs uppercase tracking-wide text-slate-500">Pending · {filtered.length} · tap to vote</span>
-              <span className="font-mono text-xs text-slate-500">{filtered.length > 0 ? `${filtered[0].votes_yes + filtered[0].votes_no}/8 closest` : ""}</span>
+              <span className="font-mono text-xs uppercase tracking-wide text-slate-500">Pending · {filtered.length} · depth meter</span>
+              <span className="font-mono text-xs text-slate-500">{filtered.length > 0 ? `${Math.round(calculateDepth(filtered[0].votes_yes, filtered[0].votes_no, filtered[0].total_weight ?? filtered[0].total).depth * 100)}% deepest` : ""}</span>
             </div>
             <ClusterRail items={filtered} selectedId={selectedId} onSelect={(id) => setSelectedId((c) => (c === id ? null : id))} />
-            {/* Resolution animation banner */}
             {justResolvedIds.size > 0 && (
               <div className="mt-3 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 font-mono text-xs text-emerald-300 animate-pulse">
                 ✓ Settled — {justResolvedIds.size} decision{justResolvedIds.size > 1 ? "s" : ""} just tipped quorum and is now canonical
               </div>
             )}
-            {/* Mini legend */}
             <div className="mt-4 flex flex-wrap items-center gap-3 font-mono text-[11px] text-slate-500">
               <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-sky-400" /> hall</span>
               <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-violet-400" /> lecturer</span>
               <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-amber-400" /> course</span>
-              <span className="ml-auto">6/8 · 75% — almost there</span>
+              <span className="ml-auto">depth: pale green → emerald (locked)</span>
             </div>
           </div>
 
-          {/* Inspector — inline vote */}
+          {/* Inspector — inline vote with depth */}
           <div className="px-5 py-4">
             {!selected ? (
               <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-8 text-center">
                 <p className="text-sm font-medium text-slate-200">Pick a card to vote</p>
                 <p className="mx-auto mt-1 max-w-[280px] font-mono text-xs leading-4 text-slate-500">You&apos;re deciding the canonical name everyone will see. 8 votes + 70% agreement settles it.</p>
                 <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 font-mono text-xs text-slate-400">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> live · 15s refresh
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> live · depth meter
                 </div>
               </div>
             ) : (
@@ -342,31 +401,45 @@ export default function ConsensusMap({ pollMs = 15000 }: { pollMs?: number }) {
                   </button>
                 </div>
 
-                {/* Interconnected preview */}
                 <div className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-[#0b1020] px-3 py-3">
                   <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-sm font-medium text-white">{selected.alias}</span>
                   <span className="font-mono text-sm text-slate-500">←→</span>
                   <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-sm font-medium text-white">{selected.canonical}</span>
                 </div>
 
-                {/* Vote progress */}
-                <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
-                  <div className="flex items-center justify-between font-mono text-xs">
-                    <span className={selected.total >= 7 ? "font-bold text-amber-300" : "text-slate-400"}>
-                      {selected.total}/8 · {selected.yes_pct}% {selected.total >= 7 ? "· 1 more!" : ""}
-                    </span>
-                    <span className={selected.total >= 8 && selected.yes_pct >= 70 ? "text-emerald-300" : "text-slate-500"}>
-                      {selected.total >= 8 && selected.yes_pct >= 70 ? "tipping to canonical ✓" : `${Math.max(0, 8 - selected.total)} more to quorum`}
-                    </span>
-                  </div>
-                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
-                    <div className="h-full bg-emerald-400 transition-all duration-500" style={{ width: `${selected.quorum_progress}%` }} />
-                  </div>
-                  <div className="mt-1 flex justify-between font-mono text-[11px] text-slate-500">
-                    <span>Yes {selected.votes_yes}</span>
-                    <span>No {selected.votes_no}</span>
-                  </div>
-                </div>
+                {/* Depth meter (truth depth) */}
+                {(() => {
+                  const d = calculateDepth(selected.votes_yes, selected.votes_no, selected.total_weight ?? selected.total);
+                  return (
+                    <div className={`rounded-xl border px-3 py-3 ${d.phase === "locked" ? "border-emerald-500/30 bg-emerald-500/10" : d.depth > 0.7 ? "border-emerald-400/20 bg-emerald-500/5" : "border-white/10 bg-white/[0.03]"}`}>
+                      <div className="flex items-center justify-between font-mono text-xs">
+                        <span className={d.phase === "locked" ? "font-black text-emerald-300" : d.depth > 0.7 ? "font-bold text-emerald-300 animate-pulse" : d.phase === "fresh" ? "text-slate-400" : "text-slate-300"}>
+                          {d.label} · {Math.round(d.depth * 100)}% depth
+                          {d.depth > 0.7 && d.phase !== "locked" ? " · closing in" : ""}
+                          {d.phase === "locked" ? " · solid ✓" : ""}
+                        </span>
+                        <span className={d.depth >= 0.85 ? "font-bold text-amber-300 animate-pulse" : "text-slate-500"}>
+                          {d.depth >= 0.85 && d.phase !== "locked" ? "Just 1 more vote to lock this" : d.phase === "locked" ? "locked ✓" : `${Math.max(0, 8 - selected.total)} more`}
+                        </span>
+                      </div>
+                      <div className="relative mt-2 h-2.5 overflow-hidden rounded-full bg-white/10">
+                        {d.phase === "fresh" && <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.8s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-white/25 to-transparent" />}
+                        {d.depth > 0.7 && d.phase !== "locked" && <div className="absolute inset-0 animate-pulse bg-emerald-400/15" />}
+                        <div className="h-full rounded-full transition-all duration-700 ease-out" style={{ width: `${Math.round(d.depth * 100)}%`, backgroundColor: d.color, boxShadow: d.depth > 0.7 ? "0 0 10px rgba(16,185,129,0.45)" : undefined }} />
+                      </div>
+                      <div className="mt-2 flex gap-1">
+                        {(["fresh", "building", "closing", "locked"] as const).map((ph) => (
+                          <span key={ph} className={`h-1 flex-1 rounded-full transition-all ${d.phase === ph ? "opacity-100 ring-1 ring-white/20" : "opacity-20"} ${ph === "fresh" ? "bg-emerald-200" : ph === "building" ? "bg-emerald-400" : ph === "closing" ? "bg-emerald-500" : "bg-emerald-600"}`} />
+                        ))}
+                      </div>
+                      <div className="mt-2 flex justify-between font-mono text-[11px] text-slate-500">
+                        <span>Yes {selected.votes_yes}</span>
+                        <span className={d.depth > 0.7 ? "text-emerald-300 font-bold" : ""}>{Math.round(d.depth * 100)}% depth</span>
+                        <span>No {selected.votes_no}</span>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 <ConsensusVoteButton
                   item={{ id: selected.id, type: selected.type, alias: selected.alias, canonical: selected.canonical, votes_yes: selected.votes_yes, votes_no: selected.votes_no, total: selected.total, quorum_progress: selected.quorum_progress, yes_pct: selected.yes_pct }}
@@ -384,6 +457,7 @@ export default function ConsensusMap({ pollMs = 15000 }: { pollMs?: number }) {
           </div>
         </div>
       )}
+      <style>{`@keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(200%); } }`}</style>
     </div>
   );
 }

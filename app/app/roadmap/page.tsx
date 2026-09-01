@@ -7,6 +7,7 @@ import { RoadSkeleton, MapSkeleton } from "@/components/Skeletons";
 import { useVoteWeight } from "@/hooks/useVoteWeight";
 import { VoteWeightBadge } from "@/components/VoteWeightBadge";
 import ConsensusMap from "@/components/road/ConsensusMap";
+import { EchoRing } from "@/components/road/EchoRing";
 
 type EventRow = {
   id: string; title: string; venue: string; event_date: string; event_time: string;
@@ -429,6 +430,7 @@ function RoadmapInner() {
                 <button onClick={()=>setSelectedId(null)} className="rounded-full border border-white/10 bg-white/[0.04] p-2 text-slate-400 hover:text-white"><X className="h-4 w-4" /></button>
               </div>
               <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10"><div className={`h-full rounded-full ${isVerified(selected) ? "bg-emerald-400" : "bg-amber-400"}`} style={{ width: `${pctOf(selected)}%`}} /></div>
+              <div className="mt-3"><EchoRing eventId={selected.id} /></div>
               <div className="mt-4 flex flex-wrap gap-2">
                 <button onClick={()=>vote(selected.id,"YES")} disabled={!!voteBusy} className="rounded-full bg-emerald-500 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-600 disabled:opacity-50">{voteBusy===selected.id+"YES" ? "…" : "Yes ✓"}</button>
                 <button onClick={()=>vote(selected.id,"NO")} disabled={!!voteBusy} className="rounded-full border border-white/10 bg-white/[0.05] px-5 py-2 text-sm font-medium text-slate-200 hover:bg-white hover:text-[#070a12] disabled:opacity-50">{voteBusy===selected.id+"NO" ? "…" : "No ✕"}</button>
@@ -455,6 +457,7 @@ function RoadmapInner() {
                     <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10"><div className={`h-full rounded-full ${v ? "bg-emerald-400" : "bg-amber-400"}`} style={{ width:`${p}%`}} /></div>
                     <span className="font-mono text-xs text-slate-500">{p}%</span>
                   </div>
+                  <div className="mt-2"><EchoRing eventId={ev.id} compact /></div>
                 </div>
               );
             })}
@@ -480,6 +483,7 @@ function RoadmapInner() {
                         <span className="font-mono text-xs text-slate-500">{Number(ev.authority_points)}/{Number(ev.required_points)||8} · {p}%</span>
                         {v ? <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 font-mono text-xs text-emerald-300">✓ green</span> : <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 font-mono text-xs text-amber-300">advisory</span>}
                       </div>
+                      <div className="mt-2"><EchoRing eventId={ev.id} compact /></div>
                     </div>
                     <span className={`hidden sm:inline-flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${v ? "bg-emerald-500 text-white" : "bg-amber-500 text-white"}`}>{v ? "✓" : "●"}</span>
                   </div>

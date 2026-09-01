@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useCalendar } from "@/hooks/useCalendar";
 import { VoterTrustPile, dotStyleForWeight } from "@/components/ui/VoterTrustPile";
+import { EchoRing } from "@/components/road/EchoRing";
 
 type BunkEvent = {
   id: string; title: string; venue: string; event_date: string; event_time: string;
@@ -189,6 +190,7 @@ export default function BunkRadar({ userId }: { userId?: string | null }) {
                     </button>
                   ) : null}
                   {verifiedCount > 0 && <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/20 bg-emerald-500/15 px-2 py-0.5 font-mono text-[10px] font-black text-emerald-200">✓ {verifiedCount} verified witness{verifiedCount>1?"es":""}</span>}
+                  <EchoRing eventId={ev.id} compact />
                 </div>
                 {ev.notify_due && <p className="mt-1 font-mono text-[11px] font-bold text-red-300">⏰ Starts in ~{ev.minutes_until} min — HIGH no-show risk, check before you go</p>}
                 {isExpanded && weights.length > 0 && (

@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSql, isDbConfigured, dbNotConfigured, ensureAllTables } from "@/lib/db";
 import { logError, getErrorMessage } from "@/lib/adapters/error";
 import { weightFromTotal, weightedQuorumStatus } from "@/lib/voteWeight";
+import { getCohesionMultipliers } from "@/lib/cohortTrust";
 
 export const dynamic = "force-dynamic";
 
@@ -78,7 +79,7 @@ export async function POST(req: NextRequest) {
     const yes=Number((agg[0] as any)?.yes||0);
     const no=Number((agg[0] as any)?.no||0);
     const total=yes+no;
-    // weighted quorum
+    // weighted quorum (history × cohort trust anonymously)
     let weightedYes = yes, weightedNo = no;
     let weightedStatus: "pending"|"resolved"|"rejected" = quorumStatus(yes,no);
     try {
@@ -96,10 +97,14 @@ export async function POST(req: NextRequest) {
           wmap.set(uid, weightFromTotal(c1+c2+c3+c4));
         } catch { wmap.set(uid, 1); }
       }));
+      let cohortMap = new Map<string, number>();
+      try { cohortMap = await getCohesionMultipliers(sql, uniq); } catch {}
       let wYes=0, wNo=0;
       for (const v of voters) {
         const w = wmap.get(String((v as any).voter_id)) ?? 1;
-        if (Number((v as any).vote_value)===1) wYes+=w; else wNo+=w;
+        const cm = cohortMap.get(String((v as any).voter_id)) ?? 1;
+        const tot = w * cm;
+        if (Number((v as any).vote_value)===1) wYes+=tot; else wNo+=tot;
       }
       weightedYes = Number(wYes.toFixed(2));
       weightedNo = Number(wNo.toFixed(2));
