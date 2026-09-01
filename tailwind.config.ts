@@ -1,5 +1,5 @@
 import type { Config } from 'tailwindcss';
-// Design tokens via ThemeAdapter — no hard-coded colors (modular)
+// Design tokens via ThemeAdapter — forest default #0d3b2a / #1a5f48 / #34d399 / #fbbf24 on #022c1e
 import { tailwindColors } from './lib/adapters/theme';
 
 const config: Config = {
@@ -22,7 +22,7 @@ const config: Config = {
       },
       boxShadow: {
         'candy': '0 8px 32px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.06)',
-        'glow-purple': '0 8px 24px rgba(139,92,246,0.35)',
+        'glow-mint': '0 8px 24px rgba(52,211,153,0.35)',
       },
     },
   },

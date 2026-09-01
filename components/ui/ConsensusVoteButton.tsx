@@ -92,7 +92,7 @@ export default function ConsensusVoteButton({
         <button
           onClick={() => doVote("no")}
           disabled={!!busy || !!disabled}
-          className={`rounded-full px-2.5 py-1 text-xs font-semibold transition ${justVoted === "no" ? "bg-white text-[#070a12] scale-105" : "bg-white/10 text-slate-200 hover:bg-white hover:text-[#070a12] border border-white/10"} disabled:opacity-50`}
+          className={`rounded-full px-2.5 py-1 text-xs font-semibold transition ${justVoted === "no" ? "bg-white text-[#022c1e] scale-105" : "bg-white/10 text-slate-200 hover:bg-white hover:text-[#022c1e] border border-white/10"} disabled:opacity-50`}
         >
           {busy === "no" ? "…" : `No · ${item.votes_no}`}
         </button>
@@ -122,7 +122,7 @@ export default function ConsensusVoteButton({
         <button
           onClick={() => doVote("no")}
           disabled={!!busy || !!disabled}
-          className={`flex-1 rounded-full py-2 text-sm font-semibold transition border ${justVoted === "no" ? "bg-white text-[#070a12]" : "border-white/15 bg-white/5 text-white hover:bg-white hover:text-[#070a12]"} disabled:opacity-50`}
+          className={`flex-1 rounded-full py-2 text-sm font-semibold transition border ${justVoted === "no" ? "bg-white text-[#022c1e]" : "border-white/15 bg-white/5 text-white hover:bg-white hover:text-[#022c1e]"} disabled:opacity-50`}
         >
           {busy === "no" ? "Saving…" : copy.no}
         </button>

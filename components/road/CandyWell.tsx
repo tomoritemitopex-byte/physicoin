@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 // Candy Well + Forest 2.5D — bottom well candies collide spring physics; forest parallax depth = friend distance far blur near sharp
 type Candy={x:number; y:number; vx:number; vy:number; r:number; color:string; friendDist:number}
-const COLORS=["#8b5cf6","#ec4899","#10b981","#f59e0b","#0ea5e9","#f43f5e"];
+const COLORS=["#34d399","#ec4899","#10b981","#f59e0b","#0ea5e9","#f43f5e"];
 export default function CandyWell({ count=14 }:{count?:number}){
   const ref=useRef<HTMLCanvasElement>(null);
   const [parallax,setParallax]=useState(0);

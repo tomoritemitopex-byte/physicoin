@@ -77,7 +77,7 @@ export default function MiningPage(){
       <p className="font-mono text-xs uppercase tracking-[0.12em] text-slate-500">Daily Rep · streak</p>
       <h1 className="mt-2 text-2xl font-bold text-white">You need a handle first</h1>
       <p className="mt-2 text-sm text-slate-400">Create a handle to start your daily Rep streak.</p>
-      <a href="/app/profile" className="mt-6 inline-flex rounded-full bg-white px-6 py-3 text-sm font-semibold text-[#070a12]">Create handle →</a>
+      <a href="/app/profile" className="mt-6 inline-flex rounded-full bg-white px-6 py-3 text-sm font-semibold text-[#022c1e]">Create handle →</a>
     </div>
   );
 
@@ -115,7 +115,7 @@ export default function MiningPage(){
         ) : (
           <div className="rounded-2xl border border-emerald-500/15 bg-emerald-500/[0.06] p-5 text-center sm:text-left sm:flex sm:items-center sm:justify-between">
             <div><p className="text-sm font-semibold text-white">Ready to earn Rep</p><p className="mt-1 text-sm text-emerald-200/70">One tap → +{preview} Rep · streak {streak}</p></div>
-            <button onClick={checkIn} disabled={busy} className="mt-3 inline-flex rounded-full bg-white px-6 py-3 text-sm font-semibold text-[#070a12] hover:bg-slate-100 disabled:opacity-50 sm:mt-0">{busy ? "Checking…" : `Check in +${preview} Rep →`}</button>
+            <button onClick={checkIn} disabled={busy} className="mt-3 inline-flex rounded-full bg-white px-6 py-3 text-sm font-semibold text-[#022c1e] hover:bg-slate-100 disabled:opacity-50 sm:mt-0">{busy ? "Checking…" : `Check in +${preview} Rep →`}</button>
           </div>
         )}
         {err && <p className="mt-3 rounded-xl border border-red-500/15 bg-red-500/10 px-3 py-2 text-sm text-red-300">{err}</p>}

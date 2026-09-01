@@ -2,9 +2,8 @@
  * lib/adapters/theme.ts — ThemeAdapter (design adapter)
  *
  * Modular design tokens: registerAdapter() plugs a new theme without hard-codes.
- * Built-ins: PHYSI dark (#070a12) + forest (#0d3b2a). Any new theme = registerAdapter({id:"...", ...})
+ * Default: forest (#0d3b2a) — mint #34d399 + gold #fbbf24 on shadow #022c1e
  * Consumers: tailwind.config.ts, globals.css (via CSS vars), layout components.
- * Like DbAdapter: pattern-based registry, first-registered wins for default.
  */
 
 import { createRegistry } from "./registry";
@@ -33,7 +32,7 @@ export interface ThemeTokens {
 export interface ThemeAdapter {
   id: string;
   name: string;
-  /** semantic family: "dark" | "forest" | ... */
+  /** semantic family: "forest" | ... */
   variant: string;
   tokens: ThemeTokens;
   /** optional Tailwind color extension helper */
@@ -46,97 +45,58 @@ export const registerTheme = reg.registerAdapter;
 export const listThemes = reg.listAdapters;
 export const getTheme = reg.getAdapter;
 export function getDefaultTheme(): ThemeAdapter {
-  return getTheme("physi-dark") ?? reg.listAdapters()[0]!;
+  return getTheme("forest") ?? reg.listAdapters()[0]!;
 }
 export function themeCssVars(id?: string): Record<string, string> {
   const t = (id ? getTheme(id) : null) ?? getDefaultTheme();
   return t.tokens.cssVars;
 }
 
-// ── built-ins ────────────────────────────────────────────────────────────────
-const physiDark: ThemeAdapter = {
-  id: "physi-dark",
-  name: "PHYSI Dark",
-  variant: "dark",
-  tokens: {
-    bg: "#070a12",
-    card: "rgba(255,255,255,0.03)",
-    border: "rgba(255,255,255,0.06)",
-    muted: "#94a3b8",
-    accent: "#ffffff",
-    accentFg: "#070a12",
-    success: "#10b981",
-    warning: "#f59e0b",
-    cssVars: {
-      "--physi-bg": "#070a12",
-      "--physi-card": "rgba(255,255,255,0.03)",
-      "--physi-border": "rgba(255,255,255,0.06)",
-      "--physi-muted": "#94a3b8",
-      "--physi-accent": "#ffffff",
-      "--physi-success": "#10b981",
-      "--physi-warning": "#f59e0b",
-      "--physi-forest": "#0d3b2a",
-      "--physi-forest-mid": "#1a5c3a",
-      "--physi-forest-light": "#52b788",
-      "--physi-forest-2": "#143d2e",
-      "--physi-purple": "#8b5cf6",
-      "--physi-purple-dark": "#6e45d0",
-      "--physi-purple-light": "#a78bfa",
-      "--font-fredoka": "\"Fredoka\", system-ui, sans-serif",
-    },
-  },
-  twColors: {
-    physi: {
-      bg: "#070a12",
-      card: "rgba(255,255,255,0.03)",
-      border: "rgba(255,255,255,0.06)",
-    },
-    forest: "#0d3b2a",
-  },
-};
-
+// ── built-in: forest (default) ───────────────────────────────────────────────
 const forest: ThemeAdapter = {
   id: "forest",
   name: "Forest Road",
   variant: "forest",
   tokens: {
     bg: "#0d3b2a",
-    card: "rgba(255,255,255,0.05)",
-    border: "rgba(255,255,255,0.08)",
+    card: "#1a5f48",
+    border: "rgba(52,211,153,0.15)",
     muted: "#a7bfb3",
-    accent: "#10b981",
-    accentFg: "#ffffff",
+    accent: "#34d399",
+    accentFg: "#022c1e",
     success: "#34d399",
     warning: "#fbbf24",
     cssVars: {
       "--physi-bg": "#0d3b2a",
-      "--physi-card": "rgba(255,255,255,0.05)",
-      "--physi-border": "rgba(255,255,255,0.08)",
+      "--physi-card": "#1a5f48",
+      "--physi-border": "rgba(52,211,153,0.15)",
       "--physi-muted": "#a7bfb3",
-      "--physi-accent": "#10b981",
+      "--physi-accent": "#34d399",
+      "--physi-accent-fg": "#022c1e",
       "--physi-success": "#34d399",
       "--physi-warning": "#fbbf24",
       "--physi-forest": "#0d3b2a",
-      "--physi-forest-mid": "#1a5c3a",
-      "--physi-forest-light": "#52b788",
+      "--physi-forest-mid": "#1a5f48",
+      "--physi-forest-light": "#34d399",
       "--physi-forest-2": "#143d2e",
-      "--physi-purple": "#8b5cf6",
-      "--physi-purple-dark": "#6e45d0",
-      "--physi-purple-light": "#a78bfa",
+      "--physi-shadow": "#022c1e",
+      "--physi-mint": "#34d399",
+      "--physi-gold": "#fbbf24",
       "--font-fredoka": "\"Fredoka\", system-ui, sans-serif",
     },
   },
   twColors: {
     physi: {
       bg: "#0d3b2a",
-      card: "rgba(255,255,255,0.05)",
-      border: "rgba(255,255,255,0.08)",
+      card: "#1a5f48",
+      border: "rgba(52,211,153,0.15)",
+      accent: "#34d399",
+      shadow: "#022c1e",
     },
     forest: "#0d3b2a",
   },
 };
 
-registerTheme(physiDark);
 registerTheme(forest);
 
 /** Resolve Tailwind 'theme.extend.colors' from registry (no hard-codes). */

@@ -330,7 +330,7 @@ export default function ConsensusMap({ pollMs = 15000 }: { pollMs?: number }) {
           <button
             key={f.k}
             onClick={() => setFilter(f.k as any)}
-            className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${filter === f.k ? "bg-white text-[#070a12]" : "border border-white/10 bg-white/[0.04] text-slate-300 hover:bg-white/[0.08]"}`}
+            className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${filter === f.k ? "bg-white text-[#022c1e]" : "border border-white/10 bg-white/[0.04] text-slate-300 hover:bg-white/[0.08]"}`}
           >
             {f.label}
           </button>
@@ -396,7 +396,7 @@ export default function ConsensusMap({ pollMs = 15000 }: { pollMs?: number }) {
                       {selected.group_key ? `Group: ${selected.group_key.slice(0, 48)}` : "Campus-wide"} · {timeAgo(selected.created_at)} · expires {selected.expires_at ? timeAgo(selected.expires_at) : "—"}
                     </p>
                   </div>
-                  <button onClick={() => setSelectedId(null)} className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 font-mono text-xs text-slate-300 hover:bg-white hover:text-[#070a12]">
+                  <button onClick={() => setSelectedId(null)} className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 font-mono text-xs text-slate-300 hover:bg-white hover:text-[#022c1e]">
                     Close
                   </button>
                 </div>

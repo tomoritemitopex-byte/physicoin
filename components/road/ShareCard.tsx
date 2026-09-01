@@ -34,7 +34,7 @@ export default function ShareCard({ open, onClose, myRep, streak, youHandle, lev
     if((ctx as any).roundRect) (ctx as any).roundRect(cardX,cardY,cardW,cardH,r);
     else ctx.rect(cardX,cardY,cardW,cardH);
     ctx.fill();
-    const candyColors:Record<number,string>={1:"#10b981",2:"#0ea5e9",3:"#8b5cf6",4:"#f59e0b",5:"#fbbf24"};
+    const candyColors:Record<number,string>={1:"#10b981",2:"#0ea5e9",3:"#34d399",4:"#f59e0b",5:"#fbbf24"};
     const col=candyColors[levelInfo.lvl]||"#10b981";
     const avX=W/2, avY=360, avR=110;
     ctx.fillStyle=col+"33";

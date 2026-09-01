@@ -46,7 +46,7 @@ export function EmptyState({ title, desc, action, onAction }: { title: string; d
       <p className="text-sm font-semibold text-white">{title}</p>
       <p className="mx-auto mt-1 max-w-[320px] text-sm leading-5 text-slate-500">{desc}</p>
       {action && onAction && (
-        <button onClick={onAction} className="mt-4 rounded-full bg-white px-5 py-2 text-sm font-semibold text-[#070a12]">
+        <button onClick={onAction} className="mt-4 rounded-full bg-white px-5 py-2 text-sm font-semibold text-[#022c1e]">
           {action}
         </button>
       )}

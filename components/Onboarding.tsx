@@ -71,7 +71,7 @@ export default function Onboarding() {
             <span className="font-mono text-xs text-slate-500">{step + 1}/3</span>
           </div>
           <div className="mt-6 flex gap-2">
-            <button onClick={next} className="flex-1 rounded-full bg-white px-5 py-3 text-sm font-semibold text-[#070a12] hover:bg-slate-100 transition">
+            <button onClick={next} className="flex-1 rounded-full bg-white px-5 py-3 text-sm font-semibold text-[#022c1e] hover:bg-slate-100 transition">
               {step === STEPS.length - 1 ? "Got it →" : "Next →"}
             </button>
             <button onClick={dismiss} className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-slate-300 hover:bg-white/[0.07]">

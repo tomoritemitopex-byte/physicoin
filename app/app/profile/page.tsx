@@ -93,7 +93,7 @@ export default function ProfilePage(){
           <div className="flex items-end"><p className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2 font-mono text-xs text-slate-500">Your votes weigh more as you verify correctly. Rep grows with streak.</p></div>
         </div>
         {err && <p className="mt-3 rounded-xl border border-red-500/15 bg-red-500/10 px-3 py-2 text-sm text-red-300">{err}</p>}
-        <button disabled={busy} className="mt-5 w-full rounded-full bg-white py-3 text-sm font-semibold text-[#070a12] hover:bg-slate-100 disabled:opacity-50 transition">{busy ? "Creating…" : "Create handle →"}</button>
+        <button disabled={busy} className="mt-5 w-full rounded-full bg-white py-3 text-sm font-semibold text-[#022c1e] hover:bg-slate-100 disabled:opacity-50 transition">{busy ? "Creating…" : "Create handle →"}</button>
         <p className="mt-3 text-center font-mono text-xs text-slate-500">Stored locally + on server · no password needed</p>
       </form>
       {toast && <div className="fixed bottom-20 left-1/2 z-50 -translate-x-1/2 rounded-full bg-[#0c1222] border border-white/10 px-4 py-2 text-sm text-white shadow-xl">{toast}</div>}
@@ -145,7 +145,7 @@ export default function ProfilePage(){
           <li>• Green ticks on the road need your Yes to count.</li>
         </ul>
         <div className="mt-4 flex gap-2">
-          <a href="/app/roadmap" className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-[#070a12]">Go to road →</a>
+          <a href="/app/roadmap" className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-[#022c1e]">Go to road →</a>
           <a href="/app/mining" className="rounded-full border border-white/10 bg-white/[0.04] px-5 py-2 text-sm text-white">Daily check-in</a>
         </div>
       </div>

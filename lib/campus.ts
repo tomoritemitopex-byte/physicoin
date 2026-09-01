@@ -18,7 +18,7 @@ export type Building = {
 export const BUILDINGS: Building[] = [
   { id: "phys", code: "PHYS", label: "Physiology", short: "Phys", color: "#10b981", accent: "#065f46", icon: "🧬", desc: "Home of Physio" },
   { id: "mbbs", code: "MBBS", label: "Medicine & Surgery", short: "MBBS", color: "#0ea5e9", accent: "#0c4a6e", icon: "🩺", desc: "College of Medicine" },
-  { id: "dpt", code: "DPT", label: "Physiotherapy", short: "DPT", color: "#8b5cf6", accent: "#4c1d95", icon: "🦴", desc: "Rehab Sciences" },
+  { id: "dpt", code: "DPT", label: "Physiotherapy", short: "DPT", color: "#34d399", accent: "#4c1d95", icon: "🦴", desc: "Rehab Sciences" },
   { id: "bnsc", code: "BNSc", label: "Nursing Science", short: "Nursing", color: "#ec4899", accent: "#831843", icon: "🩹", desc: "Nursing" },
   { id: "bmls", code: "BMLS", label: "Medical Lab Science", short: "BMLS", color: "#f59e0b", accent: "#78350f", icon: "🔬", desc: "Lab Science" },
   { id: "pharm", code: "PHARM", label: "Pharmacy", short: "Pharm", color: "#06b6d4", accent: "#164e63", icon: "💊", desc: "Pharmaceutical Sci" },

@@ -10,7 +10,7 @@ export default function VerifyPage(){
       <p className="font-mono text-xs uppercase tracking-[0.12em] text-slate-500">Verify moved</p>
       <h1 className="mt-2 text-xl font-bold text-white">Verify on the Road</h1>
       <p className="mt-1 text-sm text-slate-400">Tap any node → Yes / No. Same verify, cleaner flow.</p>
-      <a href="/app/roadmap?view=list&filter=advisory" className="mt-6 inline-flex rounded-full bg-white px-6 py-3 text-sm font-semibold text-[#070a12]">Open Road →</a>
+      <a href="/app/roadmap?view=list&filter=advisory" className="mt-6 inline-flex rounded-full bg-white px-6 py-3 text-sm font-semibold text-[#022c1e]">Open Road →</a>
     </div>
   );
 }

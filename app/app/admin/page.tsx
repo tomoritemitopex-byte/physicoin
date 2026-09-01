@@ -76,7 +76,7 @@ export default function AdminPage() {
           <span className="font-mono text-[11px] text-slate-500">{logs.length} entries</span>
         </div>
 
-        <div className="max-h-[64vh] overflow-auto overscroll-contain bg-[#070a12]">
+        <div className="max-h-[64vh] overflow-auto overscroll-contain bg-[#022c1e]">
           {logs.length === 0 ? (
             <div className="px-4 py-10 text-center font-mono text-xs text-slate-500">No logs yet — hit any /api/* route to generate events. Check <code>logs/realtime.log</code> in repo.</div>
           ) : (

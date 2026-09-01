@@ -228,7 +228,7 @@ export default function VoiceGossipFab({ onCreate, anonId, genAnonId }: Props) {
           onTouchEnd={cancelHold}
           onTouchCancel={cancelHold}
           aria-label="Hold to whisper gossip"
-          className={`relative flex h-[56px] w-[56px] items-center justify-center rounded-full text-white shadow-[0_8px_24px_rgba(139,92,246,0.5)] transition ${holding ? "scale-110 bg-[#6e45d0]" : listening ? "scale-105 bg-red-500 animate-pulse shadow-[0_8px_24px_rgba(239,68,68,0.5)]" : "bg-[#8b5cf6] hover:bg-[#7c3aed]"}`}
+          className={`relative flex h-[56px] w-[56px] items-center justify-center rounded-full text-white shadow-[0_8px_24px_rgba(139,92,246,0.5)] transition ${holding ? "scale-110 bg-[#34d399]" : listening ? "scale-105 bg-red-500 animate-pulse shadow-[0_8px_24px_rgba(239,68,68,0.5)]" : "bg-[#34d399] hover:bg-[#7c3aed]"}`}
         >
           {holding && (
             <svg className="absolute inset-0 h-full w-full -rotate-90" viewBox="0 0 56 56">
@@ -293,7 +293,7 @@ export default function VoiceGossipFab({ onCreate, anonId, genAnonId }: Props) {
             </div>
             <div className="mt-4 flex gap-2">
               <button onClick={() => setPhase("idle")} className="flex-1 rounded-full border border-white/10 bg-white/[0.06] py-2.5 text-[13px] font-medium text-slate-200">Cancel</button>
-              <button onClick={handleWhisperSubmit} className="flex-[1.4] rounded-full bg-[#8b5cf6] py-2.5 text-[13px] font-black text-white hover:bg-[#7c3aed]">Whisper anon {anonDisplay} · fusion x2 → Post</button>
+              <button onClick={handleWhisperSubmit} className="flex-[1.4] rounded-full bg-[#34d399] py-2.5 text-[13px] font-black text-white hover:bg-[#7c3aed]">Whisper anon {anonDisplay} · fusion x2 → Post</button>
             </div>
             <p className="mt-2 text-center font-mono text-[10px] text-slate-500">hold FAB 1.5s · whisper 3s auto · COURSE/VENUE/TIME/SEVERITY auto · anon {anonDisplay} #7F3A · fusion x2 · no typing</p>
           </div>

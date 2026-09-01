@@ -245,7 +245,7 @@ function RoadmapInner() {
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-white sm:text-[26px]">Where&apos;s class today?</h1>
           <p className="mt-1.5 max-w-[560px] text-sm leading-5 text-slate-400">Post what you hear. Tap Yes if you were there — green tick when your coursemates confirm.</p>
         </div>
-        <button onClick={()=>setShowPost(v=>!v)} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-white px-6 min-h-[44px] text-sm font-semibold text-[#070a12] shadow-lg hover:bg-slate-100 transition">
+        <button onClick={()=>setShowPost(v=>!v)} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-white px-6 min-h-[44px] text-sm font-semibold text-[#022c1e] shadow-lg hover:bg-slate-100 transition">
           <Plus className="h-4 w-4" /> {showPost ? "Close" : "Post gist"}
         </button>
       </div>
@@ -276,14 +276,14 @@ function RoadmapInner() {
             {[
               { k:"all", label:"All" }, { k:"advisory", label:"Advisory" }, { k:"verified", label:"Green" }
             ].map(f=> (
-              <button key={f.k} onClick={()=>setFilterParam(f.k)} className={`min-h-[40px] rounded-full px-4 text-sm font-medium transition ${filter===f.k ? "bg-white text-[#070a12]" : "border border-white/10 bg-white/[0.04] text-slate-300 hover:bg-white/[0.07]"}`}>{f.label}</button>
+              <button key={f.k} onClick={()=>setFilterParam(f.k)} className={`min-h-[40px] rounded-full px-4 text-sm font-medium transition ${filter===f.k ? "bg-white text-[#022c1e]" : "border border-white/10 bg-white/[0.04] text-slate-300 hover:bg-white/[0.07]"}`}>{f.label}</button>
             ))}
           </div>
         </div>
         <div className="flex w-fit items-center rounded-full border border-white/10 bg-white/[0.04] p-1">
-          <button onClick={()=>setView("map")} className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-4 text-sm font-medium transition ${view==="map" ? "bg-white text-[#070a12]" : "text-slate-400 hover:text-white"}`}><MapIcon className="h-3.5 w-3.5" /> Map</button>
-          <button onClick={()=>setView("list")} className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-4 text-sm font-medium transition ${view==="list" ? "bg-white text-[#070a12]" : "text-slate-400 hover:text-white"}`}><List className="h-3.5 w-3.5" /> List</button>
-          <button onClick={()=>setView("consensus")} className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-4 text-sm font-medium transition ${view==="consensus" ? "bg-white text-[#070a12]" : "text-slate-400 hover:text-white"}`}><GitMerge className="h-3.5 w-3.5" /> Consensus</button>
+          <button onClick={()=>setView("map")} className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-4 text-sm font-medium transition ${view==="map" ? "bg-white text-[#022c1e]" : "text-slate-400 hover:text-white"}`}><MapIcon className="h-3.5 w-3.5" /> Map</button>
+          <button onClick={()=>setView("list")} className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-4 text-sm font-medium transition ${view==="list" ? "bg-white text-[#022c1e]" : "text-slate-400 hover:text-white"}`}><List className="h-3.5 w-3.5" /> List</button>
+          <button onClick={()=>setView("consensus")} className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-4 text-sm font-medium transition ${view==="consensus" ? "bg-white text-[#022c1e]" : "text-slate-400 hover:text-white"}`}><GitMerge className="h-3.5 w-3.5" /> Consensus</button>
         </div>
       </div>
 
@@ -325,7 +325,7 @@ function RoadmapInner() {
               <p className="text-sm font-medium text-amber-200">Looks like duplicate — merge?</p>
               <p className="mt-1 font-mono text-xs text-amber-200/70">{dupHint.hint || dupHint.message || "An event with same title + venue exists within 7 days."}</p>
               {dupHint.existing && <p className="mt-1 font-mono text-xs text-slate-400">{dupHint.existing.title} @ {dupHint.existing.venue} · {String(dupHint.existing.event_date).slice(0,10)}</p>}
-              {dupHint.canonicalVenue && <button type="button" onClick={()=>setForm(f=>({...f,venue:dupHint.canonicalVenue}))} className="mt-2 rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#070a12]">Use canonical: {dupHint.canonicalVenue}</button>}
+              {dupHint.canonicalVenue && <button type="button" onClick={()=>setForm(f=>({...f,venue:dupHint.canonicalVenue}))} className="mt-2 rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#022c1e]">Use canonical: {dupHint.canonicalVenue}</button>}
               <div className="mt-2 flex gap-2">
                 <button type="button" onClick={async()=>{
                   // force create despite duplicate
@@ -335,7 +335,7 @@ function RoadmapInner() {
                     const j=await r.json(); if(!r.ok||j.ok===false) throw new Error(j.error||j.message||"post failed");
                     setToast("Posted despite duplicate ✓"); setDupHint(null); setShowPost(false); fetchFeed();
                   }catch(e:any){ setToast(e.message);}finally{ setPosting(false);}
-                }} className="rounded-full border border-white/20 px-3 py-1 text-xs text-white hover:bg-white hover:text-[#070a12]">Post anyway</button>
+                }} className="rounded-full border border-white/20 px-3 py-1 text-xs text-white hover:bg-white hover:text-[#022c1e]">Post anyway</button>
                 <button type="button" onClick={()=>setDupHint(null)} className="rounded-full border border-white/10 px-3 py-1 text-xs text-slate-400">Dismiss</button>
               </div>
             </div>
@@ -346,7 +346,7 @@ function RoadmapInner() {
             <span className="ml-1 font-mono text-xs text-slate-500">repeats all your events +7 days</span>
           </div>
           <div className="mt-4 flex gap-2">
-            <button disabled={posting} className="min-h-[44px] rounded-full bg-white px-7 text-sm font-semibold text-[#070a12] hover:bg-slate-100 disabled:opacity-50 transition">{posting ? "Posting…" : "Post as advisory →"}</button>
+            <button disabled={posting} className="min-h-[44px] rounded-full bg-white px-7 text-sm font-semibold text-[#022c1e] hover:bg-slate-100 disabled:opacity-50 transition">{posting ? "Posting…" : "Post as advisory →"}</button>
             <button type="button" onClick={()=>setShowPost(false)} className="min-h-[44px] rounded-full border border-white/10 bg-white/[0.04] px-6 text-sm text-slate-300">Cancel</button>
           </div>
         </form>
@@ -366,7 +366,7 @@ function RoadmapInner() {
               <span className="hidden sm:inline font-mono text-xs text-slate-400">halls · lecturers · courses</span>
             </span>
             <span className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 font-mono text-xs text-slate-400 group-open:hidden">Show <span aria-hidden>▾</span></span>
-            <span className="hidden items-center gap-1.5 rounded-full bg-white px-3 py-1 font-mono text-xs font-semibold text-[#070a12] group-open:inline-flex">Hide <span aria-hidden>▴</span></span>
+            <span className="hidden items-center gap-1.5 rounded-full bg-white px-3 py-1 font-mono text-xs font-semibold text-[#022c1e] group-open:inline-flex">Hide <span aria-hidden>▴</span></span>
           </summary>
           <div className="border-t border-white/[0.06] p-2 sm:p-3">
             <ConsensusMap />
@@ -383,7 +383,7 @@ function RoadmapInner() {
         <div className="mt-6 rounded-[20px] border border-dashed border-white/10 bg-white/[0.02] px-6 py-12 text-center">
           <p className="font-semibold text-white">No results</p>
           <p className="mt-1 text-sm text-slate-500">Try a different filter or post the first gist.</p>
-          <button onClick={()=>setShowPost(true)} className="mt-4 rounded-full bg-white px-5 py-2 text-sm font-semibold text-[#070a12]">Post gist →</button>
+          <button onClick={()=>setShowPost(true)} className="mt-4 rounded-full bg-white px-5 py-2 text-sm font-semibold text-[#022c1e]">Post gist →</button>
         </div>
       ) : view==="map" ? (
         <div className="mt-6">
@@ -391,17 +391,17 @@ function RoadmapInner() {
           <div className="overflow-hidden rounded-[20px] border border-white/[0.07] bg-gradient-to-br from-[#0d3b2a] via-[#143d2e] to-[#1a5c3a] p-4 sm:p-6">
             <div className="flex items-center justify-between">
               <p className="font-mono text-xs uppercase tracking-[0.12em] text-emerald-200/70">Endless road · WAT</p>
-              <span className="rounded-full bg-white px-3 py-1 font-mono text-xs font-bold text-[#070a12]">{filtered.length} nodes</span>
+              <span className="rounded-full bg-white px-3 py-1 font-mono text-xs font-bold text-[#022c1e]">{filtered.length} nodes</span>
             </div>
             <div className="relative mt-4 -mx-1 overflow-x-auto no-scrollbar sm:mx-0">
               <svg viewBox="0 0 640 170" className="h-[140px] w-full min-w-[520px] sm:h-[150px]" role="img" aria-label="Road">
                 <defs>
-                  <linearGradient id="roadGrad" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stopColor="#6e45d0"/><stop offset="50%" stopColor="#8b5cf6"/><stop offset="100%" stopColor="#a78bfa"/></linearGradient>
+                  <linearGradient id="roadGrad" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stopColor="#34d399"/><stop offset="50%" stopColor="#34d399"/><stop offset="100%" stopColor="#fbbf24"/></linearGradient>
                 </defs>
                 {(() => {
                   const d = "M 24 120 C 150 120, 150 36, 280 36 C 410 36, 410 120, 540 120 C 590 120, 620 110, 640 104";
                   return (<g>
-                    <path d={d} fill="none" stroke="#1a1033" strokeWidth={30} strokeLinecap="round" opacity={0.9} />
+                    <path d={d} fill="none" stroke="#022c1e" strokeWidth={30} strokeLinecap="round" opacity={0.9} />
                     <path d={d} fill="none" stroke="url(#roadGrad)" strokeWidth={24} strokeLinecap="round" />
                     <path d={d} fill="none" stroke="white" strokeWidth={2} strokeLinecap="round" strokeDasharray="10 10" opacity={0.9} />
                   </g>);
@@ -446,7 +446,7 @@ function RoadmapInner() {
               <div className="mt-3"><EchoRing eventId={selected.id} /></div>
               <div className="mt-4 flex flex-wrap gap-2">
                 <button onClick={()=>vote(selected.id,"YES")} disabled={!!voteBusy} className="min-h-[44px] rounded-full bg-emerald-500 px-6 text-sm font-semibold text-white hover:bg-emerald-600 disabled:opacity-50">{voteBusy===selected.id+"YES" ? "…" : "Yes ✓"}</button>
-                <button onClick={()=>vote(selected.id,"NO")} disabled={!!voteBusy} className="min-h-[44px] rounded-full border border-white/10 bg-white/[0.05] px-6 text-sm font-medium text-slate-200 hover:bg-white hover:text-[#070a12] disabled:opacity-50">{voteBusy===selected.id+"NO" ? "…" : "No ✕"}</button>
+                <button onClick={()=>vote(selected.id,"NO")} disabled={!!voteBusy} className="min-h-[44px] rounded-full border border-white/10 bg-white/[0.05] px-6 text-sm font-medium text-slate-200 hover:bg-white hover:text-[#022c1e] disabled:opacity-50">{voteBusy===selected.id+"NO" ? "…" : "No ✕"}</button>
                 <button onClick={()=>vote(selected.id,"CANCEL")} disabled={!!voteBusy} className="min-h-[44px] rounded-full border border-white/10 bg-white/[0.02] px-6 text-sm text-slate-400 hover:bg-white/[0.06] disabled:opacity-50">Skip</button>
                 {myWeightLabel && <span className="ml-1 self-center"><VoteWeightBadge weight={myWeight} label={myWeightLabel} /></span>}
               </div>
@@ -503,7 +503,7 @@ function RoadmapInner() {
                   <div className="mt-4 flex flex-wrap items-center gap-1.5">
                     <span className="font-mono text-xs uppercase tracking-wide text-slate-400">Were you there?</span>
                     <button onClick={()=>vote(ev.id,"YES")} disabled={!!voteBusy} className="min-h-[40px] rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 text-sm font-medium text-emerald-300 hover:bg-emerald-500 hover:text-white disabled:opacity-50">{voteBusy===ev.id+"YES" ? "…" : "Yes ✓"}</button>
-                    <button onClick={()=>vote(ev.id,"NO")} disabled={!!voteBusy} className="min-h-[40px] rounded-full border border-white/10 bg-white/[0.04] px-4 text-sm text-slate-200 hover:bg-white hover:text-[#070a12] disabled:opacity-50">{voteBusy===ev.id+"NO" ? "…" : "No ✕"}</button>
+                    <button onClick={()=>vote(ev.id,"NO")} disabled={!!voteBusy} className="min-h-[40px] rounded-full border border-white/10 bg-white/[0.04] px-4 text-sm text-slate-200 hover:bg-white hover:text-[#022c1e] disabled:opacity-50">{voteBusy===ev.id+"NO" ? "…" : "No ✕"}</button>
                     <button onClick={()=>vote(ev.id,"CANCEL")} disabled={!!voteBusy} className="min-h-[40px] rounded-full border border-white/10 bg-white/[0.02] px-4 text-sm text-slate-400 hover:bg-white/[0.06] disabled:opacity-50">Skip</button>
                     {myWeightLabel && <VoteWeightBadge weight={myWeight} label={myWeightLabel} />}
                   </div>
@@ -525,7 +525,7 @@ function RoadmapInner() {
               <input value={pickerHandle} onChange={e=>setPickerHandle(e.target.value)} placeholder="alex_02" autoFocus className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-white/15 focus:outline-none" />
               {pickerErr && <p className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">{pickerErr}</p>}
               <div className="flex gap-2">
-                <button type="submit" disabled={pickerBusy} className="flex-1 rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-[#070a12] hover:bg-slate-100 disabled:opacity-50">{pickerBusy ? "Creating…" : "Create & verify →"}</button>
+                <button type="submit" disabled={pickerBusy} className="flex-1 rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-[#022c1e] hover:bg-slate-100 disabled:opacity-50">{pickerBusy ? "Creating…" : "Create & verify →"}</button>
                 <button type="button" onClick={()=>setPickerOpen(false)} className="rounded-full border border-white/10 px-5 py-2.5 text-sm text-slate-300">Cancel</button>
               </div>
             </form>

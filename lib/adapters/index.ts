@@ -15,7 +15,7 @@
 // Ensure DB adapters are registered (framework auto-registers, just ensure import)
 import "@/lib/db/framework";
 
-// Theme adapters (auto-register physi-dark + forest)
+// Theme adapters (auto-register forest)
 export * from "./theme";
 
 // Code adapters (api registry)

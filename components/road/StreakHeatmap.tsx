@@ -104,9 +104,9 @@ export default function StreakHeatmap({ userId }: { userId: string }) {
           <p className="font-mono text-[11px] font-bold uppercase tracking-wide text-amber-300">Today · {todayClasses.length} upcoming · tap to verify</p>
           <div className="mt-2 space-y-1.5">
             {todayClasses.map(c=> (
-              <button key={c.id} onClick={()=>handleVerify(c.id)} disabled={!!verifyBusy} className="flex w-full items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5 text-left hover:bg-white hover:text-[#070a12] disabled:opacity-50 transition group">
+              <button key={c.id} onClick={()=>handleVerify(c.id)} disabled={!!verifyBusy} className="flex w-full items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5 text-left hover:bg-white hover:text-[#022c1e] disabled:opacity-50 transition group">
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13px] font-bold text-white group-hover:text-[#070a12]">{c.title} <span className="font-mono text-[11px] font-medium text-slate-400 group-hover:text-slate-600">· {c.venue}</span></span>
+                  <span className="block truncate text-[13px] font-bold text-white group-hover:text-[#022c1e]">{c.title} <span className="font-mono text-[11px] font-medium text-slate-400 group-hover:text-slate-600">· {c.venue}</span></span>
                   <span className="font-mono text-[11px] text-slate-400 group-hover:text-slate-600">{c.event_time} · {c.authority_points}/{c.required_points} votes</span>
                 </span>
                 <span className={`shrink-0 rounded-full px-3 py-1.5 font-mono text-[11px] font-bold ${verifyBusy===c.id ? "bg-white/10 text-slate-400" : "bg-emerald-500 text-white group-hover:bg-emerald-600"}`}>{verifyBusy===c.id ? "…" : "Verify ✓"}</span>

@@ -195,22 +195,7 @@ export default function LandingPage() {
           ))}
         </section>
 
-        {/* ── Testimonials ── */}
-        <section className="mt-10 rounded-[20px] border border-[rgba(52,211,153,0.12)] bg-[#1a5f48]/40 px-6 py-6">
-          <p className="font-mono text-xs uppercase tracking-[0.12em] text-[rgba(240,253,244,0.55)]">What students say — illustrative</p>
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            {[
-              { q: '“If it’s not gold, I double-check. Saved me two wrong-hall treks.”', a: '200L · Anatomy' },
-              { q: '“We posted at 7:42, by 8:10 twenty people tapped Yes. No broadcast needed.”', a: 'Class rep · Biochemistry' },
-              { q: '“It just shows I showed up today. Not money — that’s clear.”', a: '100L · Physiology' },
-            ].map((t) => (
-              <figure key={t.a} className="rounded-2xl border border-[rgba(52,211,153,0.10)] bg-[#0d3b2a]/30 px-4 py-4">
-                <blockquote className="text-sm leading-5 text-[rgba(240,253,244,0.85)]">{t.q}</blockquote>
-                <figcaption className="mt-3 font-mono text-xs text-[rgba(240,253,244,0.55)]">— {t.a}</figcaption>
-              </figure>
-            ))}
-          </div>
-        </section>
+        <p className="mt-10 text-center font-mono text-xs text-[rgba(240,253,244,0.55)]">Live from /api/stats: {totalEvents} events · {verifiedCount} verified · updates every 30s</p>
 
         {/* ── Final CTA — mint on shadow, gold accent ── */}
         <section className="mt-10 overflow-hidden rounded-[20px] border border-[rgba(52,211,153,0.18)] bg-gradient-to-br from-[#1a5f48] to-[#0d3b2a] px-6 py-10 text-center sm:px-10 shadow-[0_12px_32px_rgba(2,44,30,0.35)]">

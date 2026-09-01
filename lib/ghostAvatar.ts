@@ -19,7 +19,7 @@ export type GhostForm = {
 const PALETTE = [
   { bg: "#065f46", fg: "#10b981" },
   { bg: "#0c4a6e", fg: "#0ea5e9" },
-  { bg: "#4c1d95", fg: "#8b5cf6" },
+  { bg: "#4c1d95", fg: "#34d399" },
   { bg: "#78350f", fg: "#f59e0b" },
   { bg: "#831843", fg: "#ec4899" },
   { bg: "#164e63", fg: "#06b6d4" },

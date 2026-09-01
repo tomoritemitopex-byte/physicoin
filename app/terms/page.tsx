@@ -8,7 +8,7 @@ export const metadata = {
 
 export default function TermsPage() {
   return (
-    <div className="min-h-screen bg-[#070a12] text-slate-200">
+    <div className="min-h-screen bg-[#022c1e] text-slate-200">
       <div className="mx-auto max-w-[820px] px-6 py-10 lg:px-8">
         <a href="/" className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-1.5 text-[13px] text-slate-300 hover:bg-white/[0.08] transition">
           ← Back to home
@@ -91,7 +91,7 @@ export default function TermsPage() {
         </div>
 
         <div className="mt-6 flex flex-wrap gap-2">
-          <a href="/app/timetable" className="rounded-full bg-white px-5 py-2.5 text-[13px] font-semibold text-[#070a12]">Open timetable →</a>
+          <a href="/app/timetable" className="rounded-full bg-white px-5 py-2.5 text-[13px] font-semibold text-[#022c1e]">Open timetable →</a>
           <a href="/app/roadmap" className="rounded-full border border-white/10 bg-white/[0.04] px-5 py-2.5 text-[13px] font-medium text-slate-200">View roadmap</a>
         </div>
         <p className="mt-6 font-mono text-[11px] text-slate-600">PHYSI · Built by students, for students · Your contributions shape the app.</p>

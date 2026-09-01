@@ -87,7 +87,7 @@ export function GhostRow({ forms, size = 32, max = 6 }: { forms: GhostForm[]; si
     <div className="flex items-center">
       <div className="flex -space-x-2">
         {shown.map((f) => (
-          <div key={f.id} className="rounded-full ring-2 ring-[#070a12] shadow-[0_2px_10px_rgba(0,0,0,0.35)] bg-[#0b1020] ghost-enter" style={{ animationDelay: `${Math.random() * 200}ms` }}>
+          <div key={f.id} className="rounded-full ring-2 ring-[#022c1e] shadow-[0_2px_10px_rgba(0,0,0,0.35)] bg-[#0b1020] ghost-enter" style={{ animationDelay: `${Math.random() * 200}ms` }}>
             <GhostAvatar form={f} size={size} />
           </div>
         ))}

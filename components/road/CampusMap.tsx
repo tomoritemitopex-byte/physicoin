@@ -387,7 +387,7 @@ function EventRowCard({ ev, verified, count, verifying, onVerify, pollTick }: { 
           <>
             <div className="flex -space-x-1.5 opacity-40">
               {[0, 1, 2].map((i) => (
-                <div key={i} className="h-7 w-7 rounded-full border-2 border-[#070a12] bg-white/10" style={{ backdropFilter: "blur(8px)" }} />
+                <div key={i} className="h-7 w-7 rounded-full border-2 border-[#022c1e] bg-white/10" style={{ backdropFilter: "blur(8px)" }} />
               ))}
             </div>
             <span className="ml-2 font-mono text-[10px] text-slate-400">no one verified yet — be first (anonymous)</span>
