@@ -8,6 +8,8 @@ import { getSql, isDbConfigured, dbNotConfigured, ensureAllTables } from "@/lib/
 import { registerApiAdapter } from "../api";
 import { registerFeature } from "../features";
 import { logError, getErrorMessage } from "../error";
+import { GHOST_ACTIONS, appendGhostChain } from "@/lib/ghostWitness";
+import { zkThresholdCheck } from "@/lib/zkAuthority";
 
 export const verifyFeature = {
   id: "verify",
@@ -83,12 +85,12 @@ async function handleVerify(req: Request): Promise<Response> {
         // Satoshi P0-1: no string-based authority bonuses — weight is pure authority_final (1.0).
         const result = await sql.transaction(async (tx: any) => {
           // 1. Fetch voter authority
-          const [u] = await tx`SELECT authority_final FROM physi_users WHERE id = ${b.verifier_id} LIMIT 1`;
+          const [u] = await tx`SELECT authority_final, rep_ghost_sig FROM physi_users WHERE id = ${b.verifier_id} LIMIT 1`;
           if (!u) throw new Error("USER_NOT_FOUND");
 
           // 2. Compute weight — NO squad boost, NO lecturer bypass, NO string matching
           // NO votes subtract half-weight; CANCEL is witness no-op (0 weight)
-          let w = Number(u.authority_final) || 1.0;
+          let w = Number((u as any).authority_final) || 1.0;
           if (b.vote === "NO") w = w * 0.5;
           if (b.vote === "CANCEL") w = 0;
 
@@ -100,6 +102,12 @@ async function handleVerify(req: Request): Promise<Response> {
             VALUES (${b.verifier_id}, ${b.event_id}, ${b.vote}, ${w}, ${isWitness}, false, ${award})
             ON CONFLICT (verifier_id, event_id) DO UPDATE SET vote = EXCLUDED.vote, authority_weight = EXCLUDED.authority_weight, is_witness = EXCLUDED.is_witness, squad_boost = EXCLUDED.squad_boost, award = EXCLUDED.award
             RETURNING *`;
+
+          // 3b. Ghost Witness: extend chain
+          try {
+            const act = b.vote === "YES" ? GHOST_ACTIONS.VERIFY_YES : b.vote === "NO" ? GHOST_ACTIONS.VERIFY_NO : GHOST_ACTIONS.VERIFY_CANCEL;
+            await appendGhostChain(tx, String(b.verifier_id), act);
+          } catch {}
 
           // 4. Quorum check + promotion/demotion (all within same tx — atomic)
           const q = await promoteIfQuorum(tx, b.event_id, b.verifier_id);

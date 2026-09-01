@@ -8,6 +8,7 @@ import { logError, getErrorMessage } from "@/lib/adapters/error";
 import { checkPresenceAward, requestGeolocation, persistPresence, getPresenceScore } from "@/lib/adapters/presence";
 import SearchBar from "@/components/road/SearchBar";
 import QuorumBar from "@/components/road/QuorumBar";
+import CampusMap from "@/components/road/CampusMap";
 import VoiceGossipFab from "@/components/VoiceGossipFab";
 import GlassRail from "@/components/road/GlassRail";
 import CandyWell from "@/components/road/CandyWell";
@@ -2348,6 +2349,14 @@ function RoadmapInner() {
         <div className="hidden">
           <RepBoard repBoard={repBoard} youHandle={youHandle} streak={streak} myRep={myRep} levelInfo={levelInfo} onShare={()=> setShareOpen(true)} repSheetOpen={repSheetOpen} setRepSheetOpen={setRepSheetOpen} />
         </div>
+        {/* ── Campus Map: buildings → levels → timetable + ephemeral ghost avatars (no DB) ── */}
+        {viewMode === "map" && (
+          <div className="pointer-events-auto absolute left-1/2 z-20 w-full max-w-[560px] -translate-x-1/2 px-3 sm:px-6" style={{ top: filtersOpen ? 272 : 168, maxHeight: "calc(100vh - 250px)", overflow: "auto" }}>
+            <div className="rounded-[22px] border border-white/10 p-3 backdrop-blur-xl shadow-[0_16px 40px_rgba(0,0,0,0.5)]" style={{ background: "rgba(13,59,42,0.55)", backdropFilter: "blur(16px) saturate(1.22)", WebkitBackdropFilter: "blur(16px) saturate(1.22)" }}>
+              <CampusMap events={events as any} onVerify={(ev) => { fetchFeed(); setFacepileTick((t) => t + 1); }} />
+            </div>
+          </div>
+        )}
         {/* SCROLLABLE ROAD CONTAINER — endless winding purple road — subtle 3D emboss */}
         <div className={`road-3d-wrap relative mx-auto flex h-[calc(100vh-64px)] w-full max-w-[560px] justify-center overflow-hidden pt-[112px] sm:pt-[104px] ${viewMode!=="map" ? "hidden" : ""}`} style={{ perspective: "800px", perspectiveOrigin: "50% 28%" }}>
           {/* depth gradients on sides — 3D vignette */}

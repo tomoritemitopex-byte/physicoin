@@ -91,3 +91,24 @@ CREATE TABLE IF NOT EXISTS physi_scope_resolution (
 CREATE INDEX IF NOT EXISTS physi_scope_votes_voter_idx ON physi_scope_votes (voter_id);
 CREATE INDEX IF NOT EXISTS physi_scope_votes_scope_idx ON physi_scope_votes (scope_a, scope_b);
 CREATE INDEX IF NOT EXISTS physi_scope_votes_time_idx ON physi_scope_votes (created_at);
+
+-- Ghost Witness Protocol — SHA256 signature chain for reputation
+ALTER TABLE physi_users ADD COLUMN IF NOT EXISTS rep_ghost_sig TEXT;
+ALTER TABLE physi_users ADD COLUMN IF NOT EXISTS ghost_sig_updated_at TIMESTAMPTZ;
+CREATE TABLE IF NOT EXISTS physi_ghost_chain (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES physi_users(id) ON DELETE CASCADE,
+  prev_sig TEXT NOT NULL,
+  new_sig TEXT NOT NULL,
+  action TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS physi_ghost_chain_user_idx ON physi_ghost_chain (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS physi_ghost_chain_new_sig_idx ON physi_ghost_chain (new_sig);
+
+-- Scope Value Mining — Rep rewards for scope voting
+ALTER TABLE physi_scope_votes ADD COLUMN IF NOT EXISTS rep_earned NUMERIC(5,2) NOT NULL DEFAULT 0;
+
+-- ZK-Proof Authority — Privacy-preserving credentials
+ALTER TABLE physi_events ADD COLUMN IF NOT EXISTS is_zk_attested BOOLEAN NOT NULL DEFAULT false;
+CREATE INDEX IF NOT EXISTS physi_events_zk_idx ON physi_events (is_zk_attested);

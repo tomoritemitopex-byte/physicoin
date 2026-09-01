@@ -7,6 +7,7 @@ import { registerApiAdapter } from "../api";
 import { registerFeature } from "../features";
 import { logError, getErrorMessage } from "../error";
 import { computeAuthorityFinal } from "@/lib/authority";
+import { ghostNextSig, GHOST_GENESIS, GHOST_ACTIONS } from "@/lib/ghostWitness";
 
 export const profileFeature = {
   id: "profile",
@@ -80,6 +81,14 @@ async function handleProfile(req: Request): Promise<Response> {
         INSERT INTO physi_users (full_name, nickname, programme, level, statuses, authority_base, authority_final)
         VALUES (${b.full_name}, ${b.nickname}, ${b.programme}, ${b.level}, ${JSON.stringify(b.statuses ?? [])}::jsonb, ${authBase}, ${authFinal})
         RETURNING *`;
+        // Ghost Witness: genesis signature for new user
+        try {
+          const newId = (r[0] as any).id;
+          const genesisSig = ghostNextSig(GHOST_GENESIS, GHOST_ACTIONS.PROFILE_CREATE, String(newId));
+          await sql`UPDATE physi_users SET rep_ghost_sig=${genesisSig}, ghost_sig_updated_at=NOW() WHERE id=${newId}`;
+          await sql`INSERT INTO physi_ghost_chain (user_id, prev_sig, new_sig, action) VALUES (${newId}, ${GHOST_GENESIS}, ${genesisSig}, ${GHOST_ACTIONS.PROFILE_CREATE})`;
+          (r[0] as any).rep_ghost_sig = genesisSig;
+        } catch {}
         return NextResponse.json({ ok: true, user: r[0] }, { status: 201 });
       } catch (e: unknown) {
         const msg = String((e as Error).message);

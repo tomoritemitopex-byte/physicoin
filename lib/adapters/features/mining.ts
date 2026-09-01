@@ -8,6 +8,7 @@ import { getSql, isDbConfigured, dbNotConfigured, ensureAllTables } from "@/lib/
 import { registerApiAdapter } from "../api";
 import { registerFeature } from "../features";
 import { logError, getErrorMessage } from "../error";
+import { GHOST_ACTIONS, appendGhostChain } from "@/lib/ghostWitness";
 
 export const miningFeature = {
   id: "mining",
@@ -46,7 +47,12 @@ async function handleMining(req: Request): Promise<Response> {
       INSERT INTO physi_mining_logs (user_id, base_reward, authority_multiplier, earned_amount)
       VALUES (${b.user_id}, ${base}, ${mult}, ${earned}) RETURNING *`;
         await sql`UPDATE physi_users SET mining_balance = mining_balance + ${earned}, updated_at = NOW() WHERE id = ${b.user_id}`;
-        return NextResponse.json({ ok: true, log: r[0], earned });
+        // Ghost Witness: extend chain on mining check-in
+        try {
+          const txLike = sql; // use sql for chain (non-transactional but ok)
+          await appendGhostChain(txLike, String(b.user_id), GHOST_ACTIONS.MINING_CHECKIN);
+        } catch {}
+        return NextResponse.json({ ok: true, log: r[0], earned, ghost_extended: true });
       } catch (e) {
         logError("MINING_CHECKIN_FAILED", e, { route: "/api/mining", method: "POST" });
         return NextResponse.json({ ok: false, code: "MINING_CHECKIN_FAILED", message: getErrorMessage("MINING_CHECKIN_FAILED") }, { status: 500 });

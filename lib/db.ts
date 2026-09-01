@@ -237,6 +237,41 @@ export async function ensureScopeResolution(): Promise<void> {
     )`;
 }
 
+export async function ensureGhostWitness(): Promise<void> {
+  const c = getSql() ?? sql;
+  if (!c) return;
+  await ensureUsers();
+  // rep_ghost_sig column on users
+  try { await c`ALTER TABLE physi_users ADD COLUMN IF NOT EXISTS rep_ghost_sig TEXT`; } catch {}
+  try { await c`ALTER TABLE physi_users ADD COLUMN IF NOT EXISTS ghost_sig_updated_at TIMESTAMPTZ`; } catch {}
+  await c`
+    CREATE TABLE IF NOT EXISTS physi_ghost_chain (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES physi_users(id) ON DELETE CASCADE,
+      prev_sig TEXT NOT NULL,
+      new_sig TEXT NOT NULL,
+      action TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`;
+  await c`CREATE INDEX IF NOT EXISTS physi_ghost_chain_user_idx ON physi_ghost_chain (user_id, created_at DESC)`;
+  await c`CREATE INDEX IF NOT EXISTS physi_ghost_chain_new_sig_idx ON physi_ghost_chain (new_sig)`;
+}
+
+export async function ensureScopeMiningColumns(): Promise<void> {
+  const c = getSql() ?? sql;
+  if (!c) return;
+  await ensureScopeVotes();
+  try { await c`ALTER TABLE physi_scope_votes ADD COLUMN IF NOT EXISTS rep_earned NUMERIC(5,2) NOT NULL DEFAULT 0`; } catch {}
+}
+
+export async function ensureZkAuthority(): Promise<void> {
+  const c = getSql() ?? sql;
+  if (!c) return;
+  await ensureEvents();
+  try { await c`ALTER TABLE physi_events ADD COLUMN IF NOT EXISTS is_zk_attested BOOLEAN NOT NULL DEFAULT false`; } catch {}
+  await c`CREATE INDEX IF NOT EXISTS physi_events_zk_idx ON physi_events (is_zk_attested)`;
+}
+
 export async function ensureEventHistory(): Promise<void> {
   const c = getSql() ?? sql;
   if (!c) return;
@@ -267,7 +302,11 @@ export async function ensureAllTables(): Promise<void> {
   const run = async () => {
     await ensureUsers();
     await ensureEvents();
-    await Promise.all([ensureVerifications(), ensureMiningLogs(), ensureCanonicalLog(), ensureEventHistory(), ensureScopeVotes(), ensureScopeResolution()]);
+    await Promise.all([ensureVerifications(), ensureMiningLogs(), ensureCanonicalLog(), ensureEventHistory(), ensureScopeVotes(), ensureScopeResolution(), ensureGhostWitness(), ensureScopeMiningColumns(), ensureZkAuthority()]);
+    // ensure columns idempotently after tables exist
+    await ensureGhostWitness();
+    await ensureScopeMiningColumns();
+    await ensureZkAuthority();
   };
   try {
     await run();
@@ -288,5 +327,8 @@ export const ensureCanonicalLogTable = ensureCanonicalLog;
 export const ensureEventHistoryTable = ensureEventHistory;
 export const ensureScopeVotesTable = ensureScopeVotes;
 export const ensureScopeResolutionTable = ensureScopeResolution;
+export const ensureGhostWitnessTable = ensureGhostWitness;
+export const ensureZkAuthorityTable = ensureZkAuthority;
+export const ensureScopeMiningColumnsTable = ensureScopeMiningColumns;
 export const ensureTables = ensureAllTables;
 export const dbUnavailableResponse = dbNotConfigured;

@@ -14,7 +14,13 @@ export {
   ensureMiningLogsTable,
   ensureMiningTable,
   ensureCanonicalLogTable,
+  ensureEventHistoryTable,
   ensureScopeVotes as ensureScopeVotesTable,
   ensureScopeResolution as ensureScopeResolutionTable,
+  ensureGhostWitness,
+  ensureZkAuthority,
+  ensureScopeMiningColumns,
+  ensureGhostWitness as ensureGhostWitnessTable,
+  ensureZkAuthority as ensureZkAuthorityTable,
   ensureTables,
 } from "./db";
