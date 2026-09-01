@@ -45,25 +45,25 @@ export default function LandingPage() {
   const verifiedCount = stats?.metrics?.verifications ?? stats?.metrics?.events_by_status?.verified ?? Math.round(totalEvents*0.35);
 
   return (
-    <div className="min-h-screen bg-[#070a12] text-white selection:bg-white selection:text-[#070a12]">
+    <div className="min-h-screen bg-[#0d3b2a] text-white selection:bg-white selection:text-[#0d3b2a]">
       {/* Subtle forest accent — restrained, not full flood */}
       <div aria-hidden className="pointer-events-none fixed inset-0">
-        <div className="absolute inset-0 bg-[#070a12]" />
+        <div className="absolute inset-0 bg-[#0d3b2a]" />
         <div className="absolute -top-40 left-1/2 h-[520px] w-[900px] -translate-x-1/2 rounded-full opacity-[0.07]" style={{ background: "radial-gradient(ellipse at center, #0d3b2a, transparent 70%)" }} />
         <div className="absolute top-[30%] right-[-6%] h-[360px] w-[360px] rounded-full opacity-[0.04]" style={{ background: "radial-gradient(ellipse at center, #8b5cf6, transparent 70%)" }} />
       </div>
 
       {/* ── Header — minimal, Notion/Linear style ── */}
-      <header className="sticky top-0 z-20 border-b border-white/[0.06] bg-[#070a12]/80 backdrop-blur-xl">
+      <header className="sticky top-0 z-20 border-b border-white/[0.06] bg-[#0d3b2a]/80 backdrop-blur-xl">
         <div className="mx-auto flex max-w-[1120px] items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-[10px] font-black tracking-tight text-[#070a12]">PHYSI</div>
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-[10px] font-black tracking-tight text-[#0d3b2a]">PHYSI</div>
             <span className="hidden sm:inline text-sm font-semibold tracking-tight text-white">PHYSI</span>
             <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-white/[0.07] bg-white/[0.04] px-2.5 py-1 font-mono text-[11px] text-slate-400">advisory · not official</span>
           </div>
           <nav className="flex items-center gap-2">
             <a href="/app/profile" className="hidden sm:inline-flex text-sm font-medium text-slate-400 hover:text-white transition px-3 py-1.5">Create profile</a>
-            <a href="/app/roadmap" className="inline-flex items-center gap-1.5 rounded-full bg-white px-5 py-2 text-sm font-semibold text-[#070a12] hover:bg-slate-100 transition">Open app <ArrowRight className="h-3.5 w-3.5" /></a>
+            <a href="/app/roadmap" className="inline-flex items-center gap-1.5 rounded-full bg-white px-5 py-2 text-sm font-semibold text-[#0d3b2a] hover:bg-slate-100 transition">Open app <ArrowRight className="h-3.5 w-3.5" /></a>
           </nav>
         </div>
       </header>
@@ -137,7 +137,7 @@ export default function LandingPage() {
                   ))}
                 </div>
                 <div className="mt-4 flex items-center gap-2.5 rounded-xl border border-white/[0.06] bg-[#0d3b2a]/40 px-3.5 py-3">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-[10px] font-bold text-[#070a12]">You</span>
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-[10px] font-bold text-[#0d3b2a]">You</span>
                   <p className="text-[13px] text-slate-300">Were you there? Tap <span className="font-semibold text-white">Yes / No</span> — no forms.</p>
                 </div>
               </div>
@@ -152,7 +152,7 @@ export default function LandingPage() {
           <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 font-mono text-xs text-white">{totalEvents} events</span>
           <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 font-mono text-xs text-white">{verifiedCount} verified</span>
           <span className="ml-auto hidden sm:inline font-mono text-xs text-slate-500">updates every 30s · /api/stats</span>
-          <a href="/app/roadmap" className="rounded-full bg-white px-4 py-1.5 text-xs font-bold text-[#070a12]">Open road →</a>
+          <a href="/app/roadmap" className="rounded-full bg-white px-4 py-1.5 text-xs font-bold text-[#0d3b2a]">Open road →</a>
         </section>
         <div className="mt-3">
           <LiveTicker items={ticker} />
@@ -226,8 +226,6 @@ export default function LandingPage() {
 
         <p className="py-8 text-center font-mono text-xs text-slate-600">PHYSI · built by students, for students</p>
       </main>
-
-      <style>{`@keyframes ticker{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}`}</style>
     </div>
   );
 }
