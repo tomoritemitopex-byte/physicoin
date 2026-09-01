@@ -3,6 +3,7 @@
  * Buckets anonymous peers by (programme, level, event_types, verify_time_pattern)
  * Returns { cohort_size, pattern_strength } — NEVER user IDs.
  * No identity leaks. Pure anonymous cohort matching.
+ * Cohort pattern is cached in physi_users.cohort_pattern_cached with 5min TTL (N+1 fix).
  */
 
 export type CohortPattern = {
@@ -17,6 +18,9 @@ export type CohortResult = {
   pattern_strength: number; // 0..1
   pattern: CohortPattern;
 };
+
+const COHORT_CACHE_TTL_MS = 5 * 60 * 1000;
+const cohortMemCache = new Map<string, { result: CohortResult; ts: number }>();
 
 function timeBucketFromHour(h: number): string {
   if (h >= 5 && h < 12) return "morning";
@@ -39,6 +43,7 @@ function normalizeLevel(l: string | null | undefined): string {
  * Buckets by (programme, level, dominant event scope_type, dominant verify hour bucket).
  * Then counts anonymous peers sharing same pattern.
  * Returns only counts, never IDs.
+ * Cached: in-memory 5min + DB column cohort_pattern_cached (5min TTL).
  */
 export async function computeCohortPattern(sql: any, userId: string): Promise<CohortResult> {
   const fallback: CohortResult = {
@@ -47,8 +52,25 @@ export async function computeCohortPattern(sql: any, userId: string): Promise<Co
     pattern: { programme: "unknown", level: "unknown", eventBucket: "general", timeBucket: "morning" },
   };
   if (!sql || !userId) return fallback;
+  const uid = String(userId);
+  // in-memory 5min cache
+  const mem = cohortMemCache.get(uid);
+  if (mem && Date.now() - mem.ts < COHORT_CACHE_TTL_MS) return mem.result;
+  // DB cache 5min
   try {
-    const uid = String(userId);
+    const cached: any[] = await sql`SELECT cohort_pattern_cached, cohort_pattern_updated_at FROM physi_users WHERE id=${uid}::uuid LIMIT 1` as any;
+    if (cached.length && cached[0].cohort_pattern_cached) {
+      const updated = cached[0].cohort_pattern_updated_at ? new Date(cached[0].cohort_pattern_updated_at).getTime() : 0;
+      if (Date.now() - updated < COHORT_CACHE_TTL_MS) {
+        const c = cached[0].cohort_pattern_cached as CohortResult;
+        if (c && c.pattern) {
+          cohortMemCache.set(uid, { result: c, ts: Date.now() });
+          return c;
+        }
+      }
+    }
+  } catch {}
+  try {
     // Fetch user's programme/level
     const uRows: any[] = await sql`SELECT programme, level FROM physi_users WHERE id=${uid} LIMIT 1`;
     const u = uRows[0];
@@ -122,10 +144,16 @@ export async function computeCohortPattern(sql: any, userId: string): Promise<Co
       // Cohort size strength: logarithmic
       const cohortStrength = cohortSize > 0 ? Math.min(1, Math.log2(cohortSize + 1) / 4) : 0;
       const pattern_strength = Number((0.35 * cohortStrength + 0.35 * activityStrength + 0.30 * (eventBucket !== "general" ? 0.8 : 0.4)).toFixed(3));
-      return { cohort_size: cohortSize, pattern_strength: Math.max(0, Math.min(1, pattern_strength)), pattern };
+      const result = { cohort_size: cohortSize, pattern_strength: Math.max(0, Math.min(1, pattern_strength)), pattern };
+      cohortMemCache.set(uid, { result, ts: Date.now() });
+      try { await sql`UPDATE physi_users SET cohort_pattern_cached=${JSON.stringify(result)}::jsonb, cohort_pattern_updated_at=NOW() WHERE id=${uid}::uuid`; } catch {}
+      return result;
     } catch {
       const cohortStrength = cohortSize > 0 ? Math.min(1, Math.log2(cohortSize + 1) / 4) : 0;
-      return { cohort_size: cohortSize, pattern_strength: Number((cohortStrength * 0.6).toFixed(3)), pattern };
+      const result = { cohort_size: cohortSize, pattern_strength: Number((cohortStrength * 0.6).toFixed(3)), pattern };
+      cohortMemCache.set(uid, { result, ts: Date.now() });
+      try { await sql`UPDATE physi_users SET cohort_pattern_cached=${JSON.stringify(result)}::jsonb, cohort_pattern_updated_at=NOW() WHERE id=${uid}::uuid`; } catch {}
+      return result;
     }
   } catch {
     return fallback;
