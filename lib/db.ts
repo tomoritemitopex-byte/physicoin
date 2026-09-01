@@ -237,6 +237,50 @@ export async function ensureScopeResolution(): Promise<void> {
     )`;
 }
 
+export async function ensureHallAliases(): Promise<void> {
+  const c = getSql() ?? sql;
+  if (!c) return;
+  await c`
+    CREATE TABLE IF NOT EXISTS physi_hall_aliases (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      alias TEXT NOT NULL,
+      canonical TEXT NOT NULL,
+      programme TEXT,
+      level TEXT,
+      subject TEXT,
+      hall_group_key TEXT,
+      vote_count INT NOT NULL DEFAULT 0,
+      votes_yes INT NOT NULL DEFAULT 0,
+      votes_no INT NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','resolved','rejected')),
+      resolved_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`;
+  await c`CREATE INDEX IF NOT EXISTS physi_hall_aliases_status_idx ON physi_hall_aliases (status)`;
+  await c`CREATE INDEX IF NOT EXISTS physi_hall_aliases_alias_idx ON physi_hall_aliases (lower(alias))`;
+  await c`CREATE INDEX IF NOT EXISTS physi_hall_aliases_canonical_idx ON physi_hall_aliases (lower(canonical))`;
+  await c`CREATE INDEX IF NOT EXISTS physi_hall_aliases_group_idx ON physi_hall_aliases (hall_group_key)`;
+  await c`CREATE UNIQUE INDEX IF NOT EXISTS physi_hall_aliases_pair_uidx ON physi_hall_aliases (lower(alias), lower(canonical), COALESCE(hall_group_key,''))`;
+  // per-voter votes
+  await c`
+    CREATE TABLE IF NOT EXISTS physi_hall_alias_votes (
+      alias_id UUID NOT NULL REFERENCES physi_hall_aliases(id) ON DELETE CASCADE,
+      voter_id UUID NOT NULL REFERENCES physi_users(id) ON DELETE CASCADE,
+      vote_value SMALLINT NOT NULL CHECK (vote_value IN (-1, 1)),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (alias_id, voter_id)
+    )`;
+  await c`CREATE INDEX IF NOT EXISTS physi_hall_alias_votes_voter_idx ON physi_hall_alias_votes (voter_id)`;
+  // additive migration for existing table per spec columns if table existed differently
+  try { await c`ALTER TABLE physi_hall_aliases ADD COLUMN IF NOT EXISTS alias TEXT`; } catch {}
+  try { await c`ALTER TABLE physi_hall_aliases ADD COLUMN IF NOT EXISTS canonical TEXT`; } catch {}
+  try { await c`ALTER TABLE physi_hall_aliases ADD COLUMN IF NOT EXISTS vote_count INT DEFAULT 0`; } catch {}
+  try { await c`ALTER TABLE physi_hall_aliases ADD COLUMN IF NOT EXISTS votes_yes INT DEFAULT 0`; } catch {}
+  try { await c`ALTER TABLE physi_hall_aliases ADD COLUMN IF NOT EXISTS votes_no INT DEFAULT 0`; } catch {}
+  try { await c`ALTER TABLE physi_hall_aliases ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ`; } catch {}
+  try { await c`ALTER TABLE physi_hall_aliases ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'pending'`; } catch {}
+}
+
 export async function ensureGhostWitness(): Promise<void> {
   const c = getSql() ?? sql;
   if (!c) return;
@@ -392,11 +436,12 @@ export async function ensureAllTables(): Promise<void> {
   const run = async () => {
     await ensureUsers();
     await ensureEvents();
-    await Promise.all([ensureVerifications(), ensureMiningLogs(), ensureCanonicalLog(), ensureEventHistory(), ensureScopeVotes(), ensureScopeResolution(), ensureGhostWitness(), ensureScopeMiningColumns(), ensureZkAuthority(), ensureSquadTables(), ensureBunkTables(), ensureNotesTables()]);
+    await Promise.all([ensureVerifications(), ensureMiningLogs(), ensureCanonicalLog(), ensureEventHistory(), ensureScopeVotes(), ensureScopeResolution(), ensureGhostWitness(), ensureScopeMiningColumns(), ensureZkAuthority(), ensureSquadTables(), ensureBunkTables(), ensureNotesTables(), ensureHallAliases()]);
     // ensure columns idempotently after tables exist
     await ensureGhostWitness();
     await ensureScopeMiningColumns();
     await ensureZkAuthority();
+    await ensureHallAliases();
   };
   try {
     await run();
@@ -417,6 +462,7 @@ export const ensureCanonicalLogTable = ensureCanonicalLog;
 export const ensureEventHistoryTable = ensureEventHistory;
 export const ensureScopeVotesTable = ensureScopeVotes;
 export const ensureScopeResolutionTable = ensureScopeResolution;
+export const ensureHallAliasesTable = ensureHallAliases;
 export const ensureGhostWitnessTable = ensureGhostWitness;
 export const ensureZkAuthorityTable = ensureZkAuthority;
 export const ensureScopeMiningColumnsTable = ensureScopeMiningColumns;

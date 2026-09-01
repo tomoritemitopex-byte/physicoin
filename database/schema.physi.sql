@@ -112,3 +112,34 @@ ALTER TABLE physi_scope_votes ADD COLUMN IF NOT EXISTS rep_earned NUMERIC(5,2) N
 -- ZK-Proof Authority — Privacy-preserving credentials
 ALTER TABLE physi_events ADD COLUMN IF NOT EXISTS is_zk_attested BOOLEAN NOT NULL DEFAULT false;
 CREATE INDEX IF NOT EXISTS physi_events_zk_idx ON physi_events (is_zk_attested);
+
+-- Hall Deduper — peer voting on canonical hall name
+CREATE TABLE IF NOT EXISTS physi_hall_aliases (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  alias TEXT NOT NULL,
+  canonical TEXT NOT NULL,
+  programme TEXT,
+  level TEXT,
+  subject TEXT,
+  hall_group_key TEXT,
+  vote_count INT NOT NULL DEFAULT 0,
+  votes_yes INT NOT NULL DEFAULT 0,
+  votes_no INT NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','resolved','rejected')),
+  resolved_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS physi_hall_aliases_status_idx ON physi_hall_aliases (status);
+CREATE INDEX IF NOT EXISTS physi_hall_aliases_alias_idx ON physi_hall_aliases (lower(alias));
+CREATE INDEX IF NOT EXISTS physi_hall_aliases_canonical_idx ON physi_hall_aliases (lower(canonical));
+CREATE INDEX IF NOT EXISTS physi_hall_aliases_group_idx ON physi_hall_aliases (hall_group_key);
+CREATE UNIQUE INDEX IF NOT EXISTS physi_hall_aliases_pair_uidx ON physi_hall_aliases (lower(alias), lower(canonical), COALESCE(hall_group_key,''));
+CREATE TABLE IF NOT EXISTS physi_hall_alias_votes (
+  alias_id UUID NOT NULL REFERENCES physi_hall_aliases(id) ON DELETE CASCADE,
+  voter_id UUID NOT NULL REFERENCES physi_users(id) ON DELETE CASCADE,
+  vote_value SMALLINT NOT NULL CHECK (vote_value IN (-1, 1)),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (alias_id, voter_id)
+);
+CREATE INDEX IF NOT EXISTS physi_hall_alias_votes_voter_idx ON physi_hall_alias_votes (voter_id);
+

@@ -315,8 +315,26 @@ export default function CampusMap({ events, onVerify }: { events: EventRow[]; on
   );
 }
 
+function useHallResolveAlias(venue: string) {
+  const [resolved, setResolved] = useState<null | { canonical: string; alias: string }>(null);
+  useEffect(() => {
+    if (!venue) return;
+    let cancel=false;
+    fetch(`/api/halls/resolve?alias=${encodeURIComponent(venue)}`, { cache: "no-store" })
+      .then(r=>r.json()).then(j=>{
+        if(cancel) return;
+        if(j.resolved && j.canonical && String(j.canonical).toLowerCase() !== String(venue).toLowerCase()){
+          setResolved({ canonical: j.canonical, alias: j.alias });
+        } else setResolved(null);
+      }).catch(()=>{});
+    return ()=>{ cancel=true; };
+  }, [venue]);
+  return resolved;
+}
+
 function EventRowCard({ ev, verified, count, verifying, onVerify, pollTick }: { ev: EventRow; verified: boolean; count: number; verifying: boolean; onVerify: () => void; pollTick: number }) {
   const forms = useEphemeralGhosts(count);
+  const hallResolved = useHallResolveAlias(String(ev.venue||""));
   // also morph on pollTick
   const [driftKey, setDriftKey] = useState(0);
   useEffect(() => {
@@ -337,7 +355,10 @@ function EventRowCard({ ev, verified, count, verifying, onVerify, pollTick }: { 
             {ev.severity && <span className={`rounded-full px-2 py-0.5 font-mono text-[9px] font-bold ${ev.severity === "cancelled" ? "bg-red-500 text-white" : ev.severity === "shift" ? "bg-amber-400 text-black" : "bg-sky-500 text-white"}`}>{ev.severity}</span>}
           </div>
           <p className="mt-0.5 flex flex-wrap gap-2 font-mono text-[11px] text-slate-300">
-            <span className="inline-flex items-center gap-1">📍 {ev.venue}</span>
+            <span className="inline-flex items-center gap-1">
+              📍 {hallResolved ? hallResolved.canonical : ev.venue}
+              {hallResolved && <span className="ml-1 text-[10px] italic text-amber-300">(was: {hallResolved.alias})</span>}
+            </span>
             <span className="opacity-40">·</span>
             <span>
               {String(ev.event_date).slice(0, 10)} · {String(ev.event_time).slice(0, 5)}
