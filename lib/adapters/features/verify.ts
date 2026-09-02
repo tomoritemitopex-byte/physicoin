@@ -140,7 +140,7 @@ async function handleVerify(req: Request): Promise<Response> {
       const b = await req.json().catch(() => null);
       // Auth: extract verifier_id from HMAC session (not body)
       const { getAuthUserId } = await import("@/lib/auth");
-      const authUid = getAuthUserId(req as Request, b?.verifier_id || b?.verifierId);
+      const authUid = getAuthUserId(req as Request);
       if (!authUid) return NextResponse.json({ ok:false, code:"UNAUTHORIZED", message:"Missing session token. POST /api/auth/session to obtain one." }, { status:401 });
       // override body verifier_id with authenticated id
       if (b) b.verifier_id = authUid;
@@ -149,6 +149,24 @@ async function handleVerify(req: Request): Promise<Response> {
       }
       if (!["YES", "NO", "CANCEL"].includes(b.vote)) {
         return NextResponse.json({ ok: false, code: "BAD_VOTE", message: getErrorMessage("BAD_VOTE") }, { status: 400 });
+      }
+      // Stake-to-vote: YES/NO costs 1 Rep held, CANCEL free
+      if (b.vote !== "CANCEL") {
+        try {
+          const { ensureVoteBonds } = await import("@/lib/db");
+          await ensureVoteBonds();
+        } catch {}
+        try {
+          const { stakeForVote, VOTE_STAKE } = await import("@/lib/voteBond");
+          const stakeRes: any = await stakeForVote(sql, String(b.verifier_id), String(b.event_id), VOTE_STAKE);
+          if (!stakeRes.ok) {
+            if (stakeRes.code === "INSUFFICIENT_STAKE") return NextResponse.json({ ok:false, code:"INSUFFICIENT_STAKE", message: stakeRes.message }, { status:402 });
+            return NextResponse.json({ ok:false, code: stakeRes.code, message: stakeRes.message }, { status:500 });
+          }
+        } catch (e: any) {
+          if (e?.status === 402) throw e;
+          // if stake table missing, continue (grace)
+        }
       }
       try {
         // --- Pre-transaction reads & pure computation (Neon HTTP batch requires non-async tx fn) ---
@@ -238,6 +256,32 @@ async function handleVerify(req: Request): Promise<Response> {
         const verification = (txResults as any[])[0]?.[0] ?? null;
         const quorum = { promoted: promote, demoted: demote, yesW, noW, total, ratio };
         const result = { verification, quorum };
+
+        // Header recompute: after canonical_log INSERT, rebuild header for event's date
+        if (promote || demote) {
+          try {
+            const { rebuildHeader } = await import("@/lib/header");
+            // need event date for header — fetch if not already
+            let hdrDate: string | null = null;
+            try {
+              const dRows: any[] = await sql`SELECT event_date::text as d FROM physi_events WHERE id=${b.event_id} LIMIT 1` as any;
+              hdrDate = dRows[0]?.d ? String(dRows[0].d).slice(0,10) : null;
+            } catch {}
+            if (hdrDate) await rebuildHeader(hdrDate);
+          } catch {}
+        }
+
+        // Stake-to-vote settlement: on quorum reached, settle bonds
+        if (promote || demote) {
+          try {
+            const majority: "YES" | "NO" = yesW > noW ? "YES" : "NO";
+            // demotion means NO majority broke ratio — burn YES losers, refund NO winners
+            const { resolveBonds } = await import("@/lib/voteBond");
+            await resolveBonds(sql, String(b.event_id), majority);
+          } catch {}
+        } else if (!promote && !demote && (b.vote === "YES" || b.vote === "NO")) {
+          // No quorum yet — stake stays held; nothing to do
+        }
 
         // RBF: also tally vote into physi_slot_claims if event is in active mempool
         try {
