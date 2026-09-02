@@ -2,9 +2,9 @@
 import { useState } from "react";
 
 /**
- * ConsensusVoteButton — student-native voting control for truth coordination.
- * Single tap YES / NO, shows tally, animates on resolution.
- * Vocabulary: "Same place?" / "Same person?" / "Same course?" — not Bitcoin terms.
+ * ConsensusVoteButton — student-native pill vote (Fix 6)
+ * Pills + ↔ + same circles (no sentences like "Same hall?")
+ * Visual: [ alias pill ] ↔ [ canonical pill ]  ○○●●○○○○  then icon-only vote
  */
 export type ConsensusVoteItem = {
   id: string;
@@ -16,12 +16,6 @@ export type ConsensusVoteItem = {
   total: number;
   quorum_progress: number;
   yes_pct: number;
-};
-
-const TYPE_COPY: Record<string, { question: string; yes: string; no: string }> = {
-  hall: { question: "Same hall?", yes: "Yes — same place", no: "No — different" },
-  prof: { question: "Same lecturer?", yes: "Yes — same person", no: "No — different" },
-  scope: { question: "Same course?", yes: "Yes — same", no: "No — keep separate" },
 };
 
 export default function ConsensusVoteButton({
@@ -39,13 +33,12 @@ export default function ConsensusVoteButton({
 }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [justVoted, setJustVoted] = useState<"yes" | "no" | null>(null);
-  const copy = TYPE_COPY[item.type] ?? TYPE_COPY.hall;
   const total = item.votes_yes + item.votes_no;
-  const yesPct = item.yes_pct;
+  // 8-circle weight visualization
+  const filled = Math.min(8, Math.max(0, Math.ceil(item.votes_yes)));
 
   async function doVote(vote: "yes" | "no") {
     if (!voterId) {
-      // dispatch event so parent can prompt for profile — student-native flow
       if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("physi-needs-profile", { detail: { item, vote } }));
       return;
     }
@@ -81,55 +74,81 @@ export default function ConsensusVoteButton({
 
   if (compact) {
     return (
-      <div className="flex items-center gap-1.5">
-        <button
-          onClick={() => doVote("yes")}
-          disabled={!!busy || !!disabled}
-          className={`rounded-full px-2.5 py-1 text-xs font-semibold transition ${justVoted === "yes" ? "bg-emerald-500 text-white scale-105" : "bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500 hover:text-white border border-emerald-500/20"} disabled:opacity-50`}
-        >
-          {busy === "yes" ? "…" : `Yes · ${item.votes_yes}`}
-        </button>
-        <button
-          onClick={() => doVote("no")}
-          disabled={!!busy || !!disabled}
-          className={`rounded-full px-2.5 py-1 text-xs font-semibold transition ${justVoted === "no" ? "bg-white text-[#022c1e] scale-105" : "bg-white/10 text-slate-200 hover:bg-white hover:text-[#022c1e] border border-white/10"} disabled:opacity-50`}
-        >
-          {busy === "no" ? "…" : `No · ${item.votes_no}`}
-        </button>
+      <div className="flex flex-col gap-2">
+        {/* pills + ↔ */}
+        <div className="flex items-center gap-1.5">
+          <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-medium text-white">{item.alias}</span>
+          <span className="font-mono text-xs text-slate-500">↔</span>
+          <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-medium text-slate-200">{item.canonical}</span>
+        </div>
+        {/* circles */}
+        <div className="flex items-center gap-1" aria-label={`${filled} of 8 agreed`}>
+          {Array.from({ length: 8 }).map((_, i) => (
+            <span key={i} className={`h-2 w-2 rounded-full ${i < filled ? "bg-emerald-400" : "bg-white/15"} ${i < filled ? "shadow-[0_0_4px_rgba(52,211,153,0.4)]" : ""}`} />
+          ))}
+          <span className="ml-1 font-mono text-[11px] text-slate-500">{total}/8</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => doVote("yes")}
+            disabled={!!busy || !!disabled}
+            aria-label="Yes, same"
+            className={`flex h-11 w-11 items-center justify-center rounded-full text-lg font-bold transition ${justVoted === "yes" ? "bg-emerald-500 text-white scale-105" : "bg-emerald-500 text-white hover:bg-emerald-400"} disabled:opacity-50`}
+            style={{ minWidth: 44, minHeight: 44 }}
+          >
+            {busy === "yes" ? "…" : "✓"}
+          </button>
+          <button
+            onClick={() => doVote("no")}
+            disabled={!!busy || !!disabled}
+            aria-label="No, different"
+            className={`flex h-11 w-11 items-center justify-center rounded-full text-base font-bold transition border ${justVoted === "no" ? "bg-white text-[#022c1e]" : "border-white/15 bg-white/5 text-white hover:bg-white hover:text-[#022c1e]"} disabled:opacity-50`}
+            style={{ minWidth: 44, minHeight: 44 }}
+          >
+            {busy === "no" ? "…" : "✕"}
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <span className="font-mono text-[11px] uppercase tracking-wide text-slate-500">{copy.question}</span>
-        <span className="font-mono text-xs text-slate-400">
-          {total}/8 · {yesPct}% {total >= 7 ? "· 1 more to quorum!" : ""}
-        </span>
+    <div className="space-y-3">
+      {/* pills + ↔ + circles — no sentences */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="rounded-full bg-white px-3 py-1.5 text-sm font-semibold text-[#022c1e]">{item.alias}</span>
+        <span className="font-mono text-sm text-slate-400">↔</span>
+        <span className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-sm font-medium text-white">{item.canonical}</span>
       </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+      <div className="flex items-center gap-1.5" aria-label={`${filled} of 8 agreed`}>
+        {Array.from({ length: 8 }).map((_, i) => (
+          <span key={i} className={`h-2.5 w-2.5 rounded-full ${i < filled ? "bg-emerald-400" : "bg-white/15"} ${i < filled ? "shadow-[0_0_6px_rgba(52,211,153,0.5)]" : ""}`} />
+        ))}
+        <span className="ml-2 font-mono text-xs text-slate-400">{total}/8</span>
+      </div>
+      <div className="h-1.5 overflow-hidden rounded-full bg-white/10" aria-hidden>
         <div className="h-full bg-emerald-400 transition-all duration-500" style={{ width: `${Math.min(100, Math.round((total / 8) * 100))}%` }} />
       </div>
       <div className="flex gap-2">
         <button
           onClick={() => doVote("yes")}
           disabled={!!busy || !!disabled}
-          className={`flex-1 rounded-full py-2 text-sm font-semibold transition ${justVoted === "yes" ? "bg-emerald-500 text-white animate-pulse" : "bg-emerald-500 text-white hover:bg-emerald-400"} disabled:opacity-50`}
+          aria-label="Yes, same"
+          className={`flex flex-1 items-center justify-center rounded-full bg-emerald-500 py-3 text-sm font-bold text-white hover:bg-emerald-400 transition ${justVoted === "yes" ? "animate-pulse" : ""} disabled:opacity-50`}
+          style={{ minHeight: 44 }}
         >
-          {busy === "yes" ? "Saving…" : copy.yes}
+          {busy === "yes" ? "…" : "✓ Yes"}
         </button>
         <button
           onClick={() => doVote("no")}
           disabled={!!busy || !!disabled}
-          className={`flex-1 rounded-full py-2 text-sm font-semibold transition border ${justVoted === "no" ? "bg-white text-[#022c1e]" : "border-white/15 bg-white/5 text-white hover:bg-white hover:text-[#022c1e]"} disabled:opacity-50`}
+          aria-label="No, different"
+          className={`flex flex-1 items-center justify-center rounded-full border border-white/15 bg-white/5 py-3 text-sm font-bold text-white hover:bg-white hover:text-[#022c1e] transition ${justVoted === "no" ? "bg-white text-[#022c1e]" : ""} disabled:opacity-50`}
+          style={{ minHeight: 44 }}
         >
-          {busy === "no" ? "Saving…" : copy.no}
+          {busy === "no" ? "…" : "✕ No"}
         </button>
       </div>
-      <p className="text-center font-mono text-[11px] text-slate-500">
-        {item.votes_yes} yes · {item.votes_no} no · {8 - total > 0 ? `${8 - total} more to decide` : "quorum — tipping…"}
-      </p>
     </div>
   );
 }

@@ -95,36 +95,34 @@ function NodePair({ item, selected, onSelect }: { item: ConsensusItem; selected:
   const nearQuorum = total >= 6;
   const d = calculateDepth(item.votes_yes, item.votes_no, item.total_weight ?? total);
   const pct = Math.round(d.depth * 100);
+  const filled = Math.min(8, Math.max(0, Math.ceil(item.votes_yes)));
 
   return (
     <button
       onClick={onSelect}
+      aria-label={`${item.alias} versus ${item.canonical}`}
+      style={{ minHeight: 44 }}
       className={`group relative flex w-full items-center gap-2 rounded-2xl border px-3 py-3 text-left transition ${
         selected ? "border-white/20 bg-white/[0.07] shadow-lg" : "border-white/[0.06] bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/10"
       } ${nearQuorum ? "ring-1 " + t.ring : ""} ${d.depth > 0.7 ? "ring-1 ring-emerald-400/20" : ""}`}
     >
       <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${t.dot} ${nearQuorum || d.depth > 0.7 ? "animate-pulse" : ""}`} />
       <div className="min-w-0 flex-1">
+        {/* pills + ↔ */}
         <div className="flex items-center gap-1.5">
-          <span className="truncate text-sm font-semibold text-white">{item.alias}</span>
+          <span className="truncate rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-xs font-medium text-white">{item.alias}</span>
           <span className="shrink-0 font-mono text-xs text-slate-500">↔</span>
-          <span className="truncate text-sm font-medium text-slate-200">{item.canonical}</span>
+          <span className="truncate rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-xs font-medium text-slate-200">{item.canonical}</span>
         </div>
-        <div className="mt-1 flex items-center gap-2">
-          <span className={`rounded-full border px-1.5 py-0.5 font-mono text-[10px] leading-none ${selected ? "border-white/15 text-white" : "border-white/10 text-slate-400"}`}>{t.short}</span>
-          <span className={`font-mono text-xs ${d.depth > 0.7 ? "font-bold text-emerald-300" : "text-slate-400"}`}>
-            {total}/8 · {pct}% depth
-          </span>
-          {d.depth > 0.7 && <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 font-mono text-[10px] font-bold text-emerald-300 animate-pulse">closing in</span>}
-          {d.depth >= 0.85 && <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 font-mono text-[10px] font-bold text-amber-300">1 more!</span>}
+        <div className="mt-1.5 flex items-center gap-1">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <span key={i} className={`h-1.5 w-1.5 rounded-full ${i < filled ? "bg-emerald-400" : "bg-white/15"}`} />
+          ))}
+          <span className="ml-1 font-mono text-[11px] text-slate-500">{total}/8</span>
         </div>
-        {/* Depth meter mini */}
+        {/* mini bar */}
         <div className="relative mt-2 h-1 overflow-hidden rounded-full bg-white/10">
-          {d.phase === "fresh" && <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.8s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-white/15 to-transparent" />}
-          <div
-            className="h-full transition-all duration-500"
-            style={{ width: `${pct}%`, backgroundColor: d.color }}
-          />
+          <div className="h-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: d.color }} />
         </div>
       </div>
       <span className={`shrink-0 rounded-full px-2 py-1 font-mono text-xs font-semibold ${d.phase === "locked" ? "bg-emerald-600 text-white" : d.depth > 0.7 ? "bg-emerald-500 text-white" : "bg-white/10 text-slate-300"}`}>
@@ -330,12 +328,13 @@ export default function ConsensusMap({ pollMs = 15000 }: { pollMs?: number }) {
           <button
             key={f.k}
             onClick={() => setFilter(f.k as any)}
+            style={{ minHeight: 44, minWidth: 44 }}
             className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${filter === f.k ? "bg-white text-[#022c1e]" : "border border-white/10 bg-white/[0.04] text-slate-300 hover:bg-white/[0.08]"}`}
           >
             {f.label}
           </button>
         ))}
-        <span className="ml-auto hidden font-mono text-xs text-slate-500 sm:inline">15s live · depth meter</span>
+        <span className="ml-auto hidden font-mono text-xs text-slate-500 sm:inline">swipe to peek →</span>
       </div>
 
       {err && <p className="px-5 pb-2 font-mono text-xs text-amber-300">{err}</p>}

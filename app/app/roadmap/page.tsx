@@ -251,32 +251,24 @@ function RoadmapInner() {
         </button>
       </div>
 
-      {/* Stats — minimal, breathable */}
-      <div className="mt-5 grid grid-cols-3 gap-3">
-        {[
-          { label:"Live", value: stats.total, sub:"entries" },
-          { label:"Green tick", value: stats.verified, sub:"confirmed", accent:"text-emerald-300" },
-          { label:"Advisory", value: stats.advisory, sub:"awaiting", accent:"text-amber-300" },
-        ].map(s=> (
-          <div key={s.label} className="rounded-2xl border border-white/[0.06] bg-white/[0.03] px-4 py-3.5">
-            <p className="font-mono text-[11px] uppercase tracking-wide text-slate-400">{s.label}</p>
-            <p className={`mt-1 text-xl font-bold tracking-tight ${s.accent ?? "text-white"}`}>{s.value}</p>
-            <p className="font-mono text-xs text-slate-400">{s.sub}</p>
-          </div>
-        ))}
+      {/* Stats — demoted to subtle inline row (Fix 1: venue is hero, not stats) */}
+      <div className="mt-4 flex items-center gap-2 font-mono text-xs text-slate-500">
+        <span className="rounded-full border border-white/5 bg-white/[0.02] px-2.5 py-1">{stats.total} live</span>
+        <span className="rounded-full border border-emerald-500/10 bg-emerald-500/5 px-2.5 py-1 text-emerald-300/70">{stats.verified} confirmed</span>
+        <span className="rounded-full border border-white/5 bg-white/[0.02] px-2.5 py-1">{stats.advisory} awaiting</span>
       </div>
 
-      {/* Search + filters — student-native, no jargon chooser */}
-      <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
+      {/* Search + filters — demoted, venue is focus (Fix 1) */}
+      <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
         <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search courses, halls…" className="w-full rounded-full border border-white/10 bg-white/[0.04] py-3 pl-10 pr-4 text-sm text-white placeholder:text-slate-400 focus:border-white/15 focus:outline-none" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search…" className="w-full rounded-full border border-white/5 bg-white/[0.02] py-2 pl-9 pr-4 text-sm text-white placeholder:text-slate-500 focus:border-white/10 focus:outline-none" />
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1">
           {[
             { k:"all", label:"All" }, { k:"advisory", label:"Needs help" }, { k:"verified", label:"Confirmed" }
           ].map(f=> (
-            <button key={f.k} onClick={()=>setFilterParam(f.k)} className={`min-h-[40px] rounded-full px-4 text-sm font-medium transition ${filter===f.k ? "bg-white text-[#022c1e]" : "border border-white/10 bg-white/[0.04] text-slate-300 hover:bg-white/[0.07]"}`}>{f.label}</button>
+            <button key={f.k} onClick={()=>setFilterParam(f.k)} className={`rounded-full px-3.5 py-2 text-xs font-medium transition ${filter===f.k ? "bg-white text-[#022c1e]" : "border border-white/5 bg-white/[0.02] text-slate-400 hover:bg-white/[0.05]"}`} style={{ minHeight:44, minWidth:44 }}>{f.label}</button>
           ))}
         </div>
       </div>
@@ -340,21 +332,52 @@ function RoadmapInner() {
         </form>
       )}
 
-      {/* Programme-as-landscape: other levels toggle (student-native) */}
-      <details className="mt-5 group rounded-[20px] border border-white/[0.06] bg-white/[0.02] open:bg-white/[0.03]">
-        <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-3">
+      {/* ConsensusMap — peeking swipe sheet + scroll-snap + edge fade + Road↔Feed swipe (Fix 4 + Fix 6) */}
+      <div className="mt-5 overflow-hidden rounded-[20px] border border-white/[0.06] bg-white/[0.02]">
+        <div className="flex items-center justify-between px-5 py-3">
           <span className="flex items-center gap-2">
             <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
             <span className="text-sm font-semibold text-white">More from other levels</span>
-            <span className="hidden sm:inline font-mono text-xs text-slate-400">tap to explore</span>
+            <span className="hidden sm:inline font-mono text-xs text-slate-400">swipe to peek</span>
           </span>
-          <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 font-mono text-xs text-slate-400 group-open:hidden">Show ▾</span>
-          <span className="hidden rounded-full bg-white px-3 py-1 font-mono text-xs font-semibold text-[#022c1e] group-open:inline-flex">Hide ▴</span>
-        </summary>
-        <div className="border-t border-white/[0.06] p-2 sm:p-3">
-          <ConsensusMap />
+          <span className="font-mono text-[11px] text-slate-500">← swipe →</span>
         </div>
-      </details>
+        {/* peeking sheet: horizontal snap with edge fade */}
+        <div className="relative">
+          <div className="pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-[#0f1a14]/60 to-transparent z-10" />
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-[#0f1a14]/60 to-transparent z-10" />
+          <div
+            className="peeking-sheet flex gap-3 overflow-x-auto px-4 pb-3 pt-1 snap-x-mandatory no-scrollbar"
+            style={{ scrollSnapType: 'x mandatory' }}
+            onTouchStart={e=>{
+              const el = e.currentTarget;
+              (el as any)._sx = e.touches[0].clientX;
+            }}
+            onTouchEnd={e=>{
+              const el = e.currentTarget as any;
+              const dx = e.changedTouches[0].clientX - (el._sx ?? 0);
+              if (Math.abs(dx) > 60) {
+                // Road ↔ Feed swipe: left swipe = "Confirmed" filter, right = "All"
+                if (dx < 0) setFilterParam("verified");
+                else if (dx > 0) setFilterParam("all");
+              }
+            }}
+          >
+            <div className="min-w-[88%] snap-center sm:min-w-[92%]">
+              <ConsensusMap />
+            </div>
+            <div className="min-w-[88%] snap-center rounded-[16px] border border-white/[0.06] bg-white/[0.02] p-4 sm:min-w-[360px]">
+              <p className="font-mono text-xs uppercase tracking-wide text-slate-500">Feed peek</p>
+              <p className="mt-2 text-sm font-semibold text-white">{filtered.length} cards · {filter} view</p>
+              <p className="mt-1 text-xs leading-4 text-slate-400">Swipe sheet shows next context — student thumb-friendly. Drag to scroll, snap to center.</p>
+              <div className="mt-3 flex gap-1.5">
+                <button onClick={()=>setFilterParam("all")} className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-[#022c1e]" style={{minHeight:44}}>All</button>
+                <button onClick={()=>setFilterParam("verified")} className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-slate-300" style={{minHeight:44}}>Confirmed</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* One card per slot — leading hall highlighted with progress (student-native) */}
       {loading ? (
@@ -368,36 +391,76 @@ function RoadmapInner() {
           <button onClick={()=>setShowPost(true)} className="mt-4 rounded-full bg-white px-5 py-2 text-sm font-semibold text-[#022c1e]">Share gist →</button>
         </div>
       ) : (
-        <div className="mt-6 space-y-3">
+        <div
+          className="mt-6 space-y-3"
+          onTouchStart={e=>{
+            const el = e.currentTarget as any;
+            el._sx = e.touches[0].clientX;
+          }}
+          onTouchEnd={e=>{
+            const el = e.currentTarget as any;
+            const dx = e.changedTouches[0].clientX - (el._sx ?? 0);
+            if (Math.abs(dx) > 70) {
+              if (dx < 0) setFilterParam("verified");
+              else setFilterParam("all");
+            }
+          }}
+        >
+          <p className="font-mono text-[11px] text-slate-500">← swipe cards to switch Road ↔ Confirmed</p>
           {filtered.map(ev=> {
             const v = isVerified(ev);
-            // progress: prefer backend progress_pct / tally_text, fallback to pctOf
             const p = (ev as any).progress_pct ?? pctOf(ev);
-            const tally = (ev as any).tally_text || (v ? `\u2713 Confirmed \u2014 ${Number(ev.authority_points)}/${Number(ev.required_points)||3} said yes` : `${Number(ev.authority_points)||0} of ${Number(ev.required_points)||3} said yes \u2014 needs ${Math.max(0, (Number(ev.required_points)||3)-(Number(ev.authority_points)||0))} more`);
+            const tally = (ev as any).tally_text || (v ? `✓ Confirmed — ${Number(ev.authority_points)}/${Number(ev.required_points)||3} said yes` : `${Number(ev.authority_points)||0} of ${Number(ev.required_points)||3} said yes — needs ${Math.max(0, (Number(ev.required_points)||3)-(Number(ev.authority_points)||0))} more`);
             const contenders = (ev as any).contenders || [];
             const venueOpts = (ev as any).venue_options || [ev.venue];
+            const weightYes = Number((ev as any).vote_weight_yes ?? ev.authority_points ?? 0);
+            const filledDots = Math.min(8, Math.max(0, Math.ceil(weightYes)));
             return (
-              <article key={ev.id} onClick={()=>setSelectedId(ev.id)} className={`cursor-pointer overflow-hidden rounded-2xl border bg-white/[0.03] transition ${selectedId===ev.id ? "border-white/20 bg-white/[0.06]" : "border-white/[0.06] hover:border-white/10 hover:bg-white/[0.05]"}`}>
+              <article
+                key={ev.id}
+                onClick={()=>setSelectedId(ev.id)}
+                aria-label={tally}
+                className={`cursor-pointer overflow-hidden rounded-2xl border bg-white/[0.03] transition ${selectedId===ev.id ? "border-white/20 bg-white/[0.06]" : "border-white/[0.06] hover:border-white/10 hover:bg-white/[0.05]"}`}
+                onTouchStart={e=>{
+                  const t = e.currentTarget as any;
+                  t._sx = e.touches[0].clientX;
+                  t._sy = e.touches[0].clientY;
+                }}
+                onTouchEnd={e=>{
+                  const t = e.currentTarget as any;
+                  const dx = e.changedTouches[0].clientX - (t._sx ?? 0);
+                  const dy = Math.abs(e.changedTouches[0].clientY - (t._sy ?? 0));
+                  if (Math.abs(dx) > 70 && dy < 40) {
+                    e.stopPropagation();
+                    vote(ev.id,"CANCEL");
+                  }
+                }}
+              >
                 <div className="p-4 sm:p-5">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-bold text-[#022c1e]">{String(ev.title).trim().slice(0,1).toUpperCase() || "•"}</span>
-                        <p className="truncate text-sm font-semibold text-white">{ev.title}</p>
+                      {/* Fix 1: Venue hero 22px + 📍, title secondary */}
+                      <p className="flex items-center gap-1.5 text-[22px] font-bold leading-tight tracking-tight text-white">
+                        <span aria-hidden>📍</span> {ev.venue}
                         {(ev as any).group_size > 1 && <span className="rounded-full bg-amber-500/20 px-2 py-0.5 font-mono text-[10px] font-bold text-amber-300">{(ev as any).group_size} halls</span>}
-                      </div>
-                      <p className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
-                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-200"><MapPin className="h-3 w-3" />{ev.venue}</span>
+                      </p>
+                      <p className="mt-1 truncate text-[13px] font-medium leading-4 text-slate-400">{ev.title}</p>
+                      <p className="mt-1.5 flex flex-wrap items-center gap-1.5">
                         {contenders.length>0 && <span className="font-mono text-xs text-slate-500">vs {contenders.map((c:any)=>c.venue).join(", ")}</span>}
                         <span className="inline-flex items-center gap-1 font-mono text-xs text-slate-500"><Clock3 className="h-3 w-3" />{String(ev.event_date).slice(0,10)} · {String(ev.event_time).slice(0,5)}</span>
                       </p>
-                      {/* Progress bar + tally — student-native */}
+                      {/* Fix 2: h-3 bar + 8-dot row (filled = ceil vote_weight_yes) + Fix 5: tally aria-label only */}
                       <div className="mt-3">
                         <div className="flex items-center gap-2">
-                          <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/10"><div className={`h-full rounded-full ${v ? "bg-emerald-400" : "bg-amber-400"}`} style={{ width:`${p}%`}} /></div>
+                          <div className="h-3 flex-1 overflow-hidden rounded-full bg-white/10" role="progressbar" aria-valuenow={p} aria-valuemin={0} aria-valuemax={100} aria-label={tally}><div className={`h-full rounded-full ${v ? "bg-emerald-400" : "bg-amber-400"}`} style={{ width:`${p}%`}} /></div>
                           <span className="font-mono text-xs font-medium text-slate-300">{p}%</span>
                         </div>
-                        <p className="mt-1.5 font-mono text-xs text-slate-300">{tally}</p>
+                        <div className="mt-2 flex items-center gap-1" aria-label={`${filledDots} of 8 weight`}>
+                          {Array.from({length:8}).map((_,i)=> (
+                            <span key={i} className={`h-2 w-2 rounded-full ${i < filledDots ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.45)]" : "bg-white/15"}`} />
+                          ))}
+                          <span className="ml-1.5 font-mono text-[11px] text-slate-500">{filledDots}/8</span>
+                        </div>
                         {venueOpts.length>1 && (
                           <div className="mt-2 flex flex-wrap gap-1">
                             {venueOpts.map((ven:string)=> (
@@ -410,12 +473,28 @@ function RoadmapInner() {
                     </div>
                     <span className={`hidden shrink-0 sm:inline-flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${v ? "bg-emerald-500 text-white" : "bg-white/10 text-slate-300"}`}>{v ? "✓" : "•"}</span>
                   </div>
-                  <div className="mt-4 flex flex-wrap items-center gap-1.5">
-                    <span className="font-mono text-xs uppercase tracking-wide text-slate-500">Were you there?</span>
-                    <button onClick={(e)=>{e.stopPropagation(); vote(ev.id,"YES")}} disabled={!!voteBusy} className="min-h-[40px] rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 text-sm font-medium text-emerald-300 hover:bg-emerald-500 hover:text-white disabled:opacity-50">{voteBusy===ev.id+"YES" ? "…" : "Yes ✓"}</button>
-                    <button onClick={(e)=>{e.stopPropagation(); vote(ev.id,"NO")}} disabled={!!voteBusy} className="min-h-[40px] rounded-full border border-white/10 bg-white/[0.04] px-4 text-sm text-slate-200 hover:bg-white hover:text-[#022c1e] disabled:opacity-50">{voteBusy===ev.id+"NO" ? "…" : "No ✕"}</button>
-                    <button onClick={(e)=>{e.stopPropagation(); vote(ev.id,"CANCEL")}} disabled={!!voteBusy} className="min-h-[40px] rounded-full border border-white/10 bg-white/[0.02] px-4 text-sm text-slate-400 hover:bg-white/[0.06] disabled:opacity-50">Skip</button>
-                    {myWeightLabel && <VoteWeightBadge weight={myWeight} label={myWeightLabel} />}
+                  {/* Fix 3: Icon-only votes 56px ✓ /44px ✕ + swipe-to-skip, Fix 7: ≥44×44, Fix 5: no tally sentence */}
+                  <div className="mt-4 flex items-center gap-3">
+                    <button
+                      onClick={(e)=>{e.stopPropagation(); vote(ev.id,"YES")}}
+                      disabled={!!voteBusy}
+                      aria-label="Confirm — you were there"
+                      className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-xl font-bold text-white shadow-lg hover:bg-emerald-400 disabled:opacity-50 transition"
+                      style={{ minWidth:56, minHeight:56 }}
+                    >
+                      {voteBusy===ev.id+"YES" ? "…" : "✓"}
+                    </button>
+                    <button
+                      onClick={(e)=>{e.stopPropagation(); vote(ev.id,"NO")}}
+                      disabled={!!voteBusy}
+                      aria-label="No — not there"
+                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-base font-bold text-slate-200 hover:bg-white hover:text-[#022c1e] disabled:opacity-50 transition"
+                      style={{ minWidth:44, minHeight:44 }}
+                    >
+                      {voteBusy===ev.id+"NO" ? "…" : "✕"}
+                    </button>
+                    <span className="font-mono text-[11px] text-slate-500">swipe card to skip →</span>
+                    {myWeightLabel && <span className="ml-auto"><VoteWeightBadge weight={myWeight} label={myWeightLabel} /></span>}
                   </div>
                   {selectedId===ev.id && (
                     <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.04] p-3">
@@ -446,8 +525,8 @@ function RoadmapInner() {
               <input value={pickerHandle} onChange={e=>setPickerHandle(e.target.value)} placeholder="alex_02" autoFocus className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-white/15 focus:outline-none" />
               {pickerErr && <p className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">{pickerErr}</p>}
               <div className="flex gap-2">
-                <button type="submit" disabled={pickerBusy} className="flex-1 rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-[#022c1e] hover:bg-slate-100 disabled:opacity-50">{pickerBusy ? "Creating…" : "Create & verify →"}</button>
-                <button type="button" onClick={()=>setPickerOpen(false)} className="rounded-full border border-white/10 px-5 py-2.5 text-sm text-slate-300">Cancel</button>
+                <button type="submit" disabled={pickerBusy} className="flex-1 rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-[#022c1e] hover:bg-slate-100 disabled:opacity-50" style={{minHeight:44}}>{pickerBusy ? "Creating…" : "Create & verify →"}</button>
+                <button type="button" onClick={()=>setPickerOpen(false)} className="rounded-full border border-white/10 px-5 py-2.5 text-sm text-slate-300" style={{minHeight:44}}>Cancel</button>
               </div>
             </form>
           </div>
