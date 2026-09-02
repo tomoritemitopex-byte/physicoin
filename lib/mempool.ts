@@ -124,9 +124,17 @@ export function groupBySlot(events: any[]): Map<string, any[]> {
   return m;
 }
 
-/** For a slot group, compute tip: venue/time with most weight. Simplified: most votes or earliest. */
+/** For a slot group, compute tip: highest bonded weight wins (RBF). Tie-break: vote_weight_no ASC, then earliest. */
 export function pickTip(claims: any[]): { tip: any; contenders: any[] } | null {
   if (!claims.length) return null;
-  const sorted = [...claims].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  const sorted = [...claims].sort((a, b) => {
+    const aYes = Number(a.vote_weight_yes ?? 0);
+    const bYes = Number(b.vote_weight_yes ?? 0);
+    if (bYes !== aYes) return bYes - aYes;
+    const aNo = Number(a.vote_weight_no ?? 0);
+    const bNo = Number(b.vote_weight_no ?? 0);
+    if (aNo !== bNo) return aNo - bNo;
+    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+  });
   return { tip: sorted[0], contenders: sorted.slice(1) };
 }

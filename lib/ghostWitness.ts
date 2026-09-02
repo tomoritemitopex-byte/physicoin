@@ -142,24 +142,12 @@ export async function appendGhostChain(
   opts?: { prevSig?: string | null; timestamp?: string }
 ): Promise<{ prevSig: string; newSig: string; timestamp: string; queries: any[] }> {
   const ts = canonicalTs(opts?.timestamp ?? new Date().toISOString());
-  const isTransactionClient = typeof (txOrSql as any)?.transaction !== "function";
-  let prevSig: string | null = opts?.prevSig !== undefined ? opts.prevSig : null;
-  if (prevSig === null && !isTransactionClient) {
-    try {
-      const rows = await txOrSql`SELECT rep_ghost_sig FROM physi_users WHERE id=${userId} LIMIT 1`;
-      prevSig = rows?.[0]?.rep_ghost_sig ?? null;
-    } catch { prevSig = null; }
-  }
+  const prevSig: string | null = opts?.prevSig !== undefined ? opts.prevSig : null;
   const { prev, newSig } = buildGhostChainSigs(prevSig, action, userId, ts);
   const queries = prepareGhostChainQueries(txOrSql, userId, action, prev, newSig, ts);
-  // For standalone (non-transactional) callers like mining check-in, execute
-  // here directly. Do not swallow errors — previous .catch(()=>null) hid failures
-  // and left chain at genesis. For transactional callers, return queries for
-  // spreading into sql.transaction array — don't double-execute inside batch.
+  const isTransactionClient = typeof (txOrSql as any)?.transaction !== "function";
   if (!isTransactionClient) {
-    // sql (outside transaction) — execute now
     await Promise.all(queries);
   }
-  // Always return queries so caller CAN spread into transaction array if needed
   return { prevSig: prev, newSig, timestamp: ts, queries };
 }
