@@ -150,26 +150,15 @@ async function handleVerify(req: Request): Promise<Response> {
       if (!["YES", "NO", "CANCEL"].includes(b.vote)) {
         return NextResponse.json({ ok: false, code: "BAD_VOTE", message: getErrorMessage("BAD_VOTE") }, { status: 400 });
       }
-      // Stake-to-vote: YES/NO costs 1 Rep held, CANCEL free
+      // Ensure vote bonds table exists before transaction (for stake inside tx)
       if (b.vote !== "CANCEL") {
         try {
           const { ensureVoteBonds } = await import("@/lib/db");
           await ensureVoteBonds();
         } catch {}
-        try {
-          const { stakeForVote, VOTE_STAKE } = await import("@/lib/voteBond");
-          const stakeRes: any = await stakeForVote(sql, String(b.verifier_id), String(b.event_id), VOTE_STAKE);
-          if (!stakeRes.ok) {
-            if (stakeRes.code === "INSUFFICIENT_STAKE") return NextResponse.json({ ok:false, code:"INSUFFICIENT_STAKE", message: stakeRes.message }, { status:402 });
-            return NextResponse.json({ ok:false, code: stakeRes.code, message: stakeRes.message }, { status:500 });
-          }
-        } catch (e: any) {
-          if (e?.status === 402) throw e;
-          // if stake table missing, continue (grace)
-        }
       }
       try {
-        // --- Pre-transaction reads & pure computation (Neon HTTP batch requires non-async tx fn) ---
+        // --- Pre-transaction reads & pure computation ---
         const [u] = await sql`SELECT authority_final, rep_ghost_sig FROM physi_users WHERE id = ${b.verifier_id} LIMIT 1`;
         if (!u) throw new Error("USER_NOT_FOUND");
 
@@ -231,29 +220,51 @@ async function handleVerify(req: Request): Promise<Response> {
         const demote = (ev as any).status === "verified" && noW > 0 && ratio < 0.66;
         const quorumDecision = { promoted: promote, demoted: demote, yesW, noW, total, ratio, required };
 
-        // --- Transactional batch: prepare query promises then return as array (Neon HTTP correct pattern) ---
-        const txResults = await sql.transaction((tx: any) => {
-          const queries: any[] = [];
-          // 1. Insert/replace verification (upsert — one vote per verifier per event)
-          const verifQ = tx`
-            INSERT INTO physi_verifications (verifier_id, event_id, vote, authority_weight, is_witness, squad_boost, award)
-            VALUES (${b.verifier_id}, ${b.event_id}, ${b.vote}, ${w}, ${isWitness}, false, ${award})
-            ON CONFLICT (verifier_id, event_id) DO UPDATE SET vote = EXCLUDED.vote, authority_weight = EXCLUDED.authority_weight, is_witness = EXCLUDED.is_witness, squad_boost = EXCLUDED.squad_boost, award = EXCLUDED.award
-            RETURNING *`;
-          queries.push(verifQ);
+        // --- Atomic transaction: stake + vote + ghost + promotion ---
+        // P0 fix: stake is now INSIDE the transaction on the tx connection (FOR UPDATE on tx),
+        // so failed vote rolls back stake deduction, and concurrent votes can't double-spend.
+        let verification: any = null;
+        // Use async transaction for stake conditional logic (Neon supports async tx)
+        const runTx = async () => {
+          let innerVerification: any = null;
+          await sql.transaction(async (tx: any) => {
+            // 1. Stake deduction + bond insert/update atomically (free re-vote fix: released/burned re-charged)
+            if (b.vote !== "CANCEL") {
+              const { stakeForVoteTx, VOTE_STAKE } = await import("@/lib/voteBond");
+              const stakeRes: any = await stakeForVoteTx(tx, String(b.verifier_id), String(b.event_id), VOTE_STAKE);
+              if (!stakeRes.ok) {
+                const err: any = new Error(stakeRes.code);
+                err.stakeRes = stakeRes;
+                throw err;
+              }
+            }
+            // 2. Insert/replace verification
+            const verifRows = await tx`
+              INSERT INTO physi_verifications (verifier_id, event_id, vote, authority_weight, is_witness, squad_boost, award)
+              VALUES (${b.verifier_id}, ${b.event_id}, ${b.vote}, ${w}, ${isWitness}, false, ${award})
+              ON CONFLICT (verifier_id, event_id) DO UPDATE SET vote = EXCLUDED.vote, authority_weight = EXCLUDED.authority_weight, is_witness = EXCLUDED.is_witness, squad_boost = EXCLUDED.squad_boost, award = EXCLUDED.award
+              RETURNING *`;
+            innerVerification = verifRows?.[0] ?? (Array.isArray(verifRows) ? verifRows[0] : null);
+            // 3. Ghost Witness: extend chain
+            const ghostQueries = prepareGhostChainQueries(tx, String(b.verifier_id), act, ghostBuild.prev, ghostBuild.newSig, ghostBuild.timestamp);
+            await Promise.all(ghostQueries);
+            // 4. Quorum promotion/demotion
+            const promoQueries = preparePromotionQueries(tx, b.event_id, b.verifier_id, quorumDecision, (ev as any).status);
+            await Promise.all(promoQueries);
+          });
+          return innerVerification;
+        };
 
-          // 2. Ghost Witness: extend chain (prepare queries)
-          const ghostQueries = prepareGhostChainQueries(tx, String(b.verifier_id), act, ghostBuild.prev, ghostBuild.newSig, ghostBuild.timestamp);
-          queries.push(...ghostQueries);
-
-          // 3. Quorum check + promotion/demotion (prepare queries based on pre-computed decision)
-          const promoQueries = preparePromotionQueries(tx, b.event_id, b.verifier_id, quorumDecision, (ev as any).status);
-          queries.push(...promoQueries);
-
-          return queries;
-        });
-
-        const verification = (txResults as any[])[0]?.[0] ?? null;
+        try {
+          verification = await runTx();
+        } catch (e: any) {
+          if (e?.stakeRes) {
+            const sr = e.stakeRes;
+            if (sr.code === "INSUFFICIENT_STAKE") return NextResponse.json({ ok:false, code:"INSUFFICIENT_STAKE", message: sr.message }, { status:402 });
+            return NextResponse.json({ ok:false, code: sr.code, message: sr.message }, { status:500 });
+          }
+          throw e;
+        }
         const quorum = { promoted: promote, demoted: demote, yesW, noW, total, ratio };
         const result = { verification, quorum };
 
