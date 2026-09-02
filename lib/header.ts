@@ -50,15 +50,13 @@ export async function buildHeader(date: string): Promise<DailyHeader> {
       if (!sigs.length) ghostRoot = sha256Hex("");
     } catch { ghostRoot = sha256Hex(""); }
   }
-  // prevHash
   let prevHash = GHOST_GENESIS;
   if (sql) {
     try {
-      const prev: any[] = await sql`SELECT hmac, merkle_root, ghost_tip_root, prev_hash, date FROM physi_headers WHERE date < ${d}::date ORDER BY date DESC LIMIT 1` as any;
+      const prev: any[] = await sql`SELECT hmac, merkle_root, ghost_tip_root, prev_hash, date, count FROM physi_headers WHERE date < ${d}::date ORDER BY date DESC LIMIT 1` as any;
       if (prev.length) {
         const p = prev[0];
-        // hash of previous header's canonical JSON
-        const prevJson = JSON.stringify({ date: String(p.date).slice(0,10), prevHash: p.prev_hash, merkleRoot: p.merkle_root, ghostTipRoot: p.ghost_tip_root, count: p.count });
+        const prevJson = JSON.stringify({ date: String(p.date).slice(0,10), prevHash: p.prev_hash, merkleRoot: p.merkle_root, ghostTipRoot: p.ghost_tip_root, count: Number(p.count) });
         prevHash = sha256Hex(prevJson);
       }
     } catch {}
@@ -66,6 +64,17 @@ export async function buildHeader(date: string): Promise<DailyHeader> {
   const payload = JSON.stringify({ date: d, prevHash, merkleRoot: merkle, ghostTipRoot: ghostRoot, count });
   const hmac = createHmac("sha256", getSecret()).update(payload).digest("hex");
   return { date: d, prevHash, merkleRoot: merkle, ghostTipRoot: ghostRoot, count, hmac };
+}
+
+export async function rebuildHeader(date: string): Promise<DailyHeader> {
+  const hdr = await buildHeader(date);
+  const sql = getSql();
+  if (sql) {
+    try {
+      await sql`INSERT INTO physi_headers (date, merkle_root, ghost_tip_root, prev_hash, hmac, count) VALUES (${hdr.date}::date, ${hdr.merkleRoot}, ${hdr.ghostTipRoot}, ${hdr.prevHash}, ${hdr.hmac}, ${hdr.count}) ON CONFLICT (date) DO UPDATE SET merkle_root=EXCLUDED.merkle_root, ghost_tip_root=EXCLUDED.ghost_tip_root, prev_hash=EXCLUDED.prev_hash, hmac=EXCLUDED.hmac, count=EXCLUDED.count`;
+    } catch {}
+  }
+  return hdr;
 }
 
 export async function ensureAndGetHeader(date: string): Promise<DailyHeader> {
