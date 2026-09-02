@@ -297,7 +297,74 @@ async function handleTimetable(req: Request): Promise<Response> {
           }
         } catch {}
       }
-      return NextResponse.json({ ok: true, events: rows, count: (rows as unknown[]).length });
+      // === GROUPING COLLAPSE (RBF merge fix) — one card per slot ===
+      try {
+        const { slotKey, groupBySlot, pickTip } = await import("@/lib/mempool");
+        const rowsArr = rows as any[];
+        const slotKeys = Array.from(new Set(rowsArr.map((r:any)=> {
+          try { return slotKey({ scope_value: r.scope_value ?? null, event_date: String(r.event_date).slice(0,10), event_time: String(r.event_time).slice(0,5), title: String(r.title||"") }); } catch { return ""; }
+        }))).filter(Boolean) as string[];
+        let claimsBySlot = new Map<string, any[]>();
+        if (slotKeys.length) {
+          try {
+            const claims = await sql`SELECT slot_key, venue, vote_weight_yes, vote_weight_no, event_id FROM physi_slot_claims WHERE slot_key = ANY(${slotKeys}::text[])` as any[];
+            for (const c of claims) {
+              if (!claimsBySlot.has(c.slot_key)) claimsBySlot.set(c.slot_key, []);
+              claimsBySlot.get(c.slot_key)!.push(c);
+            }
+          } catch {}
+        }
+        for (const r of rowsArr) {
+          const sk = (()=>{ try{ return slotKey({ scope_value: (r as any).scope_value ?? null, event_date: String((r as any).event_date).slice(0,10), event_time: String((r as any).event_time).slice(0,5), title: String((r as any).title||"") }); } catch { return (r as any).slot_key || ""; } })();
+          (r as any).slot_key = (r as any).slot_key || sk;
+          const claims = claimsBySlot.get(sk) || [];
+          const match = claims.find((c:any)=> String(c.venue).toLowerCase()===String((r as any).venue).toLowerCase()) || claims.find((c:any)=> String(c.event_id)===String((r as any).id));
+          const vy = match ? Number(match.vote_weight_yes||0) : Number((r as any).vote_weight_yes||0);
+          const vn = match ? Number(match.vote_weight_no||0) : Number((r as any).vote_weight_no||0);
+          (r as any).vote_weight_yes = vy || Number((r as any).authority_points||0);
+          (r as any).vote_weight_no = vn || 0;
+        }
+        const grouped = groupBySlot(rowsArr);
+        const collapsed: any[] = [];
+        const slots: any[] = [];
+        for (const entry of Array.from(grouped.entries())) { const sk = entry[0] as string; const group = entry[1] as any[];
+          if (group.length === 1) {
+            const e:any = group[0];
+            const yes = Number(e.vote_weight_yes||0);
+            const required = Number(e.required_points||3);
+            const needs = Math.max(0, Math.ceil(required - yes));
+            e.tally_text = yes >= required ? `\u2713 Confirmed \u2014 ${yes} of ${required} said yes` : `${yes} of ${required} said yes \u2014 needs ${needs} more`;
+            e.progress_pct = required ? Math.min(100, Math.round((yes/required)*100)) : (e.status==='verified'?100:0);
+            e.venue_options = [e.venue];
+            e.contenders = [];
+            e.is_grouped = false;
+            e.group_size = 1;
+            collapsed.push(e);
+            slots.push({ slot_key: sk, tip: { id:e.id, venue:e.venue }, contenders: [], yes, required, tally_text: e.tally_text });
+          } else {
+            const picked = pickTip(group as any[]);
+            const tip:any = picked ? picked.tip : group[0];
+            const contenders:any[] = picked ? picked.contenders : group.slice(1);
+            const yes = Number(tip.vote_weight_yes||0);
+            const required = Number(tip.required_points||3);
+            const needs = Math.max(0, Math.ceil(required - yes));
+            const tally_text = yes >= required ? `\u2713 Confirmed \u2014 ${yes} of ${required} said yes` : `${yes} of ${required} said yes \u2014 needs ${needs} more`;
+            tip.tally_text = tally_text;
+            tip.progress_pct = required ? Math.min(100, Math.round((yes/required)*100)) : 0;
+            tip.venue_options = group.map((g:any)=> g.venue);
+            tip.contenders = contenders.map((c:any)=> ({ id:c.id, venue:c.venue, event_time:String(c.event_time).slice(0,5), vote_weight_yes: Number(c.vote_weight_yes||0), vote_weight_no: Number(c.vote_weight_no||0) }));
+            tip.is_grouped = true;
+            tip.group_size = group.length;
+            tip.slot_key = sk;
+            collapsed.push(tip);
+            slots.push({ slot_key: sk, tip: { id:tip.id, venue:tip.venue, vote_weight_yes: yes }, contenders: tip.contenders, yes, required, tally_text, venues: tip.venue_options });
+          }
+        }
+        collapsed.sort((a:any,b:any)=> new Date(b.event_date).getTime() - new Date(a.event_date).getTime() || new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        return NextResponse.json({ ok: true, events: collapsed, slots, count: collapsed.length, total_raw: rowsArr.length });
+      } catch {
+        return NextResponse.json({ ok: true, events: rows, count: (rows as unknown[]).length });
+      }
     } catch (e) {
       logError("TIMETABLE_FETCH_FAILED", e, { route: "/api/timetable", method: "GET" });
       return NextResponse.json({ ok: false, code: "TIMETABLE_FETCH_FAILED", message: getErrorMessage("TIMETABLE_FETCH_FAILED") }, { status: 500 });
