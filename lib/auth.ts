@@ -11,6 +11,7 @@ import { createHmac, randomUUID } from "crypto";
 
 const DEV_FALLBACK = "dev-fallback-hmac-secret-do-not-use-in-prod";
 const TOKEN_TTL_MS = 30 * 24 * 3600 * 1000; // 30 days
+export const LEGACY_CUTOFF = Date.parse("2026-10-26"); // P0 fix: legacy b64(uid) tokens expire here
 
 function getSecret(): string {
   const s = (process.env.HMAC_SECRET || process.env.GHOST_HMAC_SECRET || "").trim();
@@ -75,9 +76,12 @@ export function verifySession(token: string): string | null {
         return obj.uid;
       }
     } catch {}
-    // Fallback: legacy token (bare uid) — valid for 30d grace period
+    // Fallback: legacy token (bare uid) — rejected after LEGACY_CUTOFF (P0 bypass fix)
     const legacy = tryLegacyDecode(payload);
-    if (legacy) return legacy;
+    if (legacy) {
+      if (Date.now() > LEGACY_CUTOFF) return null;
+      return legacy;
+    }
     // Also handle case where payload was b64(JSON) but parse failed
     return null;
   } catch { return null; }
@@ -94,7 +98,10 @@ export function decodeSession(token: string): SessionPayload | { uid: string; le
     if (obj?.uid) return obj as SessionPayload;
   } catch {}
   const legacy = tryLegacyDecode(payload);
-  if (legacy) return { uid: legacy, legacy: true } as any;
+  if (legacy) {
+    if (Date.now() > LEGACY_CUTOFF) return null;
+    return { uid: legacy, legacy: true } as any;
+  }
   return null;
 }
 
@@ -160,7 +167,10 @@ export async function verifySessionWithRevocation(token: string, sql?: any): Pro
   const uid = verifySession(token);
   if (!uid) return null;
   const jti = getSessionJti(token);
-  if (!jti) return uid; // legacy token grace period — not revocable by jti
+  if (!jti) {
+    // legacy token — already gated by LEGACY_CUTOFF in verifySession; not revocable by jti
+    return Date.now() > LEGACY_CUTOFF ? null : uid;
+  }
   if (!sql) return uid;
   try {
     const rows: any[] = await sql`SELECT 1 FROM physi_revoked_tokens WHERE jti=${jti} LIMIT 1` as any;
