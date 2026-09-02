@@ -1,4 +1,5 @@
 "use client";
+import { Wallet, Coins } from "lucide-react";
 import { useEffect, useState, useCallback, useRef } from "react";
 
 type StoredProfile = { id:string; nickname:string; mining_balance:number|string; authority_final:number|string; authority_base:number|string; programme:string; level:string; };
@@ -60,23 +61,24 @@ export default function MiningPage(){
       const r=await fetch("/api/mining",{ method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify({ user_id: profile.id, base_reward: BASE_REWARD })});
       const j=await r.json(); if(!r.ok||j.ok===false) throw new Error(j.error||"check-in failed");
       const earned=Number(j.earned ?? j.log?.earned_amount ?? BASE_REWARD);
-      setToast(`+${earned.toFixed(0)} Rep — streak continues!`);
+      setToast(`Earned +${earned.toFixed(2)} $PHY — streak continues!`);
+      try{ window.dispatchEvent(new CustomEvent("physi-earn",{ detail: `Earned +${earned.toFixed(2)} $PHY` })); }catch{}
       try{ localStorage.setItem(LS_LAST,new Date().toISOString()); const nb=Number(profile.mining_balance??0)+earned; const np={...profile, mining_balance:nb}; setProfile(np); localStorage.setItem("physi_profile", JSON.stringify(np)); }catch{}
       setCooldown(COOLDOWN_MS); setNextAt(new Date(Date.now()+COOLDOWN_MS)); await fetchMining();
     }catch(e:any){ setErr(e.message); setToast(e.message); } finally{ setBusy(false); }
   }
 
   const streak=streakFromLogs(logs);
-  const rep=profile? Number(profile.mining_balance??0).toFixed(0):"0";
+  const rep=profile? Number(profile.mining_balance??0).toFixed(2):"0.00";
   const mult=profile? Number(profile.authority_final??1).toFixed(2):"1.00";
   const preview=profile? (BASE_REWARD*Number(profile.authority_final??1)).toFixed(0):"1";
 
   if(!checked) return <div className="mx-auto max-w-[720px] px-4 py-10"><div className="h-32 animate-pulse rounded-2xl bg-white/[0.04]" /></div>;
   if(!profile) return (
     <div className="mx-auto max-w-[720px] px-4 py-10 text-center">
-      <p className="font-mono text-xs uppercase tracking-[0.12em] text-slate-500">Daily Rep · streak</p>
+      <p className="font-mono text-xs uppercase tracking-[0.12em] text-slate-500">Daily $PHY · streak</p>
       <h1 className="mt-2 text-2xl font-bold text-white">You need a handle first</h1>
-      <p className="mt-2 text-sm text-slate-400">Create a handle to start your daily Rep streak.</p>
+      <p className="mt-2 text-sm text-slate-400">Create a handle to start your daily $PHY streak.</p>
       <a href="/app/profile" className="mt-6 inline-flex rounded-full bg-white px-6 py-3 text-sm font-semibold text-[#022c1e]">Create handle →</a>
     </div>
   );
@@ -84,14 +86,14 @@ export default function MiningPage(){
   return (
     <div className="mx-auto max-w-[720px] px-4 py-8 sm:px-6 space-y-5">
       <div>
-        <p className="font-mono text-xs uppercase tracking-[0.12em] text-slate-500">Rep · daily streak · WAT</p>
+        <p className="font-mono text-xs uppercase tracking-[0.12em] text-slate-500">Wallet · $PHY · daily streak · WAT</p>
         <h1 className="mt-1 text-2xl font-bold tracking-tight text-white">Good morning, @{profile.nickname}</h1>
-        <p className="mt-1 text-sm text-slate-400">One tap per 24h. Keep streak → your votes weigh more.</p>
+        <p className="mt-1 text-sm text-slate-400">One tap per 24h → earn $PHY. Keep streak → your votes weigh more.</p>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
         {[
-          ["Rep", rep, "score"],
+          ["Wallet", `${rep} $PHY`, "spendable"],
           ["Streak", String(streak), streak===1 ? "day" : "days"],
           ["Boost", `×${mult}`, streak>=3 ? "1.2x active" : "at 3 days"],
         ].map(([k,v,sub])=> (
@@ -114,28 +116,28 @@ export default function MiningPage(){
           </div>
         ) : (
           <div className="rounded-2xl border border-emerald-500/15 bg-emerald-500/[0.06] p-5 text-center sm:text-left sm:flex sm:items-center sm:justify-between">
-            <div><p className="text-sm font-semibold text-white">Ready to earn Rep</p><p className="mt-1 text-sm text-emerald-200/70">One tap → +{preview} Rep · streak {streak}</p></div>
-            <button onClick={checkIn} disabled={busy} className="mt-3 inline-flex rounded-full bg-white px-6 py-3 text-sm font-semibold text-[#022c1e] hover:bg-slate-100 disabled:opacity-50 sm:mt-0">{busy ? "Checking…" : `Check in +${preview} Rep →`}</button>
+            <div><p className="flex items-center gap-1.5 text-sm font-semibold text-white"><Coins className="h-4 w-4 text-emerald-400"/>Ready to earn $PHY</p><p className="mt-1 text-sm text-emerald-200/70">One tap → +{preview} $PHY · streak {streak}</p></div>
+            <button onClick={checkIn} disabled={busy} className="mt-3 inline-flex rounded-full bg-white px-6 py-3 text-sm font-semibold text-[#022c1e] hover:bg-slate-100 disabled:opacity-50 sm:mt-0">{busy ? "Checking…" : `Check in +${preview} $PHY →`}</button>
           </div>
         )}
         {err && <p className="mt-3 rounded-xl border border-red-500/15 bg-red-500/10 px-3 py-2 text-sm text-red-300">{err}</p>}
-        <p className="mt-3 text-center font-mono text-xs text-slate-500">24h cooldown · stored server + browser · Rep has no cash value</p>
+        <p className="mt-3 text-center font-mono text-xs text-slate-500">24h cooldown · 1 base $PHY halves every 50k campus · cap 10k $PHY</p>
       </div>
 
       <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-5">
-        <div className="flex items-center justify-between"><h3 className="text-sm font-semibold text-white">Recent Rep</h3><span className="font-mono text-xs text-slate-500">{logs.length} total</span></div>
+        <div className="flex items-center justify-between"><h3 className="flex items-center gap-1.5 text-sm font-semibold text-white"><Wallet className="h-3.5 w-3.5 text-emerald-400"/>Recent $PHY</h3><span className="font-mono text-xs text-slate-500">{logs.length} total</span></div>
         {loading ? <div className="mt-3 space-y-2">{[0,1,2].map(i=> <div key={i} className="h-12 animate-pulse rounded-xl bg-white/[0.04]" />)}</div>
         : logs.length===0 ? <p className="mt-3 text-center text-sm text-slate-500">No Rep yet — tap check-in above.</p>
         : <ul className="mt-3 space-y-2">{logs.slice(0,5).map(l=> (
             <li key={l.id} className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-[#0b1020] px-3 py-2.5">
-              <span className="font-mono text-sm font-semibold text-white">+{Number(l.earned_amount).toFixed(0)} Rep</span>
+              <span className="font-mono text-sm font-semibold text-emerald-300">+{Number(l.earned_amount).toFixed(2)} $PHY</span>
               <span className="font-mono text-xs text-slate-500">{new Date(l.created_at).toLocaleDateString("en-GB",{day:"2-digit",month:"short"})} · ×{Number(l.authority_multiplier).toFixed(2)}</span>
             </li>
           ))}</ul>}
       </div>
 
-      <p className="text-center font-mono text-xs text-slate-600">PHYSI · Rep is contribution, not cash · advisory feed only</p>
-      {toast && <div className="fixed bottom-20 left-1/2 z-50 -translate-x-1/2 rounded-full bg-[#0c1222] border border-white/10 px-4 py-2 text-sm text-white shadow-xl">{toast}</div>}
+      <p className="text-center font-mono text-xs text-slate-600">PHYSI · $PHY is campus currency · spend to vote & unlock · advisory feed only</p>
+      {toast && <div className={`fixed bottom-20 left-1/2 z-50 -translate-x-1/2 rounded-full border px-4 py-2 text-sm shadow-xl ${toast.startsWith("Earned")||toast.includes("$PHY")?"bg-emerald-600 border-emerald-500 text-white":"bg-[#0c1222] border-white/10 text-white"}`}>{toast}</div>}
     </div>
   );
 }

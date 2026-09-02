@@ -61,7 +61,8 @@ export default function NotesDrop({ userId }: { userId?: string | null }) {
       const r = await fetch("/api/notes", { method: "POST", body: fd });
       const j = await r.json().catch(() => null);
       if (!r.ok || !j?.ok) throw new Error(j?.message || "Upload failed");
-      setMsg("Dropped! It’s on the campus map now");
+      setMsg("Dropped! Earned +2 $PHY — it’s on the map now");
+      try{ const raw=localStorage.getItem("physi_profile"); if(raw){ const pr=JSON.parse(raw); pr.mining_balance=Number((Number(pr.mining_balance||0)+2).toFixed(2)); localStorage.setItem("physi_profile",JSON.stringify(pr)); window.dispatchEvent(new CustomEvent("physi-earn",{detail:"Earned +2 $PHY for notes drop"})); } }catch{}
       setFile(null); setPreviewUrl(null); setTitle("");
       fetchNotes();
     } catch (e) { setMsg((e as Error).message); } finally { setUploading(false); }
@@ -74,10 +75,11 @@ export default function NotesDrop({ userId }: { userId?: string | null }) {
       const r = await fetch("/api/notes/unlock", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ note_id: noteId, user_id: uid }) });
       const j = await r.json().catch(() => null);
       if (!r.ok || !j?.ok) {
-        if (j?.code === "INSUFFICIENT_COINS") { setMsg("You need 1 coin — check in to a class to earn coins"); return; }
+        if (j?.code === "INSUFFICIENT_COINS") { setMsg("You need 1 $PHY — check in to earn $PHY"); try{ window.dispatchEvent(new CustomEvent("physi-spend",{detail:"Need 1 $PHY to unlock"})); }catch{} return; }
         throw new Error(j?.message || "Unlock failed");
       }
-      setMsg(j.cost === 0 ? j.message : "Unlocked — 1 coin used");
+      setMsg(j.cost === 0 ? j.message : "Unlocked — 1 $PHY spent");
+      try{ if(j.cost!==0){ const raw=localStorage.getItem("physi_profile"); if(raw){ const pr=JSON.parse(raw); pr.mining_balance=Math.max(0, Number((Number(pr.mining_balance||0)-1).toFixed(2))); localStorage.setItem("physi_profile",JSON.stringify(pr)); window.dispatchEvent(new CustomEvent("physi-spend",{detail:"Spent 1 $PHY to unlock notes"})); } } else { window.dispatchEvent(new CustomEvent("physi-earn",{detail:"Verified +1 $PHY"})); } }catch{}
       try {
         const rr = await fetch(`/api/notes?note_id=${encodeURIComponent(noteId)}&viewer_id=${encodeURIComponent(uid)}`, { cache: "no-store" });
         const jj = await rr.json().catch(() => null);
@@ -93,7 +95,7 @@ export default function NotesDrop({ userId }: { userId?: string | null }) {
         <div>
           <p className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-sky-300">notes drop · campus map</p>
           <h3 className="text-[16px] font-black text-white">Snap & share notes</h3>
-          <p className="font-mono text-[11px] text-white/60">Blurred preview — 1 coin to reveal. Your uploads are free.</p>
+          <p className="font-mono text-[11px] text-white/60">Blurred preview — 1 $PHY to reveal. Your uploads are free.</p>
         </div>
         <span className="rounded-full bg-white px-2.5 py-1 font-mono text-[10px] font-black text-black">{notes.length} drops</span>
       </div>
@@ -143,7 +145,7 @@ export default function NotesDrop({ userId }: { userId?: string | null }) {
                     <p className="font-mono text-[11px] text-white/60">{b?.code || n.building_id} · {n.level} · {new Date(n.created_at).toLocaleDateString([], { day: "2-digit", month: "short" })}</p>
                   </div>
                   {n.blurred ? (
-                    <button onClick={() => doUnlock(n.id)} className="shrink-0 rounded-full bg-white px-3 py-1.5 font-mono text-[11px] font-black text-black hover:bg-amber-50">Show · 1 coin</button>
+                    <button onClick={() => doUnlock(n.id)} className="shrink-0 rounded-full bg-white px-3 py-1.5 font-mono text-[11px] font-black text-black hover:bg-amber-50">Spend 1 $PHY · Show</button>
                   ) : (
                     <span className="shrink-0 rounded-full bg-emerald-500 px-3 py-1 font-mono text-[11px] font-black text-white">Revealed</span>
                   )}
@@ -152,7 +154,7 @@ export default function NotesDrop({ userId }: { userId?: string | null }) {
                   <p className={`font-mono text-[12px] leading-5 ${n.blurred ? "text-white/50 blur-[5px] select-none" : "text-white/80"}`} style={n.blurred ? { filter: "blur(6px)" } : undefined}>
                     {n.ocr_text?.slice(0, 420) || "No text yet"}
                   </p>
-                  {n.blurred && <p className="mt-1 font-mono text-[10px] text-amber-200">Tap “Show · 1 coin” to reveal — your coins are earned by checking in.</p>}
+                  {n.blurred && <p className="mt-1 font-mono text-[10px] text-amber-200">Spend $PHY to unlock road node · 1 $PHY — earn by checking in.</p>}
                 </div>
               </div>
             );

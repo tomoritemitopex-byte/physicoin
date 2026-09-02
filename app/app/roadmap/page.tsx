@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useCallback, useMemo, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Search, Plus, X, Map as MapIcon, List, Clock3, MapPin, GitMerge } from "lucide-react";
+import { Search, Plus, X, Map as MapIcon, List, Clock3, MapPin, GitMerge, Coins, Wallet } from "lucide-react";
 import Onboarding from "@/components/Onboarding";
 import { RoadSkeleton, MapSkeleton } from "@/components/Skeletons";
 import { useVoteWeight } from "@/hooks/useVoteWeight";
@@ -137,7 +137,10 @@ function RoadmapInner() {
       }
       if (!r.ok || j.ok===false) throw new Error(j.error || j.message || "post failed");
       try { const { autoBumpStreak } = await import("@/lib/streak"); autoBumpStreak("event_post"); } catch {}
-      setToast("Posted — live as advisory ✓"); setForm({ title:"", venue:"", event_date:"", event_time:"", scope_type:"general", scope_value:"", prof_name:"", severity:"move" }); setDupHint(null); setShowPost(false); fetchFeed();
+      const isFirstGist = !localStorage.getItem("physi_first_gist_done");
+      setToast(isFirstGist ? "Earned +5 $PHY for first gist ✓" : "Posted — live as advisory ✓");
+      try{ if(isFirstGist){ const raw=localStorage.getItem("physi_profile"); if(raw){ const pr=JSON.parse(raw); pr.mining_balance=Number((Number(pr.mining_balance||0)+5).toFixed(2)); localStorage.setItem("physi_profile",JSON.stringify(pr)); localStorage.setItem("physi_first_gist_done","1"); window.dispatchEvent(new CustomEvent("physi-earn",{detail:"Earned +5 $PHY for first gist"})); } } }catch{}
+      setForm({ title:"", venue:"", event_date:"", event_time:"", scope_type:"general", scope_value:"", prof_name:"", severity:"move" }); setDupHint(null); setShowPost(false); fetchFeed();
     } catch (e: any) { setToast(e.message); } finally { setPosting(false); }
   }
 
@@ -211,9 +214,16 @@ function RoadmapInner() {
     setVoteBusy(id+v);
     try {
       const r = await fetch("/api/verify", { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify({ verifier_id: pid, event_id: id, vote: v }) });
-      const j = await r.json(); if (!r.ok || j.ok===false) throw new Error(j.error || "vote failed");
+      const j = await r.json();
+      if (!r.ok || j.ok===false) {
+        if (j?.code==="INSUFFICIENT_STAKE" || r.status===402) { setToast("Need 1 $PHY to vote — check in to earn"); try{ window.dispatchEvent(new CustomEvent("physi-spend",{detail:"Need 1 $PHY — Wallet empty"})); }catch{} throw new Error(j?.message || j?.error || "Need 1 $PHY to vote"); }
+        throw new Error(j.error || "vote failed");
+      }
       try { const { autoBumpStreak } = await import("@/lib/streak"); autoBumpStreak("verify"); } catch {}
-      setToast(v==="YES" ? "You confirmed — thanks!" : v==="NO" ? "Marked not there" : "Skipped");
+      // local wallet update: stake 1 $PHY spent (refunded if majority later)
+      try{ const raw=localStorage.getItem("physi_profile"); if(raw && v!=="CANCEL"){ const pr=JSON.parse(raw); pr.mining_balance=Math.max(0, Number((Number(pr.mining_balance||0)-1).toFixed(2))); localStorage.setItem("physi_profile",JSON.stringify(pr)); window.dispatchEvent(new CustomEvent("physi-spend",{detail:"Staked 1 $PHY to vote — refunded if majority"})); } }catch{}
+      if(v==="CANCEL"){ setToast("Skipped — no $PHY staked"); }
+      else { setToast(v==="YES" ? "Verified +1 $PHY · staked 1 $PHY (refund if majority)" : "Voted No — staked 1 $PHY"); try{ window.dispatchEvent(new CustomEvent("physi-earn",{detail:"Verified +1 $PHY"})); }catch{} }
       fetchFeed();
     } catch (e: any) { setToast(e.message); } finally { setVoteBusy(null); }
   }
@@ -478,7 +488,7 @@ function RoadmapInner() {
                     <button
                       onClick={(e)=>{e.stopPropagation(); vote(ev.id,"YES")}}
                       disabled={!!voteBusy}
-                      aria-label="Confirm — you were there"
+                      aria-label="Confirm — stake 1 $PHY"
                       className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-xl font-bold text-white shadow-lg hover:bg-emerald-400 disabled:opacity-50 transition"
                       style={{ minWidth:56, minHeight:56 }}
                     >
@@ -487,15 +497,17 @@ function RoadmapInner() {
                     <button
                       onClick={(e)=>{e.stopPropagation(); vote(ev.id,"NO")}}
                       disabled={!!voteBusy}
-                      aria-label="No — not there"
+                      aria-label="No — stake 1 $PHY"
                       className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-base font-bold text-slate-200 hover:bg-white hover:text-[#022c1e] disabled:opacity-50 transition"
                       style={{ minWidth:44, minHeight:44 }}
                     >
                       {voteBusy===ev.id+"NO" ? "…" : "✕"}
                     </button>
-                    <span className="font-mono text-[11px] text-slate-500">swipe card to skip →</span>
+                    <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 font-mono text-[10px] font-bold text-amber-300"><Coins className="h-3 w-3"/> 1 $PHY to vote</span>
+                    <span className="hidden sm:inline font-mono text-[11px] text-slate-500">swipe to skip →</span>
                     {myWeightLabel && <span className="ml-auto"><VoteWeightBadge weight={myWeight} label={myWeightLabel} /></span>}
                   </div>
+                  <p className="mt-2 font-mono text-[11px] text-slate-500">Spend $PHY to unlock road node · staked 1 $PHY refunded if you’re with majority</p>
                   {selectedId===ev.id && (
                     <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.04] p-3">
                       <p className="font-mono text-xs text-slate-400">Hall options for this class</p>

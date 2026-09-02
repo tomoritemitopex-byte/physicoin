@@ -76,6 +76,28 @@ function BottomNav({ pathname }: { pathname: string | null }) {
   );
 }
 
+
+function HeaderWallet({ isProfile }: { isProfile: boolean }){
+  const [bal,setBal]=useState<string | null>(null);
+  useEffect(()=>{
+    function read(){ try{ const raw=localStorage.getItem("physi_profile"); if(raw){ const p=JSON.parse(raw); setBal(Number(p.mining_balance||0).toFixed(0)); } else setBal(null);}catch{ setBal(null);} }
+    read();
+    const on=()=>read();
+    window.addEventListener("physi-earn",on as any);
+    window.addEventListener("physi-spend",on as any);
+    window.addEventListener("storage",on as any);
+    const iv=setInterval(read,3000);
+    return()=>{ window.removeEventListener("physi-earn",on as any); window.removeEventListener("physi-spend",on as any); window.removeEventListener("storage",on as any); clearInterval(iv); };
+  },[]);
+  return (
+    <a href="/app/profile" className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium transition ${isProfile ? "border-[#34d399] bg-[#34d399] text-[#022c1e]" : "border-[rgba(52,211,153,0.15)] bg-[#1a5f48]/60 text-[rgba(240,253,244,0.80)] hover:bg-[#1a5f48] hover:text-[#f0fdf4]"}`}>
+      <span className="hidden sm:inline-flex items-center gap-1">{isProfile ? "Profile · active" : "Profile"}{bal!==null && <span className={`ml-1 rounded-full px-2 py-0.5 font-mono text-xs font-black ${isProfile?"bg-[#022c1e] text-emerald-300":"bg-white text-[#022c1e]"}`}>{bal} $PHY</span>}</span>
+      <span className="sm:hidden flex items-center gap-1">Profile{bal!==null && <span className="rounded-full bg-white px-1.5 py-0.5 font-mono text-[10px] font-black text-[#022c1e]">{bal}</span>}</span>
+      <span className={`hidden sm:flex h-5 w-5 items-center justify-center rounded-full text-[10px] ${isProfile ? "bg-[#022c1e] text-[#fbbf24]" : "bg-[#f0fdf4] text-[#022c1e]"}`}>◯</span>
+    </a>
+  );
+}
+
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [scrolled, setScrolled] = useState(false);
@@ -104,11 +126,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <span className="hidden sm:inline text-sm font-semibold tracking-tight text-[#f0fdf4]">PHYSI</span>
             <span className="hidden sm:inline-flex rounded-full border border-[rgba(52,211,153,0.15)] bg-[#1a5f48]/60 px-2.5 py-1 font-mono text-[11px] text-[rgba(240,253,244,0.65)]">inside</span>
           </div>
-          <a href="/app/profile" className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium transition ${isProfile ? "border-[#34d399] bg-[#34d399] text-[#022c1e]" : "border-[rgba(52,211,153,0.15)] bg-[#1a5f48]/60 text-[rgba(240,253,244,0.80)] hover:bg-[#1a5f48] hover:text-[#f0fdf4]"}`}>
-            <span className="hidden sm:inline">{isProfile ? "Profile · active" : "Profile"}</span>
-            <span className="sm:hidden">Profile</span>
-            <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] ${isProfile ? "bg-[#022c1e] text-[#fbbf24]" : "bg-[#f0fdf4] text-[#022c1e]"}`}>◯</span>
-          </a>
+          <HeaderWallet isProfile={isProfile} />
         </div>
         {mobileOpen && (
           <div className="border-t border-[rgba(52,211,153,0.12)] bg-[#022c1e]/95 px-4 py-3 backdrop-blur sm:hidden">
