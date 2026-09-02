@@ -32,6 +32,10 @@ async function handleTimetable(req: Request): Promise<Response> {
     // PATCH / PUT — update venue/time and log history diff LT2->LT5
     if (req.method === "PATCH" || req.method === "PUT") {
       try { await ensureAllTables(); } catch(e){ logError("TIMETABLE_CREATE_FAILED", e, { route:"/api/timetable", method:req.method, phase:"ensure"}); }
+      // auth required for mutation
+      const { getAuthUserId } = await import("@/lib/auth");
+      const patchAuth = getAuthUserId(req as Request);
+      if (!patchAuth) return NextResponse.json({ ok:false, code:"UNAUTHORIZED", message:"Missing session token" }, { status:401 });
       let body: any;
       try { body = await req.json(); } catch(e){ return NextResponse.json({ ok:false, code:"BAD_INPUT", message:getErrorMessage("BAD_INPUT")},{status:400}); }
       const id = String(body?.id || body?.event_id || "").trim();
@@ -54,7 +58,7 @@ async function handleTimetable(req: Request): Promise<Response> {
       }
       // log history
       try {
-        await sql`INSERT INTO physi_event_history (event_id, prev_venue, prev_event_date, prev_event_time, new_venue, new_event_date, new_event_time, changed_by) VALUES (${id}, ${String(prev.venue)}, ${String(prev.event_date).slice(0,10)}, ${String(prev.event_time).slice(0,5)}, ${String(newVenue)}, ${String(newDate)}, ${String(newTime)}, ${(body.changed_by as string) ?? (body.created_by as string) ?? null})`;
+        await sql`INSERT INTO physi_event_history (event_id, prev_venue, prev_event_date, prev_event_time, new_venue, new_event_date, new_event_time, changed_by) VALUES (${id}, ${String(prev.venue)}, ${String(prev.event_date).slice(0,10)}, ${String(prev.event_time).slice(0,5)}, ${String(newVenue)}, ${String(newDate)}, ${String(newTime)}, ${patchAuth})`;
       } catch(e){ console.warn("[timetable] history insert failed", (e as Error).message); }
       // update
       const upd = await sql`UPDATE physi_events SET venue=${String(newVenue)}, event_date=${String(newDate)}, event_time=${String(newTime)}, severity=${String(newSeverity)}, prev_venue=${String(prev.venue)}, prev_event_time=${String(prev.event_time).slice(0,5)}, prev_event_date=${String(prev.event_date).slice(0,10)}, updated_at=NOW() WHERE id=${id} RETURNING *`;
@@ -75,14 +79,12 @@ async function handleTimetable(req: Request): Promise<Response> {
         return NextResponse.json({ ok: false, code: "BAD_INPUT", message: getErrorMessage("BAD_INPUT") }, { status: 400 });
       }
       const b = body as Record<string, unknown>;
-      // Auth: HMAC session token extracts user_id (not from body)
-      try {
-        const { getAuthUserId } = await import("@/lib/auth");
-        const authUid = getAuthUserId(req as Request, b.created_by as string | null);
-        if (authUid) (b as any).created_by = authUid;
-        // also support changed_by for PATCH history
-        if ((b as any).changed_by && authUid) (b as any).changed_by = authUid;
-      } catch {}
+      // Auth: HMAC session token extracts user_id (strict)
+      const { getAuthUserId } = await import("@/lib/auth");
+      const authUid = getAuthUserId(req as Request);
+      if (!authUid) return NextResponse.json({ ok:false, code:"UNAUTHORIZED", message:"Missing session token. POST /api/auth/session to obtain one." }, { status:401 });
+      (b as any).created_by = authUid;
+      if ((b as any).changed_by) (b as any).changed_by = authUid;
       if (!b?.title || !b?.venue || !b?.event_date || !b?.event_time || !b?.scope_type) {
         return NextResponse.json(
           { ok: false, code: "BAD_INPUT", message: getErrorMessage("BAD_INPUT") },

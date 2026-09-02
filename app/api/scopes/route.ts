@@ -24,12 +24,11 @@ export async function POST(req: NextRequest) {
     try { await ensureAllTables(); } catch {}
 
     const b = await req.json().catch(() => null);
-    // Auth: extract voter_id from HMAC session token
-    try {
-      const { getAuthUserId } = await import("@/lib/auth");
-      const authUid = getAuthUserId(req as unknown as Request, b?.voter_id || b?.voterId);
-      if (authUid) (b as any).voter_id = authUid;
-    } catch {}
+    // Auth: extract voter_id from HMAC session token (strict)
+    const { getAuthUserId } = await import("@/lib/auth");
+    const authUid = getAuthUserId(req as unknown as Request);
+    if (!authUid) return NextResponse.json({ ok:false, code:"UNAUTHORIZED", message:"Missing session token. POST /api/auth/session to obtain one." }, { status:401 });
+    (b as any).voter_id = authUid;
     if (!b?.voter_id || !b?.scope_a || !b?.scope_b)
       return NextResponse.json({ ok: false, code: "BAD_INPUT", message: getErrorMessage("BAD_INPUT") }, { status: 400 });
 

@@ -510,6 +510,46 @@ export async function ensureHeaders(): Promise<void> {
   await c`CREATE INDEX IF NOT EXISTS physi_headers_created_idx ON physi_headers (created_at DESC)`;
 }
 
+export async function ensureVoteBonds(): Promise<void> {
+  const c = getSql() ?? sql;
+  if (!c) return;
+  await c`
+    CREATE TABLE IF NOT EXISTS physi_vote_bonds (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      verifier_id UUID NOT NULL REFERENCES physi_users(id) ON DELETE CASCADE,
+      event_id UUID NOT NULL REFERENCES physi_events(id) ON DELETE CASCADE,
+      stake NUMERIC(5,2) NOT NULL DEFAULT 1.00,
+      status TEXT NOT NULL CHECK (status IN ('held','released','burned')),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(verifier_id, event_id)
+    )`;
+  await c`CREATE INDEX IF NOT EXISTS physi_vote_bonds_event_idx ON physi_vote_bonds (event_id)`;
+  await c`CREATE INDEX IF NOT EXISTS physi_vote_bonds_verifier_idx ON physi_vote_bonds (verifier_id)`;
+}
+
+export async function ensureRevokedTokens(): Promise<void> {
+  const c = getSql() ?? sql;
+  if (!c) return;
+  await c`
+    CREATE TABLE IF NOT EXISTS physi_revoked_tokens (
+      jti TEXT PRIMARY KEY,
+      user_id UUID REFERENCES physi_users(id) ON DELETE SET NULL,
+      revoked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ NOT NULL
+    )`;
+  await c`CREATE INDEX IF NOT EXISTS physi_revoked_tokens_expires_idx ON physi_revoked_tokens (expires_at)`;
+}
+
+export async function ensureAuthColumns(): Promise<void> {
+  const c = getSql() ?? sql;
+  if (!c) return;
+  await ensureUsers();
+  try { await c`ALTER TABLE physi_users ADD COLUMN IF NOT EXISTS password_hash TEXT`; } catch {}
+  // mining_balance cap — app-level LEAST() but also add check constraint if missing
+  try { await c`ALTER TABLE physi_users ADD CONSTRAINT physi_users_balance_cap CHECK (mining_balance <= 10000)`; } catch {}
+  try { await c`ALTER TABLE physi_users ADD CONSTRAINT physi_users_balance_nonneg CHECK (mining_balance >= 0)`; } catch {}
+}
+
 /**
  * Idempotent bootstrap — safe to call on every request.
  * Parallel leaves, ordered root; single retry for cold start (500ms wake).
@@ -520,7 +560,7 @@ export async function ensureAllTables(): Promise<void> {
   const run = async () => {
     await ensureUsers();
     await ensureEvents();
-    await Promise.all([ensureVerifications(), ensureMiningLogs(), ensureCanonicalLog(), ensureEventHistory(), ensureScopeVotes(), ensureScopeResolution(), ensureGhostWitness(), ensureScopeMiningColumns(), ensureZkAuthority(), ensureSquadTables(), ensureBunkTables(), ensureNotesTables(), ensureHallAliases(), ensureProfAliases(), ensureSlotClaims(), ensureHeaders()]);
+    await Promise.all([ensureVerifications(), ensureMiningLogs(), ensureCanonicalLog(), ensureEventHistory(), ensureScopeVotes(), ensureScopeResolution(), ensureGhostWitness(), ensureScopeMiningColumns(), ensureZkAuthority(), ensureSquadTables(), ensureBunkTables(), ensureNotesTables(), ensureHallAliases(), ensureProfAliases(), ensureSlotClaims(), ensureHeaders(), ensureVoteBonds(), ensureRevokedTokens(), ensureAuthColumns()]);
     // ensure columns idempotently after tables exist
     await ensureGhostWitness();
     await ensureScopeMiningColumns();
@@ -529,6 +569,9 @@ export async function ensureAllTables(): Promise<void> {
     await ensureProfAliases();
     await ensureSlotClaims();
     await ensureHeaders();
+    await ensureVoteBonds();
+    await ensureRevokedTokens();
+    await ensureAuthColumns();
   };
   try {
     await run();
