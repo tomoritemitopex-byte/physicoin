@@ -10,9 +10,48 @@ import GhostAvatar from "@/components/road/GhostAvatar";
  * No jargon: no quorum/zk/rep — use coins/badges/XP only in tooltips if needed.
  */
 export default function FindMyPeople({ userId, programme, level }: { userId?: string | null; programme?: string; level?: string }) {
-  const [prog, setProg] = useState(programme || "PHYS");
-  const [lvl, setLvl] = useState(level || "200L");
-  const [building, setBuilding] = useState("phys");
+  // Initialize from physi_profile if available, fallback to props, then defaults
+  const [prog, setProg] = useState(() => {
+    try {
+      const raw = localStorage.getItem("physi_profile");
+      if (raw) {
+        const profile = JSON.parse(raw);
+        return (profile?.programme || programme || "PHYS").toUpperCase();
+      }
+      return programme || "PHYS";
+    } catch {
+      return programme || "PHYS";
+    }
+  });
+  const [lvl, setLvl] = useState(() => {
+    try {
+      const raw = localStorage.getItem("physi_profile");
+      if (raw) {
+        const profile = JSON.parse(raw);
+        return profile?.level || level || "200L";
+      }
+      return level || "200L";
+    } catch {
+      return level || "200L";
+    }
+  });
+  const [building, setBuilding] = useState(() => {
+    try {
+      const raw = localStorage.getItem("physi_profile");
+      if (raw) {
+        const profile = JSON.parse(raw);
+        return profile?.lastBuildingId || "phys";
+      }
+      // Also check for last used building in localStorage
+      const lastBuilding = localStorage.getItem("physi_last_building");
+      if (lastBuilding) return lastBuilding;
+      return "phys";
+    } catch {
+      const lastBuilding = localStorage.getItem("physi_last_building");
+      if (lastBuilding) return lastBuilding;
+      return "phys";
+    }
+  });
   const [heat, setHeat] = useState<Record<string, number>>({});
   const [dots, setDots] = useState<any[]>([]);
   const [waves, setWaves] = useState<any[]>([]);

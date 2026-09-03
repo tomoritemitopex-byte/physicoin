@@ -1,6 +1,10 @@
 "use client";
+
 import { useEffect, useState } from 'react';
 import { ArrowRight, Check, ShieldCheck, Clock3, Users, Sparkles, MapPin } from 'lucide-react';
+import { Fredoka } from 'next/font/google';
+
+const fredoka = Fredoka({ subsets: ['latin'], weight: ['400','500','600','700'], display: 'swap', variable: '--font-fredoka' });
 
 function LiveTicker({ items }: { items: string[] }) {
   if (!items.length) return null;
@@ -45,7 +49,7 @@ export default function LandingPage() {
   const verifiedCount = stats?.metrics?.verifications ?? stats?.metrics?.events_by_status?.verified ?? Math.round(totalEvents*0.35);
 
   return (
-    <div className="min-h-screen bg-[#0d3b2a] text-[#f0fdf4] selection:bg-[#34d399] selection:text-[#022c1e]">
+    <div className="min-h-screen bg-[#0d3b2a] text-[#f0fdf4] selection:bg-[#34d399] selection:text-[#022c1e]" style={{ fontFamily: 'var(--font-fredoka), system-ui, sans-serif' }}>
       {/* Tonal depth — mid green glow over forest base */}
       <div aria-hidden className="pointer-events-none fixed inset-0">
         <div className="absolute inset-0 bg-[#0d3b2a]" />
@@ -69,6 +73,7 @@ export default function LandingPage() {
       </header>
 
       <main className="relative mx-auto max-w-[1120px] px-6">
+
         {/* ── HERO ── */}
         <section className="grid gap-10 pt-10 pb-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center lg:pt-16 lg:pb-12">
           <div>
@@ -135,13 +140,13 @@ export default function LandingPage() {
                     </div>
                   ))}
                 </div>
-                <div className="mt-4 flex items-center gap-2.5 rounded-xl border border-[rgba(52,211,153,0.15)] bg-[#022c1e]/45 px-3.5 py-3">
+                <div className="mt-4 flex items-center gap-2 rounded-xl border border-[rgba(52,211,153,0.15)] bg-[#022c1e]/45 px-3.5 py-3">
                   <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#34d399] text-[10px] font-bold text-[#022c1e]">You</span>
                   <p className="text-[13px] text-[rgba(240,253,244,0.80)]">Were you there? Tap <span className="font-semibold text-[#f0fdf4]">Yes / No</span> — no forms.</p>
                 </div>
               </div>
+              <p className="mt-3 text-center font-mono text-[11px] text-[rgba(240,253,244,0.45)]">Preview · real confirmations inside the road</p>
             </div>
-            <p className="mt-3 text-center font-mono text-[11px] text-[rgba(240,253,244,0.45)]">Preview · real confirmations inside the road</p>
           </div>
         </section>
 
@@ -153,6 +158,7 @@ export default function LandingPage() {
           <span className="ml-auto hidden sm:inline font-mono text-xs text-[rgba(240,253,244,0.55)]">updates every 30s · /api/stats</span>
           <a href="/app/roadmap" className="rounded-full bg-[#34d399] px-4 py-1.5 text-xs font-bold text-[#022c1e] hover:bg-[#6ee7b7] transition">Open road →</a>
         </section>
+
         <div className="mt-3">
           <LiveTicker items={ticker} />
         </div>
@@ -165,7 +171,7 @@ export default function LandingPage() {
           </div>
           <div className="mt-5 grid gap-4 sm:grid-cols-3">
             {[
-              { n: '01', title: 'Hear gist', desc: 'Lecturer says “we moved to Hall B”. Post it — shows instantly as advisory.', icon: Sparkles, tint: 'border-[rgba(52,211,153,0.15)]' },
+              { n: '01', title: 'Hear gist', desc: 'Lecturer says "we moved to Hall B". Post it — shows instantly as advisory.', icon: Sparkles, tint: 'border-[rgba(52,211,153,0.15)]' },
               { n: '02', title: 'Coursemates confirm', desc: 'Were you there? Tap Yes / No. Enough Yes turns it gold.', icon: Users, tint: 'border-[rgba(251,191,36,0.18)]' },
               { n: '03', title: 'Everyone knows', desc: 'Gold tick = trust it. No tick = double-check. No more wrong hall.', icon: Check, tint: 'border-[rgba(52,211,153,0.15)]' },
             ].map((s) => (
@@ -183,11 +189,7 @@ export default function LandingPage() {
 
         {/* ── Why students built this ── */}
         <section className="mt-10 grid gap-4 sm:grid-cols-3">
-          {[
-            ['For freshers', 'Trek to the right hall on day one. No “sorry, we moved” after three floors.'],
-            ['For class reps', 'You hear it first. Post before the broadcast chaos — votes do the rest.'],
-            ['For everyone', 'One post helps ten coursemates. Ten confirms help the whole department.'],
-          ].map(([t,d])=> (
+          {[['For freshers', 'Trek to the right hall on day one. No "sorry, we moved" after three floors.'], ['For class reps', 'You hear it first. Post before the broadcast chaos — votes do the rest.'], ['For everyone', 'One post helps ten coursemates. Ten confirms help the whole department.']].map(([t,d])=> (
             <div key={t} className="rounded-2xl border border-[rgba(52,211,153,0.12)] bg-[#1a5f48]/50 px-5 py-4">
               <p className="text-sm font-semibold text-[#f0fdf4]">{t}</p>
               <p className="mt-1.5 text-sm leading-5 text-[rgba(240,253,244,0.70)]">{d}</p>
@@ -200,7 +202,7 @@ export default function LandingPage() {
         {/* ── Final CTA — mint on shadow, gold accent ── */}
         <section className="mt-10 overflow-hidden rounded-[20px] border border-[rgba(52,211,153,0.18)] bg-gradient-to-br from-[#1a5f48] to-[#0d3b2a] px-6 py-10 text-center sm:px-10 shadow-[0_12px_32px_rgba(2,44,30,0.35)]">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-[rgba(251,191,36,0.18)] bg-[rgba(251,191,36,0.10)] px-3 py-1 font-mono text-xs text-[#fbbf24]"><ShieldCheck className="h-3 w-3" /> Advisory · confirm exams with your department</span>
-          <h2 className="mx-auto mt-4 max-w-[520px] text-2xl font-bold tracking-tight text-[#f0fdf4] sm:text-[26px]">Don’t miss the next venue change.</h2>
+          <h2 className="mx-auto mt-4 max-w-[520px] text-2xl font-bold tracking-tight text-[#f0fdf4] sm:text-[26px]">Don't miss the next venue change.</h2>
           <p className="mx-auto mt-2 max-w-[480px] text-sm leading-5 text-[rgba(240,253,244,0.70)]">Join your coursemates — post once, check once a day.</p>
           <div className="mt-6 flex justify-center">
             <a href="/app/roadmap" className="primary-cta inline-flex items-center gap-2 px-7 py-3.5 text-[15px]">Open the road <ArrowRight className="h-4 w-4" /></a>
@@ -209,6 +211,7 @@ export default function LandingPage() {
         </section>
 
         <p className="py-8 text-center font-mono text-xs text-[rgba(240,253,244,0.40)]">PHYSI · built by students, for students</p>
+
       </main>
     </div>
   );

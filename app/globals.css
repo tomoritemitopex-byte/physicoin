@@ -101,6 +101,279 @@ h2 { font-weight: 600; }
 @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
 @keyframes pulseSoft { 0%,100% { opacity:1; } 50% { opacity:0.7; } }
 
+/* ── Candy Crush Road Animations ── */
+@keyframes candyShimmer {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+@keyframes ghost-drift {
+  0%   { transform: translate(0, 0) scale(1); }
+  25%  { transform: translate(var(--ghost-drift, 4px), -6px) scale(1.04); }
+  50%  { transform: translate(calc(var(--ghost-drift, 4px) * -1), 2px) scale(0.97); }
+  75%  { transform: translate(calc(var(--ghost-drift, 4px) * 0.5), -8px) scale(1.02); }
+  100% { transform: translate(0, 0) scale(1); }
+}
+@keyframes urgencyShrink {
+  0%   { width: 100%; opacity: 1; }
+  100% { width: 0%; opacity: 0; }
+}
+@keyframes clockPulse {
+  0%   { box-shadow: 0 0 0 0 rgba(251,191,36,0.45); }
+  70%  { box-shadow: 0 0 0 18px rgba(251,191,36,0); }
+  100% { box-shadow: 0 0 0 0 rgba(251,191,36,0); }
+}
+@keyframes nodeGlow {
+  0%, 100% { filter: drop-shadow(0 0 6px rgba(52,211,153,0.4)); }
+  50%      { filter: drop-shadow(0 0 14px rgba(52,211,153,0.75)); }
+}
+@keyframes pathDashFlow {
+  to { stroke-dashoffset: -24; }
+}
+@keyframes nodeBounce {
+  0%, 100% { transform: translateY(0); }
+  40%      { transform: translateY(-8px); }
+  60%      { transform: translateY(-4px); }
+}
+
+/* Ghost drift animation class */
+.ghost-drift {
+  animation: ghost-drift var(--ghost-wobble, 1200ms) ease-in-out infinite;
+  will-change: transform;
+}
+
+/* ── Winding Road Layout ── */
+.winding-road-container {
+  position: relative;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: y mandatory;
+}
+.winding-road-container::-webkit-scrollbar { width: 6px; }
+.winding-road-container::-webkit-scrollbar-track { background: rgba(2,44,30,0.3); }
+.winding-road-container::-webkit-scrollbar-thumb { background: rgba(52,211,153,0.3); border-radius: 3px; }
+
+/* SVG road path */
+.road-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+.road-svg .road-dash {
+  stroke: rgba(240,253,244,0.22);
+  stroke-width: 4;
+  stroke-dasharray: 12 8;
+  animation: pathDashFlow 1.8s linear infinite;
+}
+.road-svg .road-glow {
+  stroke: rgba(52,211,153,0.08);
+  stroke-width: 18;
+  stroke-linecap: round;
+}
+
+/* Building node along road */
+.building-node {
+  position: absolute;
+  z-index: 5;
+  cursor: pointer;
+  transition: transform 280ms cubic-bezier(.34,1.56,.64,1), filter 280ms ease;
+  transform: translate(-50%, -50%);
+}
+.building-node:hover { transform: translate(-50%, -50%) scale(1.12); filter: drop-shadow(0 0 12px rgba(52,211,153,0.5)); }
+.building-node:focus-visible { outline: 2px solid #34d399; outline-offset: 4px; }
+.building-node.active {
+  animation: nodeBounce 400ms cubic-bezier(.34,1.56,.64,1);
+  filter: drop-shadow(0 0 20px rgba(251,191,36,0.6));
+}
+.building-node .node-icon {
+  width: 60px; height: 60px; border-radius: 16px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26px;
+  border: 3px solid rgba(255,255,255,0.18);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.15);
+  transition: border-color 280ms ease, box-shadow 280ms ease;
+}
+.building-node.active .node-icon {
+  border-color: rgba(251,191,36,0.6);
+  box-shadow: 0 8px 28px rgba(251,191,36,0.25), inset 0 1px 0 rgba(255,255,255,0.9), 0 0 20px rgba(251,191,36,0.3);
+}
+.building-node .node-label {
+  position: absolute; top: 68px; left: 50%; transform: translateX(-50%);
+  white-space: nowrap;
+  background: rgba(2,44,30,0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #f0fdf4;
+  font-family: var(--font-fredoka), system-ui, sans-serif;
+  opacity: 0;
+  transition: opacity 200ms ease;
+  pointer-events: none;
+}
+.building-node:hover .node-label,
+.building-node.active .node-label { opacity: 1; }
+.building-node .node-count {
+  position: absolute; top: -6px; right: -6px;
+  min-width: 20px; height: 20px; border-radius: 10px;
+  background: rgba(0,0,0,0.8);
+  border: 2px solid var(--physi-bg);
+  font-size: 10px; font-weight: 700;
+  color: #f0fdf4;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-fredoka), system-ui, sans-serif;
+}
+
+/* Clock tower milestone */
+.clock-tower {
+  position: absolute;
+  z-index: 8;
+  transform: translate(-50%, -50%);
+  animation: clockPulse 2.5s ease-in-out infinite;
+}
+.clock-tower .tower-icon {
+  width: 72px; height: 72px; border-radius: 50%;
+  background: linear-gradient(135deg, #1a5f48 0%, #0d3b2a 100%);
+  border: 4px solid #fbbf24;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 32px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.45), 0 0 40px rgba(251,191,36,0.2), inset 0 2px 0 rgba(255,255,255,0.15);
+}
+.clock-tower .tower-label {
+  position: absolute; top: 80px; left: 50%; transform: translateX(-50%);
+  white-space: nowrap;
+  background: rgba(251,191,36,0.15);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(251,191,36,0.3);
+  border-radius: 12px;
+  padding: 4px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fbbf24;
+  font-family: var(--font-fredoka), system-ui, sans-serif;
+}
+
+/* Level flow — vertical connector between nodes */
+.level-flow {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  z-index: 2;
+  pointer-events: none;
+}
+.level-flow .flow-line {
+  width: 3px;
+  background: linear-gradient(to bottom, rgba(52,211,153,0.25), rgba(52,211,153,0.05));
+  border-radius: 2px;
+}
+.level-flow .flow-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: rgba(52,211,153,0.4);
+  margin: 4px auto;
+  animation: pulseSoft 2s ease-in-out infinite;
+}
+
+/* Event card — WhatsApp-style with candy face ghost */
+.whatsapp-event {
+  position: relative;
+  z-index: 10;
+  scroll-snap-align: start;
+  background: rgba(26,95,72,0.65);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 18px;
+  padding: 14px 16px;
+  margin: 6px 12px;
+  transition: border-color 200ms ease, background 200ms ease;
+}
+.whatsapp-event:hover { border-color: rgba(52,211,153,0.3); background: rgba(26,95,72,0.8); }
+.whatsapp-event .event-header {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
+}
+.whatsapp-event .event-time {
+  font-size: 11px; font-weight: 600; color: #34d399;
+  font-family: var(--font-fredoka), system-ui, sans-serif;
+}
+.whatsapp-event .event-venue {
+  font-size: 14px; font-weight: 700; color: #f0fdf4;
+}
+.whatsapp-event .event-title {
+  font-size: 13px; color: rgba(240,253,244,0.75); margin-top: 2px;
+}
+
+/* 24h fading urgency bar */
+.urgency-bar {
+  height: 4px; border-radius: 2px;
+  background: rgba(255,255,255,0.08);
+  overflow: hidden; margin-top: 10px;
+}
+.urgency-bar .urgency-fill {
+  height: 100%; border-radius: 2px;
+  background: linear-gradient(90deg, #34d399, #fbbf24, #f43f5e);
+  animation: urgencyShrink 24h linear forwards;
+}
+.urgency-bar .urgency-fill.fading {
+  animation-duration: 0.6s;
+  animation-timing-function: ease-in;
+}
+.urgency-bar .urgency-label {
+  font-size: 9px; font-weight: 600; color: rgba(240,253,244,0.45);
+  font-family: var(--font-fredoka), system-ui, sans-serif;
+  margin-top: 3px;
+}
+
+/* Candy-face ghost row */
+.ghost-row {
+  display: flex; align-items: center; gap: 4px; margin-top: 8px;
+}
+.ghost-row .ghost-dot {
+  width: 24px; height: 24px; border-radius: 50%;
+  border: 2px solid rgba(2,44,30,0.6);
+}
+
+/* Swipe verify gestures */
+.swipe-zone {
+  position: relative;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.swipe-zone .swipe-action {
+  position: absolute; top: 0; bottom: 0; width: 60px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px; font-weight: 800;
+  opacity: 0;
+  transition: opacity 150ms ease;
+  border-radius: 18px;
+}
+.swipe-zone .swipe-yes {
+  left: 0; background: rgba(52,211,153,0.25); color: #34d399;
+}
+.swipe-zone .swipe-no {
+  right: 0; background: rgba(244,63,94,0.2); color: #f43f5e;
+}
+.swipe-zone .swipe-skip {
+  top: 50%; left: 50%; transform: translate(-50%, -50%);
+  background: rgba(251,191,36,0.2); color: #fbbf24;
+  border-radius: 50%; width: 50px; height: 50px;
+}
+.swipe-zone.swiping-yes .swipe-yes,
+.swipe-zone.swiping-no .swipe-no { opacity: 1; }
+.swipe-zone.swiping-skip .swipe-skip { opacity: 1; }
+
+/* Swipe arrow hints */
+.swipe-hint {
+  display: flex; justify-content: space-between;
+  padding: 0 24px; margin-top: 4px;
+  font-size: 10px; font-weight: 600; color: rgba(240,253,244,0.30);
+  font-family: var(--font-fredoka), system-ui, sans-serif;
+}
+.swipe-hint .hint-yes { color: rgba(52,211,153,0.4); }
+.swipe-hint .hint-no { color: rgba(244,63,94,0.4); }
+.swipe-hint .hint-skip { color: rgba(251,191,36,0.4); }
+
 /* Forest rail — bottom nav glass */
 .one-rail {
   position: fixed;

@@ -1,12 +1,15 @@
 import type { Config } from 'tailwindcss';
-// Design tokens via ThemeAdapter — forest default #0d3b2a / #1a5f48 / #34d399 / #fbbf24 on #022c1e
 import { tailwindColors } from './lib/adapters/theme';
 
 const config: Config = {
-  content: ['./app/**/*.{ts,tsx}', './components/**/*.{ts,tsx}', './lib/**/*.{ts,tsx}'],
+  content: [
+    './app/**/*.{ts,tsx}',
+    './components/**/*.{ts,tsx}',
+    './lib/**/*.{ts,tsx}',
+  ],
   theme: {
     extend: {
-      colors: tailwindColors() as Config['theme'] extends { extend?: { colors?: infer C } } ? C : never,
+      colors: tailwindColors() as unknown as Config['theme'] extends { extend?: { colors?: infer C } } ? C : never,
       fontFamily: {
         mono: ['JetBrains Mono', 'monospace'],
         sans: ['Inter', 'system-ui', 'sans-serif'],
@@ -23,6 +26,8 @@ const config: Config = {
       boxShadow: {
         'candy': '0 8px 32px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.06)',
         'glow-mint': '0 8px 24px rgba(52,211,153,0.35)',
+        'liquid-glass': '0 0 0 1px rgba(255,255,255,0.05), 0 8px 32px rgba(2,44,30,0.45)',
+        'parallax-3': 'transform: perspective(1000px) rotateX(3deg) translateZ(0)',
       },
     },
   },

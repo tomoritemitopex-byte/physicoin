@@ -14,7 +14,6 @@
 
 import { createRegistry } from "./registry";
 import { registerApiAdapter } from "./api";
-import { NextResponse } from "next/server";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -47,7 +46,11 @@ const buffer: RealtimeLog[] = [];
 
 // ---------------------------------------------------------------------------
 // GitHub-visible file logging: logs/realtime.log + logs/errors.log
-// fs/path are server-only — loaded lazily to avoid bundling in client
+// ts/server-only — prevent client bundling of fs/path
+// The file is imported by app/app/layout.tsx via "@/lib/adapters" (client context)
+// but fs/path usage is fully guarded. Next.js still tries to resolve the module
+// graph at build time, so we use dynamic require() wrapped in try/cancel.
+
 // ---------------------------------------------------------------------------
 function getFs(): typeof import("fs") | null {
   if (typeof window !== "undefined") return null;
@@ -252,14 +255,14 @@ export const realtimeAdapter = defaultRealtimeAdapter;
 // ---------------------------------------------------------------------------
 async function handleLogs(req: Request): Promise<Response> {
   if (req.method !== "GET") {
-    return NextResponse.json({ ok: false, code: "METHOD_NOT_ALLOWED", message: "GET only" }, { status: 405 });
+    return new Response(JSON.stringify({ ok: false, code: "METHOD_NOT_ALLOWED", message: "GET only" }), { status: 405, headers: { "content-type": "application/json" } });
   }
   const url = new URL(req.url);
   const raw = url.searchParams.get("limit");
   const limit = raw ? Math.max(1, Math.min(parseInt(raw, 10) || 100, 200)) : 100;
   // Read from file (git-visible) with fallback to buffer
   const logs = getRecentLogs(limit);
-  return NextResponse.json({ ok: true, logs, count: logs.length, total: buffer.length });
+  return new Response(JSON.stringify({ ok: true, logs, count: logs.length, total: buffer.length }), { status: 200, headers: { "content-type": "application/json" } });
 }
 
 registerApiAdapter({

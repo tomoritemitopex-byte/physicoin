@@ -67,6 +67,28 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   const { verifySession } = await import("@/lib/auth");
+  const url = new URL(req.url);
+  const checkUserId = url.searchParams.get("user_id");
+  
+  // If checking password status for a specific user
+  if (checkUserId) {
+    const sql = getSql();
+    if (isDbConfigured() && sql) {
+      try {
+        await ensureAllTables();
+      } catch {}
+      try {
+        const rows: any[] = await sql`SELECT id, password_hash FROM physi_users WHERE id=${checkUserId} LIMIT 1` as any;
+        if (!rows.length) return NextResponse.json({ ok: false, code: "USER_NOT_FOUND", message: "user not found" }, { status: 404 });
+        const hasHash = !!rows[0]?.password_hash;
+        return NextResponse.json({ ok: true, hasPassword: hasHash });
+      } catch (e: any) {
+        return NextResponse.json({ ok: false, code: "INTERNAL", message: "failed to check password" }, { status: 500 });
+      }
+    }
+    return NextResponse.json({ ok: false, code: "DB_NOT_CONFIGURED", message: "database not configured" }, { status: 503 });
+  }
+  
   const auth = req.headers.get("authorization") || req.headers.get("cookie") || "";
   let token: string | null = null;
   const m = auth.match(/Bearer\s+(.+)/i);

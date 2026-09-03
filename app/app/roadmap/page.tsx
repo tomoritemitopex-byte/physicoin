@@ -8,6 +8,7 @@ import { useVoteWeight } from "@/hooks/useVoteWeight";
 import { VoteWeightBadge } from "@/components/VoteWeightBadge";
 import ConsensusMap from "@/components/road/ConsensusMap";
 import { EchoRing } from "@/components/road/EchoRing";
+import WindingRoad from "@/components/road/WindingRoad";
 
 type EventRow = {
   id: string; title: string; venue: string; event_date: string; event_time: string;
@@ -389,34 +390,14 @@ function RoadmapInner() {
         </div>
       </div>
 
-      {/* One card per slot — leading hall highlighted with progress (student-native) */}
-      {loading ? (
-        <div className="mt-6"><RoadSkeleton /></div>
-      ) : err ? (
-        <div className="mt-6 rounded-2xl border border-red-500/15 bg-red-500/10 px-4 py-4 text-sm text-red-200">{err} <button onClick={fetchFeed} className="ml-2 underline">Retry</button></div>
-      ) : filtered.length===0 ? (
-        <div className="mt-6 rounded-[20px] border border-dashed border-white/10 bg-white/[0.02] px-6 py-12 text-center">
-          <p className="font-semibold text-white">No results yet</p>
-          <p className="mt-1 text-sm text-slate-500">Be the first to share where class is.</p>
-          <button onClick={()=>setShowPost(true)} className="mt-4 rounded-full bg-white px-5 py-2 text-sm font-semibold text-[#022c1e]">Share gist →</button>
-        </div>
-      ) : (
-        <div
-          className="mt-6 space-y-3"
-          onTouchStart={e=>{
-            const el = e.currentTarget as any;
-            el._sx = e.touches[0].clientX;
-          }}
-          onTouchEnd={e=>{
-            const el = e.currentTarget as any;
-            const dx = e.changedTouches[0].clientX - (el._sx ?? 0);
-            if (Math.abs(dx) > 70) {
-              if (dx < 0) setFilterParam("verified");
-              else setFilterParam("all");
-            }
-          }}
-        >
-          <p className="font-mono text-[11px] text-slate-500">← swipe cards to switch Road ↔ Confirmed</p>
+      {/* ── WINDING ROAD (roadmap default) ── */}
+      <div className="mt-6">
+        <WindingRoad events={filtered} onVerify={()=>{}} />
+      </div>
+
+      {/* ── Legacy list card slot (kept for historical render context) ── */}
+      {false && (
+        <div className="mt-6 space-y-3">
           {filtered.map(ev=> {
             const v = isVerified(ev);
             const p = (ev as any).progress_pct ?? pctOf(ev);
@@ -431,20 +412,8 @@ function RoadmapInner() {
                 onClick={()=>setSelectedId(ev.id)}
                 aria-label={tally}
                 className={`cursor-pointer overflow-hidden rounded-2xl border bg-white/[0.03] transition ${selectedId===ev.id ? "border-white/20 bg-white/[0.06]" : "border-white/[0.06] hover:border-white/10 hover:bg-white/[0.05]"}`}
-                onTouchStart={e=>{
-                  const t = e.currentTarget as any;
-                  t._sx = e.touches[0].clientX;
-                  t._sy = e.touches[0].clientY;
-                }}
-                onTouchEnd={e=>{
-                  const t = e.currentTarget as any;
-                  const dx = e.changedTouches[0].clientX - (t._sx ?? 0);
-                  const dy = Math.abs(e.changedTouches[0].clientY - (t._sy ?? 0));
-                  if (Math.abs(dx) > 70 && dy < 40) {
-                    e.stopPropagation();
-                    vote(ev.id,"CANCEL");
-                  }
-                }}
+                onTouchStart={e=>{ const t = e.currentTarget as any; t._sx = e.touches[0].clientX; t._sy = e.touches[0].clientY; }}
+                onTouchEnd={e=>{ const t = e.currentTarget as any; const dx = e.changedTouches[0].clientX - (t._sx ?? 0); const dy = Math.abs(e.changedTouches[0].clientY - (t._sy ?? 0)); if (Math.abs(dx) > 70 && dy < 40) { e.stopPropagation(); vote(ev.id,"CANCEL"); }} }
               >
                 <div className="p-4 sm:p-5">
                   <div className="flex items-start justify-between gap-3">
@@ -483,7 +452,6 @@ function RoadmapInner() {
                     </div>
                     <span className={`hidden shrink-0 sm:inline-flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${v ? "bg-emerald-500 text-white" : "bg-white/10 text-slate-300"}`}>{v ? "✓" : "•"}</span>
                   </div>
-                  {/* Fix 3: Icon-only votes 56px ✓ /44px ✕ + swipe-to-skip, Fix 7: ≥44×44, Fix 5: no tally sentence */}
                   <div className="mt-4 flex items-center gap-3">
                     <button
                       onClick={(e)=>{e.stopPropagation(); vote(ev.id,"YES")}}
@@ -524,10 +492,6 @@ function RoadmapInner() {
           })}
         </div>
       )}
-
-      {/* Handle picker      )}
-
-      {/* Handle picker */}
       {pickerOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={()=>setPickerOpen(false)}>
           <div onClick={e=>e.stopPropagation()} className="w-full max-w-sm rounded-[20px] border border-white/10 bg-[#0c1222] p-6 shadow-2xl">

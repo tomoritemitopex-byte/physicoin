@@ -9,8 +9,36 @@ type NoteRow = {
 
 export default function NotesDrop({ userId }: { userId?: string | null }) {
   const [notes, setNotes] = useState<NoteRow[]>([]);
-  const [building, setBuilding] = useState("phys");
-  const [level, setLevel] = useState("200L");
+  // Initialize from physi_profile if available, fallback to defaults
+  const [building, setBuilding] = useState(() => {
+    try {
+      const raw = localStorage.getItem("physi_profile");
+      if (raw) {
+        const profile = JSON.parse(raw);
+        return profile?.lastBuildingId || "phys";
+      }
+      // Also check for last used building in localStorage
+      const lastBuilding = localStorage.getItem("physi_last_building");
+      if (lastBuilding) return lastBuilding;
+      return "phys";
+    } catch {
+      const lastBuilding = localStorage.getItem("physi_last_building");
+      if (lastBuilding) return lastBuilding;
+      return "phys";
+    }
+  });
+  const [level, setLevel] = useState(() => {
+    try {
+      const raw = localStorage.getItem("physi_profile");
+      if (raw) {
+        const profile = JSON.parse(raw);
+        return profile?.level || "200L";
+      }
+      return "200L";
+    } catch {
+      return "200L";
+    }
+  });
   const [title, setTitle] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -61,11 +89,31 @@ export default function NotesDrop({ userId }: { userId?: string | null }) {
       const r = await fetch("/api/notes", { method: "POST", body: fd });
       const j = await r.json().catch(() => null);
       if (!r.ok || !j?.ok) throw new Error(j?.message || "Upload failed");
-      setMsg("Dropped! Earned +2 $PHY — it’s on the map now");
-      try{ const raw=localStorage.getItem("physi_profile"); if(raw){ const pr=JSON.parse(raw); pr.mining_balance=Number((Number(pr.mining_balance||0)+2).toFixed(2)); localStorage.setItem("physi_profile",JSON.stringify(pr)); window.dispatchEvent(new CustomEvent("physi-earn",{detail:"Earned +2 $PHY for notes drop"})); } }catch{}
-      setFile(null); setPreviewUrl(null); setTitle("");
-      fetchNotes();
-    } catch (e) { setMsg((e as Error).message); } finally { setUploading(false); }
+            setMsg("Dropped! Earned +2 $PHY — it's on the map now");
+            try{
+              const raw=localStorage.getItem("physi_profile");
+              if(raw){
+                const pr=JSON.parse(raw);
+                pr.mining_balance=Number((Number(pr.mining_balance||0)+2).toFixed(2));
+                localStorage.setItem("physi_profile",JSON.stringify(pr));
+                window.dispatchEvent(new CustomEvent("physi-earn",{detail:"Earned +2 $PHY for notes drop"}));
+              }
+            }catch{}
+            setFile(null); setPreviewUrl(null); setTitle("");
+      
+            // Persist building selection
+            try {
+              const raw = localStorage.getItem("physi_profile");
+              if (raw) {
+                const profile = JSON.parse(raw);
+                profile.lastBuildingId = building;
+                localStorage.setItem("physi_profile", JSON.stringify(profile));
+              }
+              localStorage.setItem("physi_last_building", building);
+            } catch {}
+      
+            fetchNotes();
+          } catch (e) { setMsg((e as Error).message); } finally { setUploading(false); }
   }
 
   async function doUnlock(noteId: string) {

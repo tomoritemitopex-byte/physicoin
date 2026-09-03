@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import StreakHeatmap from "@/components/road/StreakHeatmap";
 import { VoteWeightBadge } from "@/components/VoteWeightBadge";
-import { Wallet, Coins, TrendingUp, Lock } from "lucide-react";
+import { Wallet, Coins, TrendingUp, Lock, Key, Eye, EyeOff, Mail } from "lucide-react";
 
 type StoredProfile = {
   id: string; nickname: string; full_name: string; programme: string; level: string;
@@ -81,6 +81,42 @@ export default function ProfilePage(){
     }catch(e:any){ setErr(e.message); } finally{ setBusy(false); }
   }
   function logout(){ localStorage.removeItem("physi_profile"); setProfile(null); setToastKind("info"); setToast("Signed out"); }
+
+  const [showPassword, setShowPassword] = useState(false);
+  const [password, setPassword] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
+  const [passwordBusy, setPasswordBusy] = useState(false);
+  const [passwordMsg, setPasswordMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const [hasPassword, setHasPassword] = useState<true | false | null>(null);
+
+  useEffect(() => {
+    if (!profile?.id) return;
+    fetch(`/api/auth/session?user_id=${encodeURIComponent(profile.id)}`, { cache: "no-store" })
+      .then(r => r.json())
+      .then(j => { if (j?.ok) setHasPassword(true); else setHasPassword(false); })
+      .catch(() => setHasPassword(null));
+  }, [profile?.id]);
+
+  async function handleSetPassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (password.length < 4) { setPasswordMsg({ type: "err", text: "Password must be at least 4 characters" }); return; }
+    if (password !== passwordConfirm) { setPasswordMsg({ type: "err", text: "Passwords don't match" }); return; }
+    setPasswordBusy(true); setPasswordMsg(null);
+    try {
+      const r = await fetch("/api/auth/session", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ user_id: profile?.id ?? "", password })
+      });
+      const j = await r.json();
+      if (!r.ok || j.ok === false) throw new Error(j.message || "Failed to set password");
+      setPassword(""); setPasswordConfirm(""); setShowPassword(false);
+      setPasswordMsg({ type: "ok", text: "Password set — you can now sign in from other browsers ✓" });
+      setHasPassword(true);
+    } catch (e: any) {
+      setPasswordMsg({ type: "err", text: e.message });
+    } finally { setPasswordBusy(false); }
+  }
 
   if(checking) return <div className="mx-auto max-w-[720px] px-4 py-10"><div className="h-40 animate-pulse rounded-2xl bg-white/[0.04]" /></div>;
 
@@ -190,6 +226,81 @@ export default function ProfilePage(){
           <a href="/app/roadmap" className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-[#022c1e]">Go to road →</a>
           <a href="/app/mining" className="rounded-full border border-white/10 bg-white/[0.04] px-5 py-2 text-sm text-white">Daily check-in +{(1*Number(profile.authority_final||1)+0.5).toFixed(0)} $PHY</a>
         </div>
+      </div>
+
+      {/* Password setup for cross-browser sign-in */}
+      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-5">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-white"><Key className="h-4 w-4 text-emerald-400" /> Cross-browser sign-in</h3>
+        <p className="mt-2 text-sm text-slate-400">Set a password once, then sign in on any device with your handle + password.</p>
+        {hasPassword === null ? (
+          <p className="mt-3 font-mono text-xs text-slate-500">Checking password status…</p>
+        ) : hasPassword ? (
+          <div className="mt-3 flex items-center gap-3">
+            <Key className="h-5 w-5 text-emerald-400" />
+            <p className="text-sm text-emerald-300">Password is set — you can sign in from any browser.</p>
+          </div>
+        ) : (
+          <div className="mt-3 space-y-3">
+            {!showPassword ? (
+              <button onClick={() => setShowPassword(true)} className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/20">
+                Set password
+              </button>
+            ) : (
+              <form onSubmit={handleSetPassword} className="space-y-3">
+                <label className="flex items-center gap-2 space-y-1.5">
+                  <span className="font-mono text-xs text-slate-500 w-24">Password</span>
+                  <div className="relative flex-1">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={e => setPassword(e.target.value)}
+                      placeholder="At least 4 characters"
+                      className="w-full rounded-xl border border-white/10 bg-[#0b1020] px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-white/15 focus:outline-none pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </label>
+                <label className="flex items-center gap-2 space-y-1.5">
+                  <span className="font-mono text-xs text-slate-500 w-24">Confirm</span>
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={passwordConfirm}
+                    onChange={e => setPasswordConfirm(e.target.value)}
+                    placeholder="Confirm password"
+                    className="w-full rounded-xl border border-white/10 bg-[#0b1020] px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-white/15 focus:outline-none"
+                  />
+                </label>
+                {passwordMsg && (
+                  <p className={`font-mono text-xs ${passwordMsg.type === "ok" ? "text-emerald-300" : "text-red-300"}`}>
+                    {passwordMsg.text}
+                  </p>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    disabled={passwordBusy}
+                    className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-[#022c1e] hover:bg-emerald-400 disabled:opacity-50"
+                  >
+                    {passwordBusy ? "Setting…" : "Save password"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setShowPassword(false); setPassword(""); setPasswordConfirm(""); setPasswordMsg(null); }}
+                    className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-slate-300 hover:bg-white/[0.07]"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        )}
       </div>
 
       <p className="text-center font-mono text-xs text-slate-600">Wallet lives as physi_profile in this browser · <a href="/terms" className="underline decoration-white/15 hover:text-slate-400">Terms →</a></p>
