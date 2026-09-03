@@ -417,3 +417,15 @@ h2 { font-weight: 600; }
   -webkit-overflow-scrolling: touch;
   scroll-padding-inline: 16px;
 }
+
+/* Reduced motion — disable animations for users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .ghost-drift { animation: none; }
+  .building-node:hover { transform: none; filter: none; }
+  .building-node.active { animation: none; }
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

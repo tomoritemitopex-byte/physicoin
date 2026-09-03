@@ -1,1 +1,5 @@
 {"ts":"2026-08-29T00:00:00.000Z","level":"info","method":"INIT","path":"/init","duration":0,"status":200,"message":"realtime log initialized"}
+{"ts":"2026-09-03T20:30:35.784Z","level":"info","method":"GET","path":"/api/stats","duration":1251,"status":200}
+{"ts":"2026-09-03T20:30:36.155Z","level":"info","method":"GET","path":"/api/health","duration":19,"status":200}
+{"ts":"2026-09-03T20:30:39.185Z","level":"info","method":"GET","path":"/api/timetable","duration":2720,"status":200}
+{"ts":"2026-09-03T20:35:19.423Z","level":"info","method":"GET","path":"/api/health","duration":4,"status":200}

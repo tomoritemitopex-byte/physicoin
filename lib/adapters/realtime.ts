@@ -46,10 +46,8 @@ const buffer: RealtimeLog[] = [];
 
 // ---------------------------------------------------------------------------
 // GitHub-visible file logging: logs/realtime.log + logs/errors.log
-// ts/server-only — prevent client bundling of fs/path
-// The file is imported by app/app/layout.tsx via "@/lib/adapters" (client context)
-// but fs/path usage is fully guarded. Next.js still tries to resolve the module
-// graph at build time, so we use dynamic require() wrapped in try/cancel.
+// fs/path are server-only — loaded lazily to avoid bundling in client.
+// Webpack config in next.config.mjs sets fs/path fallbacks to false.
 
 // ---------------------------------------------------------------------------
 function getFs(): typeof import("fs") | null {

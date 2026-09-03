@@ -1,8 +1,8 @@
+"use client";
 import React, { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { BUILDINGS, LEVELS, Building } from "@/lib/campus";
 import { GhostForm, ghostsForCount, ghostForSeed } from "@/lib/ghostAvatar";
 import GhostAvatar from "@/components/road/GhostAvatar";
-import { anonHash } from "@/lib/fusion";
 
 /** WindingRoad — Candy Crush-style serpentine road through the campus.
  * Replaces the old grid-of-cards CampusMap.
@@ -56,7 +56,6 @@ function useEphemeralGhosts(count: number) {
 // y-spacing 136px/node so hit targets never clip and clock tower sits inline at 300L y.
 const ROAD_WIDTH = 18;
 const ROAD_STROKE = 3;
-const ROAD_SHADOW = "0 4px 12px rgba(2,44,30,0.35)";
 // Nodes at 136px spacing starting y=60 (6 nodes => 900px total run + 80px bottom pad above rail).
 const NODE_POSITIONS: Record<string, { x: number; y: number }> = {
   phys:   { x: 50,  y: 60  },
@@ -87,13 +86,10 @@ function buildSvgPath(nodeIds: string[]): string {
   return d;
 }
 
-function nodeColor(b: Building): string { return b.color; }
-
 export default function WindingRoad({ events, onVerify }: { events: EventRow[]; onVerify?: (ev: EventRow) => void }) {
   const [buildingId, setBuildingId] = useState<string | null>(null);
   const [level, setLevel] = useState<string | null>(null);
   const [verifying, setVerifying] = useState<string | null>(null);
-  const [pollTick, setPollTick] = useState(0);
   const [swipeIdx, setSwipeIdx] = useState<number | null>(null);
   const roadRef = useRef<HTMLDivElement>(null);
   const building = useMemo(() => BUILDINGS.find((b) => b.id === buildingId) || null, [buildingId]);
@@ -159,7 +155,6 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
           if (!cancel) setVerifyCounts((m) => ({ ...m, [ev.id]: Math.min(3, Math.round(Number(ev.authority_points ?? 0))) }));
         }
       }
-      if (!cancel) setPollTick((t) => t + 1);
     }
     poll();
     const iv = setInterval(poll, 15000);
@@ -183,7 +178,6 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
       try { const raw = localStorage.getItem("physi_profile"); if (raw) uid = JSON.parse(raw)?.id ?? null; } catch {}
       if (!uid) {
         setVerifyCounts((m) => ({ ...m, [ev.id]: (m[ev.id] ?? 0) + 1 }));
-        setPollTick((t) => t + 1);
         if (onVerify) onVerify(ev);
         setVerifying(null);
         return;
@@ -192,7 +186,6 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
       const j = await r.json().catch(() => ({} as any));
       if (r.ok && j.ok !== false) {
         setVerifyCounts((m) => ({ ...m, [ev.id]: (m[ev.id] ?? 0) + 1 }));
-        setPollTick((t) => t + 1);
         if (onVerify) onVerify(ev);
       } else {
         setVerifyCounts((m) => ({ ...m, [ev.id]: (m[ev.id] ?? 0) + 1 }));
@@ -235,9 +228,10 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
       </div>
 
       {/* ── Road SVG — winding cream path (solid gummy + shadow, 18px wide) ── */}
-      <svg className="road-svg" viewBox="0 0 100 720" preserveAspectRatio="xMidYMid slice" style={{ minHeight: "100vh" }}>
+      <svg className="road-svg" viewBox="0 0 100 720" preserveAspectRatio="xMidYMid slice" style={{ minHeight: "100vh" }} aria-hidden="true" role="presentation">
         <defs>
           <filter id="road-shadow"><feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="rgba(2,44,30,0.45)" /></filter>
+          <filter id="road-glow"><feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="rgba(52,211,153,0.35)" /></filter>
         </defs>
         {/* road — solid gummy cream with white border + shadow */}
         {svgPath && (
@@ -301,7 +295,8 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
             style={{ left: `${pos.x}%`, top: `${pos.y}%`, position: "absolute", zIndex: active ? 20 : 10, }}
             onClick={() => setBuildingId(active ? null : b.id)}
             aria-label={`${b.label} — ${cnt} events`}
-            tabIndex={0}
+            aria-pressed={active}
+            aria-controls={active ? "building-panel" : undefined}
           >
             <div className="node-icon" style={{ background: active ? "rgba(255,255,255,0.96)" : `${b.color || "#34d399"}cc`, color: active ? "#022c1e" : "white" }}>
               <span style={{ fontSize: 26 }}>{b.icon}</span>
@@ -314,7 +309,7 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
 
       {/* ── Clock tower milestone (300L midpoint — inline, NOT sticky) ── */}
       <div className="clock-tower" style={{ left: `${CLOCK_TOWER_POS.x}%`, top: `${CLOCK_TOWER_POS.y}%`, position: "absolute", zIndex: 25 }}>
-        <div className="tower-icon">🕛</div>
+        <div className="tower-icon" aria-hidden="true" role="img" aria-label="300L midpoint clock tower">🕛</div>
         <span className="tower-label">300L · midpoint</span>
       </div>
 
@@ -340,8 +335,8 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
                 <button
                   key={lv}
                   onClick={() => setLevel(active ? null : lv)}
-                  className={`rounded-xl border px-4 py-2.5 text-center font-black tracking-tight transition-all ${active ? "bg-white text-black border-white shadow-[0_6px_18px_rgba(0,0,0,0.25)] scale-[1.03]" : "bg-white/[0.06] text-white border-white/10 hover:bg-white/10"}`}
-                >
+                  aria-pressed={active}
+                  className={`rounded-xl border px-4 py-2.5 text-center font-black tracking-tight transition-all ${active ? "bg-white text-black border-white shadow-[0_6px_18px_rgba(0,0,0,0.25)] scale-[1.03]" : "bg-white/[0.06] text-white border-white/10 hover:bg-white/10"}`}>
                   <span className="block text-[14px]">{lv}</span>
                   <span className="font-mono text-[10px] font-medium opacity-60">{active ? "selected" : "level"}</span>
                 </button>
@@ -409,16 +404,16 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
                         <span className="urgency-label">{timeLeft < 1 ? "expired" : `${timeLeft}h left · ${cnt} verified`}</span>
                         <div className="ghost-row">
                           {Array.from({ length: Math.min(cnt, 5) }).map((_, gi) => {
-                            const gf = ghostForSeed(`w-${ev.id}-${gi}-${pollTick}`, 0);
-                            return <span key={gi} className="ghost-dot inline-block rounded-full" style={{ background: gf.fg, width: 16, height: 16, border: "2px solid rgba(2,44,30,0.5)" }} />;
+                            const gf = ghostForSeed(`w-${ev.id}-${gi}`, Date.now());
+                            return <span key={gi} className="ghost-dot inline-block rounded-full" style={{ background: gf.fg, width: 16, height: 16, border: "2px solid rgba(2,44,30,0.5)" }} aria-hidden="true" />;
                           })}
                         </div>
                       </div>
 
                       {/* verify buttons */}
                       <div className="mt-3 flex items-center gap-3">
-                        <button onClick={(e) => { e.stopPropagation(); handleVerify(ev); }} disabled={verifying === ev.id} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-xl font-bold text-white shadow-lg hover:bg-emerald-400 disabled:opacity-50" style={{ minWidth: 48, minHeight: 48 }} aria-label="Confirm — stake 1 $PHY">{verifying === ev.id ? "…" : "✓"}</button>
-                        <button onClick={(e) => { e.stopPropagation(); }} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-base font-bold text-slate-200 hover:bg-white hover:text-[#022c1e] disabled:opacity-50" style={{ minWidth: 40, minHeight: 40 }} aria-label="No — stake 1 $PHY">✕</button>
+                        <button onClick={(e) => { e.stopPropagation(); handleVerify(ev); }} disabled={verifying === ev.id} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-xl font-bold text-white shadow-lg hover:bg-emerald-400 disabled:opacity-50" style={{ minWidth: 48, minHeight: 48 }} aria-label={`Confirm ${ev.title} at ${ev.venue}`}>{verifying === ev.id ? "…" : "✓"}</button>
+                        <button onClick={(e) => { e.stopPropagation(); handleVerify(ev); }} disabled={verifying === ev.id} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-base font-bold text-slate-200 hover:bg-white hover:text-[#022c1e] disabled:opacity-50" style={{ minWidth: 48, minHeight: 48 }} aria-label={`No ${ev.title} at ${ev.venue}`}>✕</button>
                         <span className="font-mono text-[10px] text-white/40">swipe → Yes / ← No / ↑ Skip</span>
                       </div>
                     </div>
@@ -467,11 +462,11 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
                 <div className="urgency-bar"><div className="urgency-fill" style={{ width: `${Math.max(0, Math.min(100, 100 - (Number(ev.authority_points ?? 0) / Math.max(1, Number(ev.required_points ?? 1))) * 100))}%` }} /></div>
                 <div className="flex items-center justify-between mt-1">
                   <span className="urgency-label">{cnt} verified</span>
-                  <div className="ghost-row">{Array.from({ length: Math.min(cnt, 5) }).map((_, gi) => { const gf = ghostForSeed(`f-${ev.id}-${gi}-${pollTick}`, 0); return <span key={gi} className="ghost-dot inline-block rounded-full" style={{ background: gf.fg, width: 14, height: 14, border: "2px solid rgba(2,44,30,0.5)" }} />; })}</div>
+                  <div className="ghost-row">{Array.from({ length: Math.min(cnt, 5) }).map((_, gi) => { const gf = ghostForSeed(`f-${ev.id}-${gi}`, Date.now()); return <span key={gi} className="ghost-dot inline-block rounded-full" style={{ background: gf.fg, width: 14, height: 14, border: "2px solid rgba(2,44,30,0.5)" }} aria-hidden="true" />; })}</div>
                 </div>
                 <div className="mt-3 flex items-center gap-3">
-                  <button onClick={(e) => { e.stopPropagation(); handleVerify(ev); }} disabled={verifying === ev.id} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-lg font-bold text-white shadow-lg hover:bg-emerald-400 disabled:opacity-50" style={{ minWidth: 44, minHeight: 44 }} aria-label="Confirm">{verifying === ev.id ? "…" : "✓"}</button>
-                  <button onClick={(e) => { e.stopPropagation(); }} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-base font-bold text-slate-200 hover:bg-white hover:text-[#022c1e]" style={{ minWidth: 36, minHeight: 36 }} aria-label="No">✕</button>
+                  <button onClick={(e) => { e.stopPropagation(); handleVerify(ev); }} disabled={verifying === ev.id} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-xl font-bold text-white shadow-lg hover:bg-emerald-400 disabled:opacity-50" style={{ minWidth: 48, minHeight: 48 }} aria-label={`Confirm ${ev.title} at ${ev.venue}`}>{verifying === ev.id ? "…" : "✓"}</button>
+                  <button onClick={(e) => { e.stopPropagation(); handleVerify(ev); }} disabled={verifying === ev.id} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-base font-bold text-slate-200 hover:bg-white hover:text-[#022c1e] disabled:opacity-50" style={{ minWidth: 48, minHeight: 48 }} aria-label={`No ${ev.title} at ${ev.venue}`}>✕</button>
                   <span className="font-mono text-[10px] text-white/40">swipe → ✓ / ← ✕</span>
                 </div>
               </div>
