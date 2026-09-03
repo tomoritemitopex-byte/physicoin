@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { ArrowRight, Check, ShieldCheck, Clock3, Users, Sparkles, MapPin } from 'lucide-react';
+import { ArrowRight, ShieldCheck, Clock3, Users, Sparkles, MapPin } from 'lucide-react';
 import { Fredoka } from 'next/font/google';
+import CampusPreview from '@/components/road/CampusPreview';
 
 const fredoka = Fredoka({ subsets: ['latin'], weight: ['400','500','600','700'], display: 'swap', variable: '--font-fredoka' });
 
@@ -109,43 +110,18 @@ export default function LandingPage() {
             </div>
           </div>
 
-          {/* Hero card — mid surface #1a5f48 on base #0d3b2a */}
+          {/* Hero card — campus preview with winding road */}
           <div className="relative">
             <div className="absolute -inset-6 -z-10 rounded-[28px] bg-[#1a5f48]/20 blur-xl" />
             <div className="overflow-hidden rounded-[20px] border border-[rgba(52,211,153,0.15)] bg-[#1a5f48] backdrop-blur-xl shadow-[0_16px_48px_rgba(2,44,30,0.45)]">
-              <div className="flex items-center justify-between border-b border-[rgba(52,211,153,0.12)] bg-[#0d3b2a]/30 px-4 py-3">
-                <div className="flex items-center gap-1.5">
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#f0fdf4]/20" />
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#f0fdf4]/10" />
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#f0fdf4]/10" />
-                </div>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[rgba(251,191,36,0.14)] border border-[rgba(251,191,36,0.18)] px-2.5 py-1 font-mono text-[11px] font-medium text-[#fbbf24]"><span className="h-1.5 w-1.5 rounded-full bg-[#fbbf24] animate-pulse" /> live</span>
+              <div className="p-4">
+                <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-[rgba(240,253,244,0.55)]">Live campus · 8 buildings · tap a node to enter</p>
+                <CampusPreview />
               </div>
-              <div className="p-5">
-                <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-[rgba(240,253,244,0.55)]">Today · advisory</p>
-                <div className="mt-3 space-y-2.5">
-                  {[
-                    { code: 'ANA 201', venue: 'Hall B · moved from LT2', time: '8:00 AM', state: 'verified', meta: '18 Yes · 2 No' },
-                    { code: 'BIO 101', venue: 'LT2 · Friday', time: '8:00 AM', state: 'pending', meta: '6 Yes · 1 No' },
-                    { code: 'CHM 112', venue: 'New Lab', time: '2:00 PM', state: 'fading', meta: '2 Yes · 9 No' },
-                  ].map((r) => (
-                    <div key={r.code} className="flex items-center justify-between rounded-2xl border border-[rgba(52,211,153,0.12)] bg-[#0d3b2a]/35 px-4 py-3">
-                      <div>
-                        <p className="text-[13px] font-semibold text-[#f0fdf4]">{r.code} <span className="font-normal text-[rgba(240,253,244,0.70)]">· {r.venue}</span></p>
-                        <p className="mt-0.5 font-mono text-xs text-[rgba(240,253,244,0.55)]">{r.time} · {r.meta}</p>
-                      </div>
-                      <span className={r.state==='verified' ? "inline-flex items-center gap-1 rounded-full bg-[rgba(251,191,36,0.14)] border border-[rgba(251,191,36,0.20)] px-2.5 py-1 font-mono text-xs font-medium text-[#fbbf24]" : r.state==='pending' ? "inline-flex items-center rounded-full border border-[rgba(52,211,153,0.15)] bg-[#022c1e]/30 px-2.5 py-1 font-mono text-xs text-[#f0fdf4]/80" : "inline-flex items-center rounded-full border border-red-400/20 bg-red-500/10 px-2.5 py-1 font-mono text-xs text-red-300"}>
-                        {r.state==='verified' ? <><Check className="h-3 w-3" /> Green</> : r.state==='pending' ? 'Advisory' : 'Fading'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-4 flex items-center gap-2 rounded-xl border border-[rgba(52,211,153,0.15)] bg-[#022c1e]/45 px-3.5 py-3">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#34d399] text-[10px] font-bold text-[#022c1e]">You</span>
-                  <p className="text-[13px] text-[rgba(240,253,244,0.80)]">Were you there? Tap <span className="font-semibold text-[#f0fdf4]">Yes / No</span> — no forms.</p>
-                </div>
+              <div className="flex items-center justify-center gap-2 border-t border-[rgba(52,211,153,0.12)] bg-[#0d3b2a]/30 px-4 py-3">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#34d399] text-[10px] font-bold text-[#022c1e]">You</span>
+                <p className="text-[13px] text-[rgba(240,253,244,0.80)]">Were you there? Tap <span className="font-semibold text-[#f0fdf4]">Yes / No</span> — no forms.</p>
               </div>
-              <p className="mt-3 text-center font-mono text-[11px] text-[rgba(240,253,244,0.45)]">Preview · real confirmations inside the road</p>
             </div>
           </div>
         </section>
@@ -173,7 +149,7 @@ export default function LandingPage() {
             {[
               { n: '01', title: 'Hear gist', desc: 'Lecturer says "we moved to Hall B". Post it — shows instantly as advisory.', icon: Sparkles, tint: 'border-[rgba(52,211,153,0.15)]' },
               { n: '02', title: 'Coursemates confirm', desc: 'Were you there? Tap Yes / No. Enough Yes turns it gold.', icon: Users, tint: 'border-[rgba(251,191,36,0.18)]' },
-              { n: '03', title: 'Everyone knows', desc: 'Gold tick = trust it. No tick = double-check. No more wrong hall.', icon: Check, tint: 'border-[rgba(52,211,153,0.15)]' },
+              { n: '03', title: 'Everyone knows', desc: 'Gold tick = trust it. No tick = double-check. No more wrong hall.', icon: ShieldCheck, tint: 'border-[rgba(52,211,153,0.15)]' },
             ].map((s) => (
               <div key={s.n} className={`rounded-[20px] border bg-[#1a5f48] p-6 shadow-[0_8px_24px_rgba(2,44,30,0.25)] ${s.tint}`}>
                 <div className="flex items-center justify-between">
