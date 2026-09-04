@@ -27,7 +27,9 @@ const config: Config = {
         'candy': '0 8px 32px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.06)',
         'glow-mint': '0 8px 24px rgba(52,211,153,0.35)',
         'liquid-glass': '0 0 0 1px rgba(255,255,255,0.05), 0 8px 32px rgba(2,44,30,0.45)',
-        'parallax-3': 'transform: perspective(1000px) rotateX(3deg) translateZ(0)',
+      },
+      transform: {
+        'road-parallax': 'perspective(1000px) rotateX(3deg) translateZ(0)',
       },
     },
   },

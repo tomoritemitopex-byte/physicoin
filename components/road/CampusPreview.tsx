@@ -3,24 +3,23 @@ import React, { useMemo } from "react";
 import { BUILDINGS } from "@/lib/campus";
 
 /**
- * Mini campus preview — matches the PHYST mobile interface aesthetic.
- * Deep forest green (#0d3b2a) background, mint-green glowing path
- * shaped like a "7", building nodes as simple rounded dots with
- * department codes, DNA helix node icon as central milestone.
+ * Mini campus preview — Elvenar-inspired parchment + jewel-tone aesthetic.
+ * Deep parchment (#f7f5ef) background, burnished gold (#c5a059) road ribbon,
+ * building nodes as jewel-tone ellipses with gold bezels.
  */
 
 const NODE_POSITIONS: Record<string, { x: number; y: number }> = {
-  phys:  { x: 50,  y: 60  },
-  mbbs:  { x: 18,  y: 196 },
-  pharm: { x: 82,  y: 196 },
-  dpt:   { x: 18,  y: 332 },
-  bnsc:  { x: 82,  y: 332 },
-  bmls:  { x: 50,  y: 468 },
-  nutr:  { x: 18,  y: 604 },
-  it:    { x: 82,  y: 604 },
+  phys:  { x: 50,  y: 76  },
+  mbbs:  { x: 18,  y: 212 },
+  pharm: { x: 82,  y: 212 },
+  dpt:   { x: 18,  y: 364 },
+  bnsc:  { x: 82,  y: 364 },
+  bmls:  { x: 50,  y: 516 },
+  nutr:  { x: 18,  y: 668 },
+  it:    { x: 82,  y: 668 },
 };
 
-const CLOCK_TOWER_POS = { x: 50, y: 468 };
+const CLOCK_TOWER_POS = { x: 50, y: 516 };
 
 function buildSvgPath(nodeIds: string[]): string {
   const pts = nodeIds
@@ -47,88 +46,77 @@ export default function CampusPreview() {
   const svgPath = useMemo(() => buildSvgPath(orderedBuildings.map((b) => b.id)), [orderedBuildings]);
 
   return (
-    <div className="relative mx-auto max-w-sm overflow-hidden rounded-[16px] border border-[rgba(52,211,153,0.15)] bg-[#0d3b2a] shadow-[0_16px_48px_rgba(2,44,30,0.55)]">
+    <div className="relative mx-auto max-w-sm overflow-hidden rounded-[16px] border border-[#c5a059]/30 bg-[#f7f5ef] shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_12px_28px_rgba(13,30,20,0.35),0_0_0_1.5px_#c5a059]">
       <svg
         className="road-svg block"
         viewBox="0 0 100 720"
         preserveAspectRatio="xMidYMid slice"
         style={{ height: "400px", width: "100%" }}
         role="img"
-        aria-label="Campus road — department buildings along a winding path"
+        aria-label="Campus road — department jewels along a gilded path"
       >
         <defs>
           <filter id="road-glow-mini">
-            <feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="rgba(52,211,153,0.5)" />
+            <feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="rgba(197,160,89,0.6)" />
           </filter>
-          <filter id="node-glow-mini">
-            <feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="rgba(251,191,36,0.5)" />
+          <filter id="jewel-bevel">
+            <feDropShadow dx="0" dy="0" stdDeviation="3" flood-color="rgba(0,0,0,0.4)" />
           </filter>
+          <radialGradient id="jewel-inner" cx="30%" cy="30%" r="70%">
+            <stop offset="0%" stopColor="#ffffff" stopOpacity="0.4" />
+            <stop offset="100%" stopColor="transparent" />
+          </radialGradient>
+          <radialGradient id="parchment-fill" cx="50%" cy="0%" r="70%">
+            <stop offset="0%" stopColor="#f7f5ef" stopOpacity="1" />
+            <stop offset="100%" stopColor="#ede9df" stopOpacity="0.95" />
+          </radialGradient>
         </defs>
 
-        {/* Deep green background — no hex grid, no parchment, clean */}
-        <rect x="0" y="0" width="100" height="720" fill="#0d3b2a" />
+        {/* Parchment background with subtle noise */}
+        <rect x="0" y="0" width="100" height="720" fill="url(#parchment-fill)" />
+        <rect x="0" y="0" width="100" height="720" fill="rgba(247,245,239,0.06)" />
 
-        {/* Subtle radial glow at top for depth */}
-        <radialGradient id="top-glow" cx="50%" cy="0%" r="60%">
-          <stop offset="0%" stopColor="rgba(26,95,72,0.15)" />
-          <stop offset="100%" stopColor="transparent" />
-        </radialGradient>
-        <rect x="0" y="0" width="100" height="200" fill="url(#top-glow)" />
-
-        {/* road — mint-green glowing path ("7" shape) */}
+        {/* Road - burnished gold ribbon */}
         {svgPath && (
-          <>
-            {/* glow layer */}
-            <path
-              d={svgPath}
-              fill="none"
-              stroke="rgba(52,211,153,0.2)"
-              strokeWidth={20}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              filter="url(#road-glow-mini)"
-              opacity="0.8"
-            />
-            {/* main path */}
-            <path
-              d={svgPath}
-              fill="none"
-              stroke="#34d399"
-              strokeWidth={10}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              opacity="0.9"
-            />
-            {/* inner highlight */}
-            <path
-              d={svgPath}
-              fill="none"
-              stroke="#f0fdf4"
-              strokeWidth={3}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              opacity="0.7"
-            />
-          </>
+          <path
+            d={svgPath}
+            fill="none"
+            stroke="#d8cbb0"
+            strokeWidth={16}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            opacity="0.5"
+          />
+        )}
+        {svgPath && (
+          <path
+            d={svgPath}
+            fill="none"
+            stroke="#c5a059"
+            strokeWidth={8}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeDasharray="4 6"
+            filter="url(#road-glow-mini)"
+            opacity="0.7"
+          />
         )}
 
-        {/* Building nodes — simple rounded dots with codes */}
+        {/* Building nodes - jewel-tone ellipses with gold bezels */}
         {orderedBuildings.map((b) => {
           const pos = NODE_POSITIONS[b.id];
           const hovered = hoveredId === b.id;
           return (
             <g key={b.id}>
-              <rect
-                x={pos.x - 6}
-                y={pos.y - 6}
-                width="12"
-                height="12"
-                rx="4"
-                ry="4"
+              <ellipse
+                cx={pos.x}
+                cy={pos.y}
+                rx="14"
+                ry="16"
                 fill={b.color}
-                stroke={hovered ? "#fbbf24" : "rgba(240,253,244,0.3)"}
-                strokeWidth={hovered ? "1.5" : "1"}
-                filter={hovered ? "url(#node-glow-mini)" : undefined}
+                stroke={hovered ? "#fbbf24" : "#c5a059"}
+                strokeWidth={hovered ? "2" : "1.5"}
+                filter={hovered ? "url(#jewel-bevel)" : undefined}
                 style={{ transition: "all 180ms ease", cursor: "pointer" }}
                 onMouseEnter={() => setHoveredId(b.id)}
                 onMouseLeave={() => setHoveredId(null)}
@@ -139,15 +127,24 @@ export default function CampusPreview() {
                 role="button"
                 aria-label={`${b.label} — ${b.code}. Tap to enter map`}
               />
+              {/* Jewel inner highlight */}
+              <ellipse
+                cx={pos.x}
+                cy={pos.y}
+                rx="14"
+                ry="16"
+                fill="url(#jewel-inner)"
+                strokeWidth="0"
+              />
               {/* Department code below node */}
               <text
                 x={pos.x}
-                y={pos.y + 10}
+                y={pos.y + 18}
                 textAnchor="middle"
-                fontSize="7"
+                fontSize="8"
                 fontWeight="700"
-                fill="rgba(240,253,244,0.6)"
-                fontFamily="var(--font-fredoka), system-ui, sans-serif"
+                fill="#1a1208"
+                fontFamily="'Instrument Serif', var(--font-display), system-serif"
               >
                 {b.code}
               </text>
@@ -155,12 +152,12 @@ export default function CampusPreview() {
               {hovered && (
                 <text
                   x={pos.x}
-                  y={pos.y - 8}
+                  y={pos.y - 10}
                   textAnchor="middle"
-                  fontSize="2.2"
+                  fontSize="2.4"
                   fontWeight="700"
-                  fill="#fbbf24"
-                  fontFamily="var(--font-fredoka), system-ui, sans-serif"
+                  fill="#c5a059"
+                  fontFamily="'Instrument Serif', var(--font-display), system-serif"
                 >
                   {b.label}
                 </text>
@@ -169,64 +166,51 @@ export default function CampusPreview() {
           );
         })}
 
-        {/* Clock tower — DNA helix node (central milestone) */}
+        {/* Clock tower - milestone arch with gold roof */}
         <g>
+          <path
+            d={`M ${CLOCK_TOWER_POS.x - 8} ${CLOCK_TOWER_POS.y - 2}
+               L ${CLOCK_TOWER_POS.x - 6} ${CLOCK_TOWER_POS.y - 6}
+               L ${CLOCK_TOWER_POS.x + 6} ${CLOCK_TOWER_POS.y - 6}
+               L ${CLOCK_TOWER_POS.x + 8} ${CLOCK_TOWER_POS.y - 2}
+               Z`}
+            fill="#c5a059"
+            stroke="#8a6d2b"
+            strokeWidth="1"
+          />
           <rect
-            x={CLOCK_TOWER_POS.x - 4}
-            y={CLOCK_TOWER_POS.y - 11}
-            width="8"
-            height="14"
-            rx="2"
-            ry="2"
-            fill="rgba(26,95,72,0.9)"
-            stroke="rgba(251,191,36,0.5)"
-            strokeWidth="1.5"
-          >
-            <animate
-              attributeName="stroke-width"
-              values="1.5;2.5;1.5"
-              dur="3s"
-              repeatCount="indefinite"
-            />
-          </rect>
-          {/* DNA helix inside the tower card */}
-          <path
-            d={`M ${CLOCK_TOWER_POS.x - 1.5} ${CLOCK_TOWER_POS.y - 9} C ${CLOCK_TOWER_POS.x - 1.5} ${CLOCK_TOWER_POS.y - 2} ${CLOCK_TOWER_POS.x + 1.5} ${CLOCK_TOWER_POS.y - 2} ${CLOCK_TOWER_POS.x + 1.5} ${CLOCK_TOWER_POS.y + 4}`}
-            fill="none"
-            stroke="#ec4899"
+            x={CLOCK_TOWER_POS.x - 3}
+            y={CLOCK_TOWER_POS.y - 2}
+            width="6"
+            height="10"
+            rx="1"
+            fill="#1a1208"
+            stroke="rgba(197,160,89,0.5)"
             strokeWidth="1"
-            opacity="0.8"
           />
-          <path
-            d={`M ${CLOCK_TOWER_POS.x + 1.5} ${CLOCK_TOWER_POS.y - 9} C ${CLOCK_TOWER_POS.x + 1.5} ${CLOCK_TOWER_POS.y - 2} ${CLOCK_TOWER_POS.x - 1.5} ${CLOCK_TOWER_POS.y - 2} ${CLOCK_TOWER_POS.x - 1.5} ${CLOCK_TOWER_POS.y + 4}`}
-            fill="none"
-            stroke="#06b6d4"
-            strokeWidth="1"
-            opacity="0.8"
-          />
-          {/* tower label */}
+          {/* tower label in serif */}
           <text
             x={CLOCK_TOWER_POS.x}
             y={CLOCK_TOWER_POS.y + 6}
             textAnchor="middle"
-            fontSize="2"
+            fontSize="2.6"
             fontWeight="700"
-            fill="rgba(251,191,36,0.7)"
-            fontFamily="var(--font-fredoka), system-ui, sans-serif"
+            fill="#c5a059"
+            fontFamily="'Instrument Serif', var(--font-display), system-serif"
           >
             300L
           </text>
         </g>
       </svg>
 
-      {/* Footer note — matches PHYST style */}
-      <div className="border-t border-[rgba(52,211,153,0.1)] bg-[#022c1e]/40 px-3 py-2 text-center">
-        <span className="font-mono text-[10px] text-[rgba(240,253,244,0.45)]">Map · List inside — tap nodes to verify</span>
+      {/* Footer - parchment strip */}
+      <div className="border-t border-[#d8cbb0]/40 bg-[#ede9df]/60 px-3 py-2 text-center">
+        <span className="font-mono text-[10px] text-[#4a3f2a]">Map · List inside — tap jewels to verify</span>
       </div>
 
       {/* Hover hint */}
       {hoveredId && (
-        <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 rounded-full border border-[rgba(52,211,153,0.2)] bg-[#022c1e]/80 px-3 py-1 font-mono text-[10px] text-[#34d399]">
+        <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 rounded-full border border-[#c5a059]/30 bg-[#c5a059]/15 px-3 py-1 font-mono text-[10px] text-[#c5a059]">
           Tap to enter → {hoveredId}
         </div>
       )}

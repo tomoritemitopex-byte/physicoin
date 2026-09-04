@@ -113,10 +113,10 @@ export default function LandingPage() {
               <span className="inline-flex items-center gap-1.5 font-mono text-xs text-[rgba(240,253,244,0.60)]"><Clock3 className="h-3.5 w-3.5" /> 30s setup · no signup wall to preview</span>
             </div>
 
-            <div className="mt-6 flex flex-wrap items-center gap-2 font-mono text-xs text-[rgba(240,253,244,0.60)]">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-[rgba(52,211,153,0.15)] bg-[#1a5f48]/60 px-3 py-1.5"><Users className="h-3 w-3 text-[#34d399]" /> by coursemates</span>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-[rgba(251,191,36,0.20)] bg-[rgba(251,191,36,0.10)] px-3 py-1.5 text-[#fbbf24]"><ShieldCheck className="h-3 w-3" /> green tick = confirmed</span>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-[rgba(52,211,153,0.15)] bg-[#1a5f48]/60 px-3 py-1.5"><MapPin className="h-3 w-3 text-[#34d399]" /> no wrong-hall trek</span>
+            <div className="mt-6 flex flex-wrap items-center gap-2 font-mono text-xs text-[#4a3f2a]">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#c5a059]/30 bg-[#f7f5ef] px-3 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_1px_8px_rgba(0,0,0,0.12)]"><Users className="h-3 w-3 text-[#c5a059]" /> by coursemates</span>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#c5a059]/30 bg-[#f7f5ef] px-3 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_1px_8px_rgba(0,0,0,0.12)]"><ShieldCheck className="h-3 w-3 text-[#c5a059]" /> green tick = confirmed</span>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#c5a059]/30 bg-[#f7f5ef] px-3 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_1px_8px_rgba(0,0,0,0.12)]"><MapPin className="h-3 w-3 text-[#c5a059]" /> no wrong-hall trek</span>
             </div>
           </div>
 

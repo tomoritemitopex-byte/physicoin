@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
-import { Fredoka } from 'next/font/google';
+import { Fredoka, Instrument_Serif } from 'next/font/google';
 import './globals.css';
 
 const fredoka = Fredoka({ subsets: ['latin'], weight: ['400','500','600','700'], display: 'swap', variable: '--font-fredoka' });
+const instrumentSerif = Instrument_Serif({ subsets: ['latin'], weight: ['400'], display: 'swap', variable: '--font-display', style: ['normal'] });
 
 export const metadata: Metadata = {
   title: 'PHYSI — Live Timetable, Built by Students',
@@ -18,7 +19,8 @@ export const viewport = { themeColor: '#0d3b2a' };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={fredoka.variable}>
+    <html lang="en" className={`${fredoka.variable} ${instrumentSerif.variable}`}>
+      <head />
       <body className="min-h-screen bg-[#0d3b2a] text-[#f0fdf4] antialiased selection:bg-[#34d399] selection:text-[#022c1e]" style={{ fontFamily: 'var(--font-fredoka), system-ui, sans-serif' }}>
         {children}
       </body>

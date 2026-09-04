@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PHYSI Design System Reference — Winding Road + Liquid Glass</title>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Instrument+Serif:wght@400&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --physi-bg: #0d3b2a;
+      --physi-card: #1a5f48;
+      --physi-border: rgba(52, 211, 153, 0.15);
+      --physi-accent: #34d399;
+      --physi-success: #10b981;
+      --physi-warning: #f59e0b;
+      --physi-gold: #fbbf24;
+      --physi-cream: #f0fdf4;
+      --physi-shadow: #022c1e;
+      --parchment: #f7f5ef;
+      --parchment-soft: #ede9df;
+      --ink: #1a1208;
+      --gold: #c5a059;
+      --gold-soft: #8a6d2b;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      background: var(--physi-bg);
+      color: var(--physi-cream);
+      font-family: 'Fredoka', system-ui, sans-serif;
+      overflow-x: hidden;
+    }
+    h1, h2 { font-family: 'Instrument Serif', system-serif; font-weight: 400; letter-spacing: -0.03em; }
+    h1 { font-size: clamp(2rem, 5vw, 3.25rem); line-height: 1.08; }
+    h2 { font-size: clamp(1.25rem, 3vw, 1.5rem); line-height: 1.12; margin-top: 2rem; }
+
+    /* ── Layout ── */
+    .container { max-width: 1200px; margin: 0 auto; padding: 2rem 1rem; }
+
+    /* ── Color Palette Cards ── */
+    .palette-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 0.75rem;
+      margin: 1rem 0 2rem;
+    }
+    .palette-swatch {
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid var(--physi-border);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    }
+    .palette-swatch .swatch-fill {
+      height: 72px;
+      display: flex;
+      align-items: flex-end;
+      padding: 0.5rem;
+      font-size: 11px;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .palette-swatch .swatch-label {
+      padding: 0.5rem;
+      font-size: 12px;
+      color: rgba(240, 253, 244, 0.6);
+    }
+
+    /* ── 3D Parallax Road Container ── */
+    .road-demo {
+      position: relative;
+      height: 500px;
+      margin: 2rem 0;
+      perspective: 1000px;
+      overflow: hidden;
+      border-radius: 24px;
+      border: 1px solid var(--physi-border);
+    }
+    .road-inner {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      transform-style: preserve-3d;
+      transform: rotateX(8deg);
+      transition: transform 0.3s ease;
+    }
+    .road-demo:hover .road-inner { transform: rotateX(12deg) scale(1.02); }
+
+    /* Forest depth layers */
+    .forest-far {
+      position: absolute;
+      bottom: 0; left: 0; width: 140%; height: 45%;
+      background: linear-gradient(to top, rgba(16, 55, 32, 0.9), transparent);
+      filter: blur(3px);
+      opacity: 0.3;
+      transform: translateX(-20%);
+    }
+    .forest-mid {
+      position: absolute;
+      bottom: 0; left: 0; width: 130%; height: 38%;
+      background: linear-gradient(to top, rgba(22, 78, 44, 0.75), transparent);
+      filter: blur(1.5px);
+      opacity: 0.35;
+      transform: translateX(-15%);
+    }
+    .forest-near {
+      position: absolute;
+      bottom: 0; left: 0; width: 120%; height: 32%;
+      background: linear-gradient(to top, rgba(34, 110, 60, 0.55), transparent);
+      opacity: 0.4;
+    }
+    .sky-glow {
+      position: absolute;
+      top: -80px; left: 50%;
+      width: 600px; height: 400px;
+      background: radial-gradient(ellipse at center, rgba(26, 95, 72, 0.45), transparent 70%);
+      filter: blur(2px);
+      opacity: 0.2;
+      transform: translateX(-50%);
+    }
+
+    /* Serpentine SVG Road */
+    .road-svg {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .road-path-shadow {
+      fill: none;
+      stroke: rgba(2, 44, 30, 0.45);
+      stroke-width: 18;
+      stroke-linecap: round;
+      filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
+    }
+    .road-path-highlight {
+      fill: none;
+      stroke: var(--physi-cream);
+      stroke-width: 21;
+      stroke-linecap: round;
+      stroke-dasharray: 12 8;
+      opacity: 0.35;
+      animation: pathDashFlow 1.8s linear infinite;
+    }
+    .road-path-glow {
+      fill: none;
+      stroke: var(--physi-accent);
+      stroke-width: 3;
+      stroke-linecap: round;
+      opacity: 0.6;
+      filter: drop-shadow(0 0 6px rgba(52, 211, 153, 0.35));
+    }
+    @keyframes pathDashFlow {
+      to { stroke-dashoffset: -24; }
+    }
+
+    /* Building Nodes (state-animated) */
+    .building-node {
+      position: absolute;
+      z-index: 5;
+      cursor: pointer;
+      transform: translate(-50%, -50%) translateZ(14px);
+      transition: all 280ms cubic-bezier(.34, 1.56, .64, 1);
+    }
+    .building-node:hover {
+      transform: translate(-50%, -50%) translateZ(22px) scale(1.12);
+      filter: drop-shadow(0 0 14px rgba(52, 211, 153, 0.5));
+    }
+    .node-icon {
+      width: 60px; height: 60px;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      border: 3px solid rgba(255, 255, 255, 0.18);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+      transition: all 280ms ease;
+    }
+
+    /* State colors */
+    .state-personal .node-icon { background: #6b7280; opacity: 0.62; border-color: rgba(107, 114, 128, 0.3); }
+    .state-waiting .node-icon { background: #3b82f6; animation: nodeGlow 2s infinite; }
+    .state-advisory .node-icon { background: #f59e0b; }
+    .state-almost .node-icon { background: #a3e635; transform: scale(1.1); animation: nodeBounce 0.6s ease; }
+    .state-verified .node-icon { background: var(--physi-success); filter: drop-shadow(0 0 14px rgba(16, 185, 129, 0.7)); }
+
+    @keyframes nodeGlow {
+      0%, 100% { filter: drop-shadow(0 0 6px rgba(52, 211, 153, 0.4)); }
+      50% { filter: drop-shadow(0 0 14px rgba(52, 211, 153, 0.75)); }
+    }
+    @keyframes nodeBounce {
+      0%, 100% { transform: translate(-50%, -50%) scale(1); }
+      40% { transform: translate(-50%, -50%) scale(1.1) translateY(-4px); }
+      60% { transform: translate(-50%, -50%) scale(1.05) translateY(-2px); }
+    }
+    @keyframes ghost-drift {
+      0%, 100% { transform: translate(0, 0) scale(1); }
+      25% { transform: translate(3px, -4px) scale(1.03); }
+      50% { transform: translate(-3px, 1px) scale(0.98); }
+      75% { transform: translate(1px, -3px) scale(1.02); }
+    }
+
+    /* Ghost Avatars */
+    .ghost-row { display: flex; align-items: center; gap: 4px; margin-top: 8px; }
+    .ghost-dot {
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      border: 2px solid rgba(2, 44, 30, 0.5);
+      animation: ghost-drift 1200ms ease-in-out infinite;
+    }
+
+    /* Clock Tower */
+    .clock-tower {
+      position: absolute;
+      z-index: 8;
+      transform: translate(-50%, -50%) translateZ(20px);
+      animation: clockPulse 2.5s ease-in-out infinite;
+    }
+    @keyframes clockPulse {
+      0% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.45); }
+      70% { box-shadow: 0 0 0 18px rgba(251, 191, 36, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0); }
+    }
+
+    /* ── Event Card (WhatsApp-style) ── */
+    .whatsapp-event {
+      position: relative;
+      z-index: 10;
+      background: rgba(26, 95, 72, 0.65);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 18px;
+      padding: 14px 16px;
+      margin: 12px 0;
+      transition: all 200ms ease;
+    }
+    .whatsapp-event:hover {
+      border-color: rgba(52, 211, 153, 0.3);
+      background: rgba(26, 95, 72, 0.8);
+    }
+    .event-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .ghost-avatar-mini {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #fbbf24, #92400e);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      border: 2px solid rgba(2, 44, 30, 0.5);
+      animation: ghost-drift 1200ms ease-in-out infinite;
+    }
+    .event-time { font-size: 11px; font-weight: 600; color: var(--physi-accent); }
+    .event-venue { font-size: 14px; font-weight: 700; color: var(--physi-cream); }
+    .event-title { font-size: 13px; color: rgba(240, 253, 244, 0.75); margin-top: 2px; }
+    .urgency-bar {
+      height: 4px;
+      border-radius: 2px;
+      background: rgba(255, 255, 255, 0.08);
+      overflow: hidden;
+      margin-top: 10px;
+    }
+    .urgency-fill {
+      height: 100%;
+      border-radius: 2px;
+      background: linear-gradient(90deg, var(--physi-accent), var(--physi-gold), #f43f5e);
+    }
+    .urgency-label {
+      font-size: 9px;
+      font-weight: 600;
+      color: rgba(240, 253, 244, 0.45);
+      margin-top: 3px;
+    }
+
+    /* Swipe Actions */
+    .swipe-zone {
+      position: relative;
+      touch-action: pan-y;
+      user-select: none;
+    }
+    .swipe-action {
+      position: absolute;
+      top: 0; bottom: 0; width: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      font-weight: 800;
+      opacity: 0;
+      transition: opacity 150ms ease;
+      border-radius: 18px;
+    }
+    .swipe-yes { left: 0; background: rgba(52, 211, 153, 0.25); color: var(--physi-accent); }
+    .swipe-no { right: 0; background: rgba(244, 63, 94, 0.2); color: #f43f5e; }
+    .swipe-skip { top: 50%; left: 50%; transform: translate(-50%, -50%);
+      background: rgba(251, 191, 36, 0.2); color: var(--physi-gold);
+      border-radius: 50%; width: 50px; height: 50px; }
+    .swipe-zone.swiping-yes .swipe-yes,
+    .swipe-zone.swiping-no .swipe-no { opacity: 1; }
+    .swipe-zone.swiping-skip .swipe-skip { opacity: 1; }
+
+    /* Verify Buttons */
+    .verify-btn-yes {
+      width: 48px; height: 48px; min-width: 48px; min-height: 48px;
+      border-radius: 50%;
+      background: var(--physi-success);
+      color: white;
+      font-weight: 700;
+      box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+      transition: all 180ms ease;
+    }
+    .verify-btn-yes:hover { background: var(--physi-accent); transform: scale(1.08); }
+    .verify-btn-no {
+      width: 44px; height: 44px; min-width: 44px; min-height: 44px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.04);
+      color: #9ca3af;
+    }
+    .verify-btn-no:hover { background: #ffffff; color: var(--physi-shadow); }
+
+    .swipe-hint {
+      display: flex;
+      justify-content: space-between;
+      padding: 0 24px;
+      margin-top: 8px;
+      font-size: 10px;
+      font-weight: 600;
+      color: rgba(240, 253, 244, 0.30);
+      font-family: 'Fredoka', system-ui, sans-serif;
+    }
+
+    /* ── Parchment Card (Elvenar) ── */
+    .parchment-card {
+      position: relative;
+      overflow: hidden;
+      border-radius: 16px;
+      border: 1px solid var(--gold);
+      background: linear-gradient(135deg, var(--parchment) 0%, var(--parchment-soft) 100%);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.45),
+        0 12px 28px rgba(13, 30, 20, 0.35),
+        0 0 0 1.5px var(--gold);
+    }
+    .parchment-card .parchment-noise {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: radial-gradient(circle at 30% 30%, rgba(247, 245, 239, 0.06) 1px, transparent 1px);
+      pointer-events: none;
+    }
+    .jewel-node {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      cursor: pointer;
+      transition: all 180ms ease;
+    }
+    .jewel-node:hover { animation: none; }
+    .jewel-ellipse {
+    }
+    .jewel-inner {
+      fill: url(#jewel-inner-gradient);
+    }
+    .jewel-code {
+      font-family: 'Instrument Serif', system-serif;
+      font-size: 8px;
+      font-weight: 700;
+      fill: var(--ink);
+    }
+
+    /* ── Liquid Glass Card ── */
+    .glass-card {
+      background: rgba(26, 95, 72, 0.55);
+      backdrop-filter: blur(16px) saturate(1.2);
+      -webkit-backdrop-filter: blur(16px) saturate(1.2);
+      border: 1px solid var(--physi-border);
+      border-radius: 20px;
+      box-shadow: 0 8px 32px rgba(2, 44, 30, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    }
+    .glass-card:hover {
+      background: rgba(26, 95, 72, 0.70);
+      border-color: rgba(52, 211, 153, 0.20);
+      box-shadow: 0 12px 40px rgba(2, 44, 30, 0.45);
+    }
+    .shimmer {
+      position: relative;
+      overflow: hidden;
+    }
+    .shimmer::after {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.30), transparent);
+      animation: shimmerSweep 1.8s infinite;
+      pointer-events: none;
+    }
+    @keyframes shimmerSweep {
+      0% { background-position: -100%; }
+      100% { background-position: 200%; }
+    }
+
+    /* Rail */
+    .one-rail {
+      position: fixed;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 40;
+      width: min(520px, 94vw);
+      background: rgba(2, 44, 30, 0.84);
+      backdrop-filter: blur(20px) saturate(1.2);
+      -webkit-backdrop-filter: blur(20px) saturate(1.2);
+      border: 1px solid var(--physi-border);
+      border-radius: 9999px;
+      box-shadow: 0 12px 40px rgba(2, 44, 30, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 6px 8px;
+    }
+
+    .section { padding: 3rem 0; }
+    .muted { color: rgba(240, 253, 244, 0.55); }
+    .text-forest { color: var(--physi-accent); }
+    .text-gold { color: var(--gold); }
+    .text-ink { color: var(--ink); }
+
+    @media (max-width: 640px) {
+      .road-demo { height: 300px; }
+      .road-inner { transform: rotateX(6deg); }
+      .building-node { transform: translate(-50%, -50%) translateZ(10px) scale(0.85); }
+      .section { padding: 1.5rem 0; }
+    }
+
+    /* Reduced motion — disable all animations */
+    @media (prefers-reduced-motion: reduce) {
+      .ghost-drift, .road-path-highlight, .building-node:hover, .clock-tower,
+      .nodeBounce, .nodeGlow, .shimmer::after {
+        animation: none !important;
+        transform: none !important;
+        filter: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>PHYSI Design System</h1>
+    <p class="muted">Forest Green · Liquid Glass · Winding Road · Rep-based States</p>
+
+    <!-- Color Palette -->
+    <h2>Forest Palette</h2>
+    <div class="palette-grid">
+      <div class="palette-swatch"><div class="swatch-fill" style="background:#0d3b2a; color:var(--physi-cream)">#0d3b2a</div><div class="swatch-label">Deep Forest (bg)</div></div>
+      <div class="palette-swatch"><div class="swatch-fill" style="background:#1a5f48; color:var(--physi-cream)">#1a5f48</div><div class="swatch-label">Living Green (card)</div></div>
+      <div class="palette-swatch"><div class="swatch-fill" style="background:#34d399; color:var(--physi-shadow)">#34d399</div><div class="swatch-label">Mint (accent)</div></div>
+      <div class="palette-swatch"><div class="swatch-fill" style="background:#10b981; color:var(--physi-shadow)">#10b981</div><div class="swatch-label">Emerald (verified)</div></div>
+      <div class="palette-swatch"><div class="swatch-fill" style="background:#f59e0b; color:var(--physi-shadow)">#f59e0b</div><div class="swatch-label">Amber (advisory)</div></div>
+      <div class="palette-swatch"><div class="swatch-fill" style="background:#fbbf24; color:var(--physi-shadow)">#fbbf24</div><div class="swatch-label">Gold (warning)</div></div>
+    </div>
+
+    <!-- Winding Road Demo -->
+    <h2>Winding Road — Candy Crush State Map</h2>
+    <div class="road-demo">
+      <div class="road-inner">
+        <!-- Forest layers -->
+        <div class="forest-far"></div>
+        <div class="forest-mid"></div>
+        <div class="forest-near"></div>
+        <div class="sky-glow"></div>
+
+        <!-- Road SVG -->
+        <svg class="road-svg" viewBox="0 0 100 720" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Serpentine campus road with 8 department building nodes">
+          <defs aria-hidden="true">
+            <!-- Note: In React/JSX, use floodColor instead of flood-color -->
+            <filter id="road-shadow"><feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="rgba(2,44,30,0.45)" /></filter>
+            <filter id="road-glow"><feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="rgba(52,211,153,0.35)" /></filter>
+          </defs>
+          <path d="M 50 76 C 32 144 32 212 50 280 C 68 348 18 416 50 484 C 82 552 18 620 50 688"
+            fill="none" stroke="rgba(2,44,30,0.45)" strokeWidth="18" strokeLinecap="round" filter="url(#road-shadow)" />
+          <path d="M 50 76 C 32 144 32 212 50 280 C 68 348 18 416 50 484 C 82 552 18 620 50 688"
+            fill="none" stroke="#f0fdf4" strokeWidth="21" strokeLinecap="round" strokeDasharray="12 8" opacity="0.35"
+            class="road-path-highlight" filter="url(#road-glow)" />
+          <path d="M 50 76 C 32 144 32 212 50 280 C 68 348 18 416 50 484 C 82 552 18 620 50 688"
+            fill="none" stroke="#34d399" strokeWidth="3" strokeLinecap="round" opacity="0.6" filter="url(#road-glow)" />
+        </svg>
+
+        <!-- Building Nodes (state animations) -->
+        <button class="building-node state-waiting" style="left:50%; top:12%; z-index:5;" aria-label="Physiology — PHYS. Tap to enter map">
+          <div class="node-icon" style="background:#3b82f6; border-color:rgba(255,255,255,0.25)">🧬</div>
+          <span class="node-label" style="top:68px;">PHYS · Physiology</span>
+        </button>
+
+        <button class="building-node state-advisory" style="left:14%; top:30%;" aria-label="Medicine & Surgery — MBBS. Tap to enter map">
+          <div class="node-icon" style="background:#f59e0b">🩺</div>
+          <span class="node-label" style="top:68px;">MBBS · Medicine</span>
+        </button>
+
+        <button class="building-node state-almost" style="left:86%; top:30%;" aria-label="Pharmacy — PHARM. Tap to enter map">
+          <div class="node-icon" style="background:#a3e635">💊</div>
+          <span class="node-label" style="top:68px;">PHARM · Pharmacy</span>
+        </button>
+
+        <button class="building-node state-verified" style="left:14%; top:48%;" aria-label="Physiotherapy — DPT. Tap to enter map">
+          <div class="node-icon" style="background:#10b981">🦴</div>
+          <span class="node-label" style="top:68px;">DPT · Physiotherapy</span>
+        </button>
+
+        <button class="building-node state-personal" style="left:86%; top:48%;" aria-label="Nursing Science — BNSc. Tap to enter map">
+          <div class="node-icon" style="background:#6b7280">🩹</div>
+          <span class="node-label" style="top:68px;">BNSc · Nursing</span>
+        </button>
+
+        <!-- Clock Tower -->
+        <div class="clock-tower" style="left:50%; top:68%;">
+          <div style="width:72px; height:72px; border-radius:50%; background:linear-gradient(135deg,#1a5f48 0%,#0d3b2a 100%); border:4px solid #fbbf24; display:flex; align-items:center; justify-content:center; font-size:32px; box-shadow:0 8px 30px rgba(0,0,0,0.45), 0 0 40px rgba(251,191,36,0.2), inset 0 2px 0 rgba(255,255,255,0.15);">🕛</div>
+          <span class="node-label" style="top:80px; color:#fbbf24; font-size:12px;">300L · midpoint</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- WhatsApp Chat Feed -->
+    <h2>WhatsApp Chat Feed — Event Gists</h2>
+    <div class="space-y-3">
+      <div class="flex items-center justify-between">
+        <span class="font-mono text-xs font-bold uppercase tracking-[0.12em] text-emerald-200">All buildings · live feed</span>
+        <span class="rounded-full bg-black/30 px-2 py-0.5 font-mono text-[10px] text-white/60">3 events</span>
+      </div>
+
+      <!-- Incoming Event (peer gist) -->
+      <div class="swipe-zone whatsapp-event">
+        <span class="swipe-action swipe-yes">✓ Yes</span>
+        <span class="swipe-action swipe-no">✕ No</span>
+        <span class="swipe-action swipe-skip">↗ Skip</span>
+        <div class="event-header">
+          <div class="ghost-avatar-mini">👤</div>
+          <div class="flex-1 min-w-0">
+            <span class="event-time">09:00 · 2026-09-04</span>
+            <p class="event-venue">LT-3, Phys Building</p>
+            <p class="event-title">Endocrine physiology quiz — 2-item mini</p>
+          </div>
+          <span class="shrink-0 rounded-full px-2 py-1 font-mono text-[10px] font-bold bg-white/10 text-slate-300">·</span>
+        </div>
+        <div class="flex items-center gap-2 mt-1">
+          <span class="rounded-full bg-black/20 px-1.5 py-0.5 text-[10px] text-slate-300">ADVISORY</span>
+          <span class="font-mono text-[10px] text-white/40">·</span>
+          <span class="font-mono text-[10px] text-white/40">whole_school</span>
+        </div>
+        <div class="urgency-bar">
+          <div class="urgency-fill" style="width: 75%"></div>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="urgency-label">18h left · 3 verified</span>
+          <div class="ghost-row">
+            <span class="ghost-dot" style="background:rgba(251,191,36,0.7);" aria-hidden="true"></span>
+            <span class="ghost-dot" style="background:rgba(52,211,153,0.7);" aria-hidden="true"></span>
+            <span class="ghost-dot" style="background:rgba(16,185,129,0.7);" aria-hidden="true"></span>
+          </div>
+        </div>
+        <div class="mt-3 flex items-center gap-3">
+          <button class="verify-btn-yes" aria-label="Verify — Yes">✓</button>
+          <button class="verify-btn-no" aria-label="Reject — No">✕</button>
+          <span class="font-mono text-[10px] text-white/40">swipe → Yes / ← No / ↑ Skip</span>
+        </div>
+      </div>
+
+      <!-- Verified Event -->
+      <div class="swipe-zone whatsapp-event">
+        <span class="swipe-action swipe-yes">✓ Yes</span>
+        <span class="swipe-action swipe-no">✕ No</span>
+        <span class="swipe-action swipe-skip">↗ Skip</span>
+        <div class="event-header">
+          <div class="ghost-avatar-mini" style="background:linear-gradient(135deg,#fbbf24,#92400e)">👥</div>
+          <div class="flex-1 min-w-0">
+            <span class="event-time">14:00 · 2026-09-04</span>
+            <p class="event-venue">Anatomy Lab, MBBS Building</p>
+            <p class="event-title">Gross anatomy — muscular system demo</p>
+          </div>
+          <span class="shrink-0 rounded-full px-2 py-1 font-mono text-[10px] font-bold bg-emerald-500 text-[#022c1e]">✓</span>
+        </div>
+        <div class="flex items-center gap-2 mt-1">
+          <span class="rounded-full bg-black/20 px-1.5 py-0.5 text-[10px] text-slate-300">VERIFIED</span>
+          <span class="font-mono text-[10px] text-white/40">·</span>
+          <span class="font-mono text-[10px] text-white/40">level_200 · 8 verified</span>
+        </div>
+        <div class="urgency-bar">
+          <div class="urgency-fill" style="width: 15%"></div>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="urgency-label">3h left · 8 verified</span>
+          <div class="ghost-row">
+            <span class="ghost-dot" style="background:rgba(16,185,129,0.7);" aria-hidden="true"></span>
+            <span class="ghost-dot" style="background:rgba(16,185,129,0.7);" aria-hidden="true"></span>
+            <span class="ghost-dot" style="background:rgba(16,185,129,0.7);" aria-hidden="true"></span>
+            <span class="ghost-dot" style="background:rgba(16,185,129,0.7);" aria-hidden="true"></span>
+            <span class="ghost-dot" style="background:rgba(16,185,129,0.7);" aria-hidden="true"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Floating Rail -->
+    <div class="one-rail">
+      <button aria-label="Menu" style="background:rgba(52,211,153,0.15); color:#34d399; min-width:44px; min-height:44px; width:44px; height:44px; border-radius:50%; border:1px solid rgba(52,211,153,0.24);">·</button>
+      <button aria-label="Add event (+)" style="background:rgba(52,211,153,0.15); color:#34d399; min-width:44px; min-height:44px; width:44px; height:44px; border-radius:50%; border:1px solid rgba(52,211,153,0.24);">+</button>
+      <button aria-label="Search" style="background:rgba(52,211,153,0.15); color:#34d399; min-width:44px; min-height:44px; width:44px; height:44px; border-radius:50%; border:1px solid rgba(52,211,153,0.24);">🔍</button>
+    </div>
+  </div>
+
+  <!-- Parchment Card Demo -->
+  <div style="max-width:320px; margin:2rem auto;">
+    <h2 style="color:var(--ink); text-align:center;">Elvenar Parchment</h2>
+    <div class="parchment-card">
+      <div class="parchment-noise"></div>
+      <svg viewBox="0 0 100 300" style="width:100%; height:200px;">
+        <defs>
+          <radialGradient id="jewel-inner-gradient" cx="30%" cy="30%" r="70%">
+            <stop offset="0%" stop-color="#ffffff" stop-opacity="0.4" />
+            <stop offset="100%" stop-color="transparent" />
+          </radialGradient>
+        </defs>
+        <rect x="0" y="0" width="100" height="300" fill="none" />
+        <ellipse cx="50" cy="80" rx="14" ry="16" fill="#10b981" stroke="#c5a059" stroke-width="1.5" />
+        <ellipse cx="50" cy="80" rx="14" ry="16" fill="url(#jewel-inner-gradient)" />
+        <text x="50" y="100" text-anchor="middle" font-size="8" font-weight="700" fill="#1a1208" font-family="'Instrument Serif', system-serif">PHYS</text>
+      </svg>
+      <div class="parchment-card-footer">
+        <span style="font-family:'Fredoka',system-ui; font-size:10px; color:#4a3f2a; padding:6px 12px; display:block; text-align:center; border-top:1px solid rgba(197,160,89,0.3);">
+          Map · List inside — tap jewels to verify
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Liquid Glass Card Demo -->
+  <div style="max-width:320px; margin:2rem auto;">
+    <h2 style="text-align:center;">Liquid Glass</h2>
+    <div class="glass-card shimmer" style="padding:1.5rem;">
+      <h3 style="margin:0 0 0.5rem; color:var(--physi-cream);">Verified Events</h3>
+      <p class="muted" style="margin:0 0 1rem; font-size:14px;">8 events confirmed today with quorum</p>
+      <div style="display:flex; gap:0.75rem;">
+        <div style="flex:1; background:rgba(16,185,129,0.15); border:1px solid rgba(52,211,153,0.24); border-radius:12px; padding:0.75rem; text-align:center;">
+          <div style="font-size:24px; font-weight:700; color:var(--physi-success);">8</div>
+          <div style="font-size:11px; color:rgba(240,253,244,0.5);">Verified</div>
+        </div>
+        <div style="flex:1; background:rgba(52,211,153,0.15); border:1px solid rgba(52,211,153,0.24); border-radius:12px; padding:0.75rem; text-align:center;">
+          <div style="font-size:24px; font-weight:700; color:var(--physi-accent);">12</div>
+          <div style="font-size:11px; color:rgba(240,253,244,0.5);">Pending</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Swipe interaction demo
+    document.querySelectorAll('.swipe-zone').forEach(zone => {
+      let sx, sy;
+      zone.addEventListener('touchstart', e => {
+        sx = e.touches[0].clientX;
+        sy = e.touches[0].clientY;
+      });
+      zone.addEventListener('touchend', e => {
+        const dx = e.changedTouches[0].clientX - sx;
+        const dy = Math.abs(e.changedTouches[0].clientY - sy);
+        if (Math.abs(dx) > 60 && dy < 50) {
+          if (dx > 0) zone.classList.add('swiping-yes');
+          else zone.classList.add('swiping-no');
+          setTimeout(() => zone.classList.remove('swiping-yes', 'swiping-no'), 300);
+        } else if (dy > 60 && Math.abs(dx) < 50) {
+          zone.classList.add('swiping-skip');
+          setTimeout(() => zone.classList.remove('swiping-skip'), 300);
+        }
+      });
+    });
+  </script>
+</body>
+</html>

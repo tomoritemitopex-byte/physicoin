@@ -33,6 +33,24 @@
   --physi-forest-light: #34d399;
   --physi-forest-2: #1a5f48;
   --font-fredoka: "Fredoka", system-ui, sans-serif;
+  --font-display: "Instrument Serif", system-serif;
+  /* Elvenar palette - parchment + jewel tones (Elvenar-inspired) */
+  --parchment: #f7f5ef;
+  --parchment-soft: #ede9df;
+  --ink: #1a1208;
+  --ink-soft: #4a3f2a;
+  --gold: #c5a059;
+  --gold-soft: #8a6d2b;
+  --gold-glow: rgba(197,160,89,0.6);
+  --gold-border: rgba(197,160,89,0.30);
+  --jewel-emerald: #10b981;
+  --jewel-sapphire: #0ea5e9;
+  --jewel-ruby: #ef4444;
+  --jewel-amethyst: #8b5cf6;
+  --jewel-cyan: #06b6d4;
+  --jewel-orange: #f59e0b;
+  --jewel-pink: #ec4899;
+  --jewel-lime: #84cc16;
 }
 
 /* Base — generous whitespace */
@@ -44,9 +62,12 @@ html, body {
   line-height: 1.6;
   letter-spacing: -0.01em;
 }
-h1, h2, h3 { font-family: var(--font-fredoka), system-ui, sans-serif; letter-spacing: -0.03em; line-height: 1.08; }
-h1 { font-weight: 700; }
-h2 { font-weight: 600; }
+h1, h2, h3 { font-family: var(--font-display), system-serif; font-weight: 400; letter-spacing: -0.03em; line-height: 1.08; }
+h1 { font-size: clamp(2rem, 5vw, 3.25rem); }
+h2 { font-size: clamp(1.25rem, 3vw, 1.5rem); }
+h3 { font-size: clamp(1rem, 2vw, 1.125rem); }
+
+/* Anims */
 
 /* — Cards — tonal surface #1a5f48 with mint border — */
 .physi-card {
