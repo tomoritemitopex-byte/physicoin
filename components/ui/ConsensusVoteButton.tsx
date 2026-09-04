@@ -126,7 +126,7 @@ export default function ConsensusVoteButton({
         ))}
         <span className="ml-2 font-mono text-xs text-slate-400">{total}/8</span>
       </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-white/10" aria-hidden>
+      <div className="h-1.5 overflow-hidden rounded-full bg-white/10" aria-hidden="true">
         <div className="h-full bg-emerald-400 transition-all duration-500" style={{ width: `${Math.min(100, Math.round((total / 8) * 100))}%` }} />
       </div>
       <div className="flex gap-2">

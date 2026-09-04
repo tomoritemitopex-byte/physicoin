@@ -41,7 +41,7 @@ function MiniSparkline({ rep }: { rep: number }) {
   const lastUp = pts[pts.length - 1] >= pts[0];
   const col = lastUp ? "#10b981" : "#f59e0b";
   return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="shrink-0" aria-hidden>
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="shrink-0" aria-hidden="true">
       <path d={filled} fill={col} opacity={0.14} />
       <path d={points} fill="none" stroke={col} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
     </svg>

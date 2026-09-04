@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 
 type Day = { date: string; activity_count: number; is_streak_day: boolean; intensity: 0|1|2|3|4 };
-type TodayClass = { id: string; title: string; venue: string; event_date: string; event_time: string; status: string; authority_points: number; required_points: number };
+type TodayClass = { id: string; title: string; venue: string; event_date: string; event_time: string; status: string; vote_weight_yes: number; required_points: number };
 
 function dotColor(intensity: number): string {
   if (intensity===0) return "bg-white/[0.06] border-white/5";
@@ -45,7 +45,7 @@ export default function StreakHeatmap({ userId }: { userId: string }) {
     fetch(`/api/timetable?status=pending&limit=20`,{cache:"no-store"}).then(r=>r.json()).then(j=>{
       const evs: any[] = j.events || j.data || [];
       const todays = evs.filter((e:any)=> String(e.event_date).slice(0,10)===iso).slice(0,4).map((e:any)=> ({
-        id: String(e.id), title: String(e.title), venue: String(e.venue), event_date: String(e.event_date).slice(0,10), event_time: String(e.event_time).slice(0,5), status: String(e.status), authority_points: Number(e.authority_points||0), required_points: Number(e.required_points||3)
+        id: String(e.id), title: String(e.title), venue: String(e.venue), event_date: String(e.event_date).slice(0,10), event_time: String(e.event_time).slice(0,5), status: String(e.status), vote_weight_yes: Number(e.vote_weight_yes||e.yes_weight||0), required_points: Number(e.required_points||3)
       }));
       setTodayClasses(todays);
     }).catch(()=>{});
@@ -107,7 +107,7 @@ export default function StreakHeatmap({ userId }: { userId: string }) {
               <button key={c.id} onClick={()=>handleVerify(c.id)} disabled={!!verifyBusy} className="flex w-full items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5 text-left hover:bg-white hover:text-[#022c1e] disabled:opacity-50 transition group">
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[13px] font-bold text-white group-hover:text-[#022c1e]">{c.title} <span className="font-mono text-[11px] font-medium text-slate-400 group-hover:text-slate-600">· {c.venue}</span></span>
-                  <span className="font-mono text-[11px] text-slate-400 group-hover:text-slate-600">{c.event_time} · {c.authority_points}/{c.required_points} votes</span>
+                  <span className="font-mono text-[11px] text-slate-400 group-hover:text-slate-600">{c.event_time} · {c.vote_weight_yes}/{c.required_points} yes votes</span>
                 </span>
                 <span className={`shrink-0 rounded-full px-3 py-1.5 font-mono text-[11px] font-bold ${verifyBusy===c.id ? "bg-white/10 text-slate-400" : "bg-emerald-500 text-white group-hover:bg-emerald-600"}`}>{verifyBusy===c.id ? "…" : "Verify ✓"}</span>
               </button>

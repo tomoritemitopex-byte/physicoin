@@ -421,7 +421,7 @@ function RoadmapInner() {
                     <div className="min-w-0 flex-1">
                       {/* Fix 1: Venue hero 22px + 📍, title secondary */}
                       <p className="flex items-center gap-1.5 text-[22px] font-bold leading-tight tracking-tight text-white">
-                        <span aria-hidden>📍</span> {ev.venue}
+                        <span aria-hidden="true">📍</span> {ev.venue}
                         {(ev as any).group_size > 1 && <span className="rounded-full bg-amber-500/20 px-2 py-0.5 font-mono text-[10px] font-bold text-amber-300">{(ev as any).group_size} halls</span>}
                       </p>
                       <p className="mt-1 truncate text-[13px] font-medium leading-4 text-slate-400">{ev.title}</p>
