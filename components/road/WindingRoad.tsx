@@ -1,6 +1,6 @@
 "use client";
 import React, { useEffect, useState, useMemo, useCallback } from "react";
-import { BUILDINGS, LEVELS, Building } from "@/lib/campus";
+import { BUILDINGS, LEVELS } from "@/lib/campus";
 import { GhostForm, ghostsForCount, ghostForSeed } from "@/lib/ghostAvatar";
 import GhostAvatar from "@/components/road/GhostAvatar";
 
@@ -122,7 +122,7 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
 
   const displayEvents = useMemo(() => {
     if (!level) return [] as EventRow[];
-    // Fix #2: No fake-event fallback — if no real events match, return empty
+    // No fake-event fallback — honest empty state
     if (filtered.length > 0) return filtered.slice(0, 14);
     return [];
   }, [filtered, level]);

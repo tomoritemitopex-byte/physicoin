@@ -2,10 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { ArrowRight, ShieldCheck, Clock3, Users, Sparkles, MapPin } from 'lucide-react';
-import { Fredoka } from 'next/font/google';
 import CampusPreview from '@/components/road/CampusPreview';
-
-const fredoka = Fredoka({ subsets: ['latin'], weight: ['400','500','600','700'], display: 'swap', variable: '--font-fredoka' });
 
 function LiveTicker({ items }: { items: string[] }) {
   if (!items.length) {

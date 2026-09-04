@@ -91,7 +91,6 @@ export default function CampusMap({ events, onVerify }: { events: EventRow[]; on
   const [buildingId, setBuildingId] = useState<string | null>(null);
   const [level, setLevel] = useState<string | null>(null);
   const [verifying, setVerifying] = useState<string | null>(null);
-  const [levelCounts, setLevelCounts] = useState<Record<string, number>>({});
   const [pollTick, setPollTick] = useState(0);
   const building = useMemo(() => BUILDINGS.find((b) => b.id === buildingId) || null, [buildingId]);
 
@@ -144,7 +143,6 @@ export default function CampusMap({ events, onVerify }: { events: EventRow[]; on
   const displayEvents = useMemo(() => {
     if (!level) return [] as EventRow[];
     if (filtered.length > 0) return filtered.slice(0, 12);
-    // No fake fallback — honest empty state
     return [];
   }, [filtered, level]);
 

@@ -8,7 +8,7 @@ export const metadata = {
 
 export default function TermsPage() {
   return (
-    <div className="min-h-screen bg-[#022c1e] text-slate-200">
+    <div className="min-h-screen bg-[#0d3b2a] text-slate-200">
       <div className="mx-auto max-w-[820px] px-6 py-10 lg:px-8">
         <a href="/" className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-1.5 text-[13px] text-slate-300 hover:bg-white/[0.08] transition">
           ← Back to home
@@ -17,7 +17,7 @@ export default function TermsPage() {
         <p className="mt-2 font-mono text-[12px] text-slate-500">Last updated · 29 Aug 2026 · PHYSI · Built by students, for students</p>
         <p className="mt-2 text-sm text-emerald-200/80">PHYSI is live and growing with you. Your contributions shape the app.</p>
 
-        <div className="mt-8 space-y-6 rounded-[20px] border border-white/[0.06] bg-white/[0.02] p-6 backdrop-blur sm:p-8">
+        <div className="mt-8 space-y-6 rounded-[20px] border border-white/[0.06] bg-[#1a5f48] p-6 backdrop-blur sm:p-8">
           <section>
             <h2 className="text-[14px] font-semibold text-white">1. Advisory only — not official</h2>
             <p className="mt-2 text-[13.5px] leading-6 text-slate-400">
@@ -34,7 +34,7 @@ export default function TermsPage() {
             <ul className="mt-3 list-disc pl-5 text-[13px] leading-6 text-slate-400">
               <li>Daily check-in grants up to ~1 PHYSI point, multiplied by your handle&apos;s authority weight.</li>
               <li>Balance is reset/expiry after 24h — there is no wallet, no withdrawal, no promise of future value.</li>
-              <li>PHYSI may change, pause or end energy rules at any time without notice.</li>
+              <li>PHYSI may change, pause or end PHYSI point rules at any time without notice.</li>
             </ul>
           </section>
 
