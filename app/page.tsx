@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { ArrowRight, ShieldCheck, Clock3, Users, Sparkles, MapPin } from 'lucide-react';
 import CampusPreview from '@/components/road/CampusPreview';
+import SplashScreen from '@/components/road/SplashScreen';
 
 function LiveTicker({ items }: { items: string[] }) {
   if (!items.length) {
@@ -52,9 +53,13 @@ export default function LandingPage() {
   const totalEvents = stats?.metrics?.events ?? stats?.counts?.physi_events ?? 0;
   const verifiedCount = stats?.metrics?.events_by_status?.verified ?? 0;
   const statsLoaded = !!stats;
+  const [showSplash, setShowSplash] = useState(true);
 
   return (
     <div className="min-h-screen bg-[#0d3b2a] text-[#f0fdf4] selection:bg-[#34d399] selection:text-[#022c1e]" style={{ fontFamily: 'var(--font-fredoka), system-ui, sans-serif' }}>
+      {/* Splash overlay — fades out after load */}
+      {showSplash && <SplashScreen onReady={() => setShowSplash(false)} />}
+
       {/* Tonal depth — mid green glow over forest base */}
       <div aria-hidden="true" className="pointer-events-none fixed inset-0">
         <div className="absolute inset-0 bg-[#0d3b2a]" />
