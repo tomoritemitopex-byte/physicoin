@@ -40,9 +40,9 @@ function BottomNav({ pathname }: { pathname: string | null }) {
         const r = await fetch("/api/timetable?limit=200",{ cache:"no-store"}); const j = await r.json().catch(()=>({} as any));
         const mine = (j.events ?? []).filter((e:any)=> String(e.created_by)===String(uid));
         if(cancelled) return;
-        const totalAp = mine.reduce((s:any,e:any)=> s+ Number(e.authority_points||0),0);
+        const totalYes = mine.reduce((s:any,e:any)=> s+ Number(e.vote_weight_yes||0),0);
         const last = Number(localStorage.getItem(`physi_mine_seen_${uid}`) || "0");
-        if(last>0 && totalAp>last) setMineDot(true);
+        if(last>0 && totalYes>last) setMineDot(true);
       }catch{}
     }
     check();

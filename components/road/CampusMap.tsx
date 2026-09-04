@@ -13,16 +13,21 @@ type EventRow = {
   scope_type: string;
   scope_value: string | null;
   status: string;
-  authority_points: number | string;
-  required_points: number | string;
+  required_points?: number | string;
+  created_at?: string;
+  created_by?: string | null;
+  slot_key?: string;
+  vote_weight_yes?: number;
+  vote_weight_no?: number;
+  tally_text?: string;
+  progress_pct?: number;
   severity?: string;
 };
 
 function isVerified(ev: EventRow) {
   if (ev.status === "verified") return true;
-  const ap = Number(ev.authority_points ?? 0);
-  const rp = Number(ev.required_points ?? 0);
-  return rp > 0 && ap >= rp;
+  const yes = Number(ev.vote_weight_yes ?? 0);
+  return yes >= (Number(ev.required_points ?? 0) || 8);
 }
 
 /** Ephemeral avatar drift — no DB writes. Morphs on verification poll tick. */
@@ -107,7 +112,7 @@ export default function CampusMap({ events, onVerify }: { events: EventRow[]; on
   const [levelRestored, setLevelRestored] = useState(false);
 
   // when building changes, reset level (but not if auto-restored from profile)
-  useEffect(() => { if (buildingId && levelRestored) setLevel(null); }, [buildingId]);
+  useEffect(() => { if (buildingId && !levelRestored) setLevel(null); }, [buildingId, levelRestored]);
 
   // auto-restore level from localStorage profile
   useEffect(() => {

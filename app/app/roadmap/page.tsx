@@ -13,7 +13,7 @@ import WindingRoad from "@/components/road/WindingRoad";
 type EventRow = {
   id: string; title: string; venue: string; event_date: string; event_time: string;
   scope_type: string; scope_value: string | null; status: string;
-  authority_points: number | string; required_points: number | string;
+  required_points?: number | string;
   created_at: string; created_by?: string | null;
   slot_key?: string; vote_weight_yes?: number; vote_weight_no?: number;
   tally_text?: string; progress_pct?: number; contenders?: any[]; venue_options?: string[]; group_size?: number; is_grouped?: boolean;
@@ -21,13 +21,14 @@ type EventRow = {
 
 function isVerified(ev: EventRow) {
   if (ev.status === "verified") return true;
-  const ap = Number(ev.authority_points ?? 0), rp = Number(ev.required_points ?? 0);
-  return rp > 0 && ap >= rp;
+  const yes = Number(ev.vote_weight_yes ?? 0);
+  return yes >= (Number(ev.required_points ?? 0) || 8);
 }
 function pctOf(ev: EventRow) {
-  const ap = Number(ev.authority_points ?? 0), rp = Number(ev.required_points ?? 0);
+  const yes = Number(ev.vote_weight_yes ?? 0);
+  const rp = Number(ev.required_points ?? 0);
   if (rp <= 0) return isVerified(ev) ? 100 : 0;
-  return Math.min(100, Math.round((ap / rp) * 100));
+  return Math.min(100, Math.round((yes / rp) * 100));
 }
 
 export default function RoadmapPage() {
@@ -401,10 +402,10 @@ function RoadmapInner() {
           {filtered.map(ev=> {
             const v = isVerified(ev);
             const p = (ev as any).progress_pct ?? pctOf(ev);
-            const tally = (ev as any).tally_text || (v ? `✓ Confirmed — ${Number(ev.authority_points)}/${Number(ev.required_points)||3} said yes` : `${Number(ev.authority_points)||0} of ${Number(ev.required_points)||3} said yes — needs ${Math.max(0, (Number(ev.required_points)||3)-(Number(ev.authority_points)||0))} more`);
+            const tally = (ev as any).tally_text || (v ? `✓ Confirmed — ${Number(ev.vote_weight_yes ?? 0)}/${Number(ev.required_points)||3} said yes` : `${Number(ev.vote_weight_yes ?? 0) || 0} of ${Number(ev.required_points)||3} said yes — needs ${Math.max(0, (Number(ev.required_points)||3)-(Number(ev.vote_weight_yes ?? 0) || 0))} more`);
             const contenders = (ev as any).contenders || [];
             const venueOpts = (ev as any).venue_options || [ev.venue];
-            const weightYes = Number((ev as any).vote_weight_yes ?? ev.authority_points ?? 0);
+            const weightYes = Number((ev as any).vote_weight_yes ?? 0);
             const filledDots = Math.min(8, Math.max(0, Math.ceil(weightYes)));
             return (
               <article

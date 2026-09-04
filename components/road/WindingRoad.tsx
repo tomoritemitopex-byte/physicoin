@@ -11,16 +11,15 @@ import GhostAvatar from "@/components/road/GhostAvatar";
 type EventRow = {
   id: string; title: string; venue: string; event_date: string; event_time: string;
   scope_type: string; scope_value: string | null; status: string;
-  authority_points: number | string; required_points: number | string;
   created_at: string; created_by?: string | null;
-  slot_key?: string; vote_weight_yes?: number; vote_weight_no?: number;
+  slot_key?: string; required_points?: number | string; vote_weight_yes?: number; vote_weight_no?: number;
   tally_text?: string; progress_pct?: number; contenders?: any[]; venue_options?: string[]; group_size?: number; is_grouped?: boolean; severity?: string;
 };
 
 function isVerified(ev: EventRow) {
   if (ev.status === "verified") return true;
-  const ap = Number(ev.authority_points ?? 0), rp = Number(ev.required_points ?? 0);
-  return rp > 0 && ap >= rp;
+  const yes = Number(ev.vote_weight_yes ?? 0);
+  return yes >= (Number(ev.required_points ?? 0) || 8);
 }
 
 /** Ephemeral avatar drift — no DB writes. */
@@ -94,9 +93,9 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
 
   const [levelRestored, setLevelRestored] = useState(false);
   useEffect(() => {
-    // Don't clear level if it was auto-restored from profile (first tap shouldn't wipe)
-    if (buildingId && levelRestored) setLevel(null);
-  }, [buildingId]);
+    // Clear level when building changes — but not if auto-restored from profile (applies to all buildings)
+    if (buildingId && !levelRestored) setLevel(null);
+  }, [buildingId, levelRestored]);
   useEffect(() => {
     // Auto-restore level from localStorage profile on mount for student-native default
     if (typeof window === "undefined") return;
@@ -423,7 +422,7 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
                   <span className="font-mono text-[10px] text-white/40">·</span>
                   <span className="font-mono text-[10px] text-white/40">{ev.scope_type}{ev.scope_value ? ` · ${ev.scope_value}` : ""}</span>
                 </div>
-                <div className="urgency-bar"><div className="urgency-fill" style={{ width: `${Math.max(0, Math.min(100, 100 - (Number(ev.authority_points ?? 0) / Math.max(1, Number(ev.required_points ?? 1))) * 100))}%` }} /></div>
+                <div className="urgency-bar"><div className="urgency-fill" style={{ width: `${Math.max(0, Math.min(100, 100 - (Number(ev.vote_weight_yes ?? 0) / Math.max(1, Number(ev.required_points ?? 1))) * 100))}%` }} /></div>
                 <div className="flex items-center justify-between mt-1">
                   <span className="urgency-label">{cnt} verified</span>
                   <div className="ghost-row">{Array.from({ length: Math.min(cnt, 5) }).map((_, gi) => { const gf = ghostForSeed(`f-${ev.id}-${gi}`, Date.now()); return <span key={gi} className="ghost-dot inline-block rounded-full" style={{ background: gf.fg, width: 14, height: 14, border: "2px solid rgba(2,44,30,0.5)" }} aria-hidden="true" /> })}</div>
