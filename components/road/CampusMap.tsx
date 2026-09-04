@@ -95,28 +95,31 @@ export default function CampusMap({ events, onVerify }: { events: EventRow[]; on
     const m: Record<string, number> = {};
     for (const b of BUILDINGS) m[b.id] = 0;
     for (const ev of events) {
-      const v = String(ev.scope_value || "").toLowerCase();
-      // distribute by level presence; also naive by venue/title contains code
       for (const b of BUILDINGS) {
         if (String(ev.title).toLowerCase().includes(b.code.toLowerCase()) || String(ev.venue).toLowerCase().includes(b.code.toLowerCase())) {
           m[b.id]++;
         }
       }
-      // every event also counts generally for PHYS to avoid empty
-      if (!Object.values(m).some((c) => c > 0)) {}
-    }
-    // fallback: spread events evenly for demo if none matched
-    const totalMatched = Object.values(m).reduce((a, b) => a + b, 0);
-    if (totalMatched === 0) {
-      BUILDINGS.forEach((b, i) => (m[b.id] = Math.floor(events.length / BUILDINGS.length) + (i < events.length % BUILDINGS.length ? 1 : 0)));
     }
     return m;
   }, [events]);
 
-  // when building changes, reset level
+  const [levelRestored, setLevelRestored] = useState(false);
+
+  // when building changes, reset level (but not if auto-restored from profile)
+  useEffect(() => { if (buildingId && levelRestored) setLevel(null); }, [buildingId]);
+
+  // auto-restore level from localStorage profile
   useEffect(() => {
-    if (buildingId) setLevel(null);
-  }, [buildingId]);
+    if (typeof window === "undefined") return;
+    const raw = localStorage.getItem("physi_profile");
+    if (raw) {
+      try {
+        const level_ = JSON.parse(raw)?.level;
+        if (level_) { setLevel(level_); setLevelRestored(true); }
+      } catch {}
+    }
+  }, []);
 
   // filtered events for selected building+level
   const filtered = useMemo(() => {
@@ -127,9 +130,6 @@ export default function CampusMap({ events, onVerify }: { events: EventRow[]; on
       const lv = level.toLowerCase();
       if (sv === lv) return true;
       if (sv === "" && String(ev.title).toLowerCase().includes(lv)) return true;
-      // general scope also shown for the level to avoid emptiness in demo
-      if (String(ev.scope_type).toLowerCase() === "general") return true;
-      // allow all events when demo has low coverage: show up to 8 for every level
       return false;
     });
   }, [events, level]);
@@ -138,14 +138,9 @@ export default function CampusMap({ events, onVerify }: { events: EventRow[]; on
   const displayEvents = useMemo(() => {
     if (!level) return [] as EventRow[];
     if (filtered.length > 0) return filtered.slice(0, 12);
-    // fallback demo: show events cyclically per level so no dead screen
-    if (events.length === 0) return [] as EventRow[];
-    const idx = LEVELS.indexOf(level as any);
-    const start = (idx * 2) % events.length;
-    const out: EventRow[] = [];
-    for (let i = 0; i < Math.min(6, events.length); i++) out.push(events[(start + i) % events.length]);
-    return out;
-  }, [filtered, events, level]);
+    // No fake fallback — honest empty state
+    return [];
+  }, [filtered, level]);
 
   // ephemeral ghosts per event — derived from verification count + poll tick (no DB)
   const [verifyCounts, setVerifyCounts] = useState<Record<string, number>>({});
@@ -160,12 +155,9 @@ export default function CampusMap({ events, onVerify }: { events: EventRow[]; on
           const j = await r.json().catch(() => ({} as any));
           const rows: any[] = j.verifications ?? j.rows ?? [];
           const yes = rows.filter((x: any) => String(x.vote).toUpperCase() === "YES").length;
-          // at least show authority_points as ghost count fallback
-          const ap = Number(ev.authority_points ?? 0);
-          const c = yes > 0 ? yes : Math.min(5, Math.max(0, Math.round(ap)));
-          if (!cancel) setVerifyCounts((m) => ({ ...m, [ev.id]: c }));
+          if (!cancel) setVerifyCounts((m) => ({ ...m, [ev.id]: yes }));
         } catch {
-          if (!cancel) setVerifyCounts((m) => ({ ...m, [ev.id]: Math.min(3, Math.round(Number(ev.authority_points ?? 0))) }));
+          if (!cancel) setVerifyCounts((m) => ({ ...m, [ev.id]: 0 }));
         }
       }
       if (!cancel) setPollTick((t) => t + 1);
@@ -179,7 +171,7 @@ export default function CampusMap({ events, onVerify }: { events: EventRow[]; on
   }, [level, displayEvents.map((e) => e.id).join(",")]);
 
   const handleVerify = useCallback(
-    async (ev: EventRow) => {
+    async (ev: EventRow, vote: "YES" | "NO" = "YES") => {
       setVerifying(ev.id);
       try {
         let uid: string | null = null;
@@ -188,9 +180,9 @@ export default function CampusMap({ events, onVerify }: { events: EventRow[]; on
           if (raw) uid = JSON.parse(raw)?.id ?? null;
         } catch {}
         if (!uid) {
-          // anon local ghost verify — ephemeral only, no DB?
-          // But we still bump local count for drift demo
-          setVerifyCounts((m) => ({ ...m, [ev.id]: (m[ev.id] ?? 0) + 1 }));
+          if (vote === "YES") {
+            setVerifyCounts((m) => ({ ...m, [ev.id]: (m[ev.id] ?? 0) + 1 }));
+          }
           setPollTick((t) => t + 1);
           if (onVerify) onVerify(ev);
           setVerifying(null);
@@ -199,19 +191,22 @@ export default function CampusMap({ events, onVerify }: { events: EventRow[]; on
         const r = await fetch("/api/verify", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ verifier_id: uid, event_id: ev.id, vote: "YES" }),
+          body: JSON.stringify({ verifier_id: uid, event_id: ev.id, vote }),
         });
         const j = await r.json().catch(() => ({} as any));
         if (r.ok && j.ok !== false) {
-          setVerifyCounts((m) => ({ ...m, [ev.id]: (m[ev.id] ?? 0) + 1 }));
+          if (vote === "YES") {
+            setVerifyCounts((m) => ({ ...m, [ev.id]: (m[ev.id] ?? 0) + 1 }));
+          }
           setPollTick((t) => t + 1);
           if (onVerify) onVerify(ev);
         } else {
-          // even on error, show ephemeral drift
-          setVerifyCounts((m) => ({ ...m, [ev.id]: (m[ev.id] ?? 0) + 1 }));
+          // Failed POST — do not increment; notify parent to refresh
+          if (onVerify) onVerify(ev);
         }
       } catch {
-        setVerifyCounts((m) => ({ ...m, [ev.id]: (m[ev.id] ?? 0) + 1 }));
+        // Network error — do not increment; notify parent to refresh
+        if (onVerify) onVerify(ev);
       } finally {
         setVerifying(null);
       }
@@ -298,7 +293,7 @@ export default function CampusMap({ events, onVerify }: { events: EventRow[]; on
                 ) : (
                   displayEvents.map((ev) => {
                     const verified = isVerified(ev);
-                    const cnt = verifyCounts[ev.id] ?? Math.min(3, Math.round(Number(ev.authority_points ?? 0))) ?? 0;
+                    const cnt = verifyCounts[ev.id] ?? 0;
                     return (
                       <EventRowCard key={ev.id} ev={ev} verified={verified} count={cnt} verifying={verifying === ev.id} onVerify={() => handleVerify(ev)} pollTick={pollTick} />
                     );

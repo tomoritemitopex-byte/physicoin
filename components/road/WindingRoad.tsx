@@ -183,11 +183,12 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
         }
         if (onVerify) onVerify(ev);
       } else {
-        // Failed POST — do not optimistically increment; show error state
+        // Failed POST — do not increment; notify parent to refresh
         if (onVerify) onVerify(ev);
       }
     } catch {
-      // Network error — do not increment
+      // Network error — do not increment; notify parent to refresh
+      if (onVerify) onVerify(ev);
     } finally {
       setVerifying(null);
     }

@@ -59,7 +59,7 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-[#0d3b2a] text-[#f0fdf4] selection:bg-[#34d399] selection:text-[#022c1e]" style={{ fontFamily: 'var(--font-fredoka), system-ui, sans-serif' }}>
       {/* Tonal depth — mid green glow over forest base */}
-      <div aria-hidden className="pointer-events-none fixed inset-0">
+      <div aria-hidden="true" className="pointer-events-none fixed inset-0">
         <div className="absolute inset-0 bg-[#0d3b2a]" />
         <div className="absolute -top-40 left-1/2 h-[520px] w-[900px] -translate-x-1/2 rounded-full opacity-[0.32]" style={{ background: "radial-gradient(ellipse at center, #1a5f48, transparent 70%)" }} />
         <div className="absolute top-[32%] right-[-4%] h-[380px] w-[380px] rounded-full opacity-[0.10]" style={{ background: "radial-gradient(ellipse at center, #022c1e, transparent 70%)" }} />
@@ -125,9 +125,6 @@ export default function LandingPage() {
               <div className="p-2">
                 <CampusPreview />
               </div>
-              <div className="border-t border-[rgba(52,211,153,0.12)] bg-[#0d3b2a]/30 px-4 py-3 text-center">
-                <p className="font-mono text-[11px] text-[rgba(240,253,244,0.45)]">Map · List inside — tap nodes to verify</p>
-              </div>
             </div>
           </div>
         </section>
@@ -144,7 +141,11 @@ export default function LandingPage() {
         )}
 
         <div className="mt-3">
-          <LiveTicker items={ticker} />
+          {statsLoaded ? <LiveTicker items={ticker} /> : (
+            <div className="animate-pulse rounded-full border border-[rgba(52,211,153,0.15)] bg-[#1a5f48]/60 px-4 py-2.5 font-mono text-xs text-[rgba(240,253,244,0.55)]">
+              Loading live confirmations…
+            </div>
+          )}
         </div>
 
         {/* ── How it works — 3 steps, tonal cards ── */}
