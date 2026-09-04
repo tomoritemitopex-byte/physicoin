@@ -83,20 +83,20 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
     const m: Record<string, number> = {};
     for (const b of BUILDINGS) m[b.id] = 0;
     for (const ev of events) {
-      const v = String(ev.scope_value || "").toLowerCase();
       for (const b of BUILDINGS) {
         if (String(ev.title).toLowerCase().includes(b.code.toLowerCase()) || String(ev.venue).toLowerCase().includes(b.code.toLowerCase())) {
           m[b.id]++;
         }
       }
     }
-    const totalMatched = Object.values(m).reduce((a, b) => a + b, 0);
-    // No fake distribution — if no venue matches, show zeros. Honest empty state.
     return m;
   }, [events]);
 
   const [levelRestored, setLevelRestored] = useState(false);
-  useEffect(() => { if (buildingId && levelRestored) setLevel(null); }, [buildingId, levelRestored]);
+  useEffect(() => {
+    // Don't clear level if it was auto-restored from profile (first tap shouldn't wipe)
+    if (buildingId && levelRestored) setLevel(null);
+  }, [buildingId]);
   useEffect(() => {
     // Auto-restore level from localStorage profile on mount for student-native default
     if (typeof window === "undefined") return;
@@ -139,11 +139,9 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
           const j = await r.json().catch(() => ({} as any));
           const rows: any[] = j.verifications ?? j.rows ?? [];
           const yes = rows.filter((x: any) => String(x.vote).toUpperCase() === "YES").length;
-          const ap = Number(ev.authority_points ?? 0);
-          const c = yes > 0 ? yes : Math.min(5, Math.max(0, Math.round(ap)));
-          if (!cancel) setVerifyCounts((m) => ({ ...m, [ev.id]: c }));
+          if (!cancel) setVerifyCounts((m) => ({ ...m, [ev.id]: yes }));
         } catch {
-          if (!cancel) setVerifyCounts((m) => ({ ...m, [ev.id]: Math.min(3, Math.round(Number(ev.authority_points ?? 0))) }));
+          if (!cancel) setVerifyCounts((m) => ({ ...m, [ev.id]: 0 }));
         }
       }
     }
@@ -180,13 +178,16 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
       });
       const j = await r.json().catch(() => ({} as any));
       if (r.ok && j.ok !== false) {
-        setVerifyCounts((m) => ({ ...m, [ev.id]: (m[ev.id] ?? 0) + 1 }));
+        if (vote === "YES") {
+          setVerifyCounts((m) => ({ ...m, [ev.id]: (m[ev.id] ?? 0) + 1 }));
+        }
         if (onVerify) onVerify(ev);
       } else {
-        setVerifyCounts((m) => ({ ...m, [ev.id]: (m[ev.id] ?? 0) + 1 }));
+        // Failed POST — do not optimistically increment; show error state
+        if (onVerify) onVerify(ev);
       }
     } catch {
-      setVerifyCounts((m) => ({ ...m, [ev.id]: (m[ev.id] ?? 0) + 1 }));
+      // Network error — do not increment
     } finally {
       setVerifying(null);
     }
@@ -321,7 +322,7 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
               ) : (
                 displayEvents.map((ev, i) => {
                   const verified = isVerified(ev);
-                  const cnt = verifyCounts[ev.id] ?? Math.min(3, Math.round(Number(ev.authority_points ?? 0))) ?? 0;
+                  const cnt = verifyCounts[ev.id] ?? 0;
                   const ghostForm = forms[i % forms.length];
                   const timeLeft = ev.event_date ? Math.max(0, Math.round((new Date(ev.event_date + "T" + (ev.event_time || "00:00")).getTime() - Date.now()) / 3600000)) : 24;
                   const urgencyPct = Math.max(0, Math.min(100, 100 - (timeLeft / 24) * 100));
@@ -394,7 +395,7 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
           </div>
           {events.slice(0, 12).map((ev) => {
             const verified = isVerified(ev);
-            const cnt = verifyCounts[ev.id] ?? Math.min(3, Math.round(Number(ev.authority_points ?? 0))) ?? 0;
+            const cnt = verifyCounts[ev.id] ?? 0;
             const ghostForm = forms[0];
             return (
               <div key={ev.id} className="swipe-zone whatsapp-event" onTouchStart={(e) => { (e.currentTarget as any)._sx = e.touches[0].clientX; (e.currentTarget as any)._sy = e.touches[0].clientY; }} onTouchEnd={(e) => {

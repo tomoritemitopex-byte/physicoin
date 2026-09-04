@@ -8,7 +8,13 @@ import CampusPreview from '@/components/road/CampusPreview';
 const fredoka = Fredoka({ subsets: ['latin'], weight: ['400','500','600','700'], display: 'swap', variable: '--font-fredoka' });
 
 function LiveTicker({ items }: { items: string[] }) {
-  if (!items.length) return null;
+  if (!items.length) {
+    return (
+      <div className="rounded-full border border-[rgba(52,211,153,0.15)] bg-[#1a5f48]/60 px-4 py-2.5 font-mono text-xs text-[rgba(240,253,244,0.55)]">
+        No recent confirmations — be the first to post
+      </div>
+    );
+  }
   const doubled = [...items, ...items];
   return (
     <div className="overflow-hidden rounded-full border border-[rgba(52,211,153,0.15)] bg-[#1a5f48]/60 backdrop-blur">
@@ -47,7 +53,8 @@ export default function LandingPage() {
   }, []);
 
   const totalEvents = stats?.metrics?.events ?? stats?.counts?.physi_events ?? 0;
-  const verifiedCount = stats?.metrics?.verifications ?? stats?.metrics?.events_by_status?.verified ?? 0;
+  const verifiedCount = stats?.metrics?.events_by_status?.verified ?? 0;
+  const statsLoaded = !!stats;
 
   return (
     <div className="min-h-screen bg-[#0d3b2a] text-[#f0fdf4] selection:bg-[#34d399] selection:text-[#022c1e]" style={{ fontFamily: 'var(--font-fredoka), system-ui, sans-serif' }}>
@@ -67,8 +74,8 @@ export default function LandingPage() {
             <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-[rgba(52,211,153,0.15)] bg-[#1a5f48]/70 px-2.5 py-1 font-mono text-[11px] text-[rgba(240,253,244,0.70)]">advisory · not official</span>
           </div>
           <nav className="flex items-center gap-2">
-            <a href="/app/profile" className="hidden sm:inline-flex text-sm font-medium text-[rgba(240,253,244,0.70)] hover:text-[#f0fdf4] transition px-3 py-1.5">Create profile</a>
-            <a href="/app/roadmap" className="inline-flex items-center gap-1.5 rounded-full bg-[#34d399] px-5 py-2 text-sm font-semibold text-[#022c1e] hover:bg-[#6ee7b7] transition">Open app <ArrowRight className="h-3.5 w-3.5" /></a>
+            <a href="/app/roadmap" className="hidden sm:inline-flex text-sm font-medium text-[rgba(240,253,244,0.70)] hover:text-[#f0fdf4] transition px-3 py-1.5">See live timetable</a>
+            <a href="/app/roadmap" className="inline-flex items-center gap-1.5 rounded-full bg-[#34d399] px-5 py-2 text-sm font-semibold text-[#022c1e] hover:bg-[#6ee7b7] transition">See live timetable <ArrowRight className="h-3.5 w-3.5" /></a>
           </nav>
         </div>
       </header>
@@ -84,9 +91,13 @@ export default function LandingPage() {
             </div>
 
             <h1 className="mt-6 text-[34px] font-bold leading-[0.95] tracking-[-0.04em] sm:text-[44px] lg:text-[52px] text-[#f0fdf4]">
-              Never trek to <br />
-              <span className="text-[rgba(240,253,244,0.70)]">the wrong hall</span> <br />
-              again.
+              <span>
+                Never trek to
+                <br />
+                <span className="text-[rgba(240,253,244,0.70)]">the wrong hall </span>
+                <br />
+                again.
+              </span>
             </h1>
 
             <p className="mt-5 max-w-[520px] text-[16px] leading-7 text-[rgba(240,253,244,0.70)]">
@@ -121,14 +132,16 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* ── Live proof — tonal strip ── */}
+        {/* ── Live proof — only show after stats loaded ── */}
+        {statsLoaded && (
         <section className="flex flex-wrap items-center gap-3 rounded-2xl border border-[rgba(52,211,153,0.15)] bg-[#1a5f48]/60 px-5 py-4">
           <span className="inline-flex items-center gap-2 rounded-full bg-[rgba(251,191,36,0.14)] border border-[rgba(251,191,36,0.18)] px-3 py-1.5 font-mono text-xs font-semibold text-[#fbbf24]"><span className="h-2 w-2 rounded-full bg-[#fbbf24] animate-pulse" /> Live proof</span>
           <span className="rounded-full border border-[rgba(52,211,153,0.15)] bg-[#022c1e]/30 px-3 py-1.5 font-mono text-xs text-[#f0fdf4]">{totalEvents} events</span>
           <span className="rounded-full border border-[rgba(251,191,36,0.18)] bg-[rgba(251,191,36,0.10)] px-3 py-1.5 font-mono text-xs text-[#fbbf24]">{verifiedCount} verified</span>
-          <span className="ml-auto hidden sm:inline font-mono text-xs text-[rgba(240,253,244,0.55)]">updates every 30s · /api/stats</span>
+          <span className="ml-auto hidden sm:inline font-mono text-xs text-[rgba(240,253,244,0.55)]">updates every 30s</span>
           <a href="/app/roadmap" className="rounded-full bg-[#34d399] px-4 py-1.5 text-xs font-bold text-[#022c1e] hover:bg-[#6ee7b7] transition">See timetable →</a>
         </section>
+        )}
 
         <div className="mt-3">
           <LiveTicker items={ticker} />
@@ -168,7 +181,9 @@ export default function LandingPage() {
           ))}
         </section>
 
-        <p className="mt-10 text-center font-mono text-xs text-[rgba(240,253,244,0.55)]">Live from /api/stats: {totalEvents} events · {verifiedCount} verified · updates every 30s</p>
+        {statsLoaded && (
+          <p className="mt-10 text-center font-mono text-xs text-[rgba(240,253,244,0.55)]">Live from campus: {totalEvents} events · {verifiedCount} verified · updates every 30s</p>
+        )}
 
         {/* ── Final CTA — mint on shadow, gold accent ── */}
         <section className="mt-10 overflow-hidden rounded-[20px] border border-[rgba(52,211,153,0.18)] bg-gradient-to-br from-[#1a5f48] to-[#0d3b2a] px-6 py-10 text-center sm:px-10 shadow-[0_12px_32px_rgba(2,44,30,0.35)]">

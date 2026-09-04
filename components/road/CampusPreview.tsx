@@ -53,7 +53,6 @@ export default function CampusPreview() {
         viewBox="0 0 100 720"
         preserveAspectRatio="xMidYMid slice"
         style={{ height: "400px", width: "100%" }}
-        aria-hidden="true"
         role="img"
         aria-label="Campus road — department buildings along a winding path"
       >
@@ -120,31 +119,32 @@ export default function CampusPreview() {
           return (
             <g key={b.id}>
               <rect
-                x={pos.x - 3}
-                y={pos.y - 3}
-                width="6"
-                height="6"
-                rx="1.5"
-                ry="1.5"
+                x={pos.x - 6}
+                y={pos.y - 6}
+                width="12"
+                height="12"
+                rx="4"
+                ry="4"
                 fill={b.color}
                 stroke={hovered ? "#fbbf24" : "rgba(240,253,244,0.3)"}
                 strokeWidth={hovered ? "1.5" : "1"}
                 filter={hovered ? "url(#node-glow-mini)" : undefined}
-                style={{ transition: "all 180ms ease" }}
+                style={{ transition: "all 180ms ease", cursor: "pointer" }}
                 onMouseEnter={() => setHoveredId(b.id)}
                 onMouseLeave={() => setHoveredId(null)}
                 onFocus={() => setHoveredId(b.id)}
                 onBlur={() => setHoveredId(null)}
+                onClick={() => (window.location.href = "/app/roadmap")}
                 tabIndex={0}
                 role="button"
-                aria-label={`${b.label} — ${b.code}`}
+                aria-label={`${b.label} — ${b.code}. Tap to enter map`}
               />
               {/* Department code below node */}
               <text
                 x={pos.x}
                 y={pos.y + 10}
                 textAnchor="middle"
-                fontSize="2.6"
+                fontSize="7"
                 fontWeight="700"
                 fill="rgba(240,253,244,0.6)"
                 fontFamily="var(--font-fredoka), system-ui, sans-serif"
