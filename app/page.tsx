@@ -35,19 +35,19 @@ export default function LandingPage() {
         const j = await r.json().catch(()=>null);
         if (!j || cancelled) return;
         setStats(j);
-        const fallbacks = ["alex_02 verified BIO 101 · now","zara_11 confirmed CHM 111 · 3m ago","mike_07 was there for PHY 101 · 6m ago"];
+        const fallbacks: string[] = [];
         let items: string[] | null = null;
         if (Array.isArray(j?.recent)) items = j.recent.slice(0,5).map((x:any)=> `${String(x.handle||x.name||"someone")} verified ${String(x.title||"event")} · now`);
         if (items?.length) setTicker(items); else setTicker(fallbacks);
-      } catch { if (!cancelled) setTicker(["alex_02 verified BIO 101 · now","zara_11 confirmed CHM 111 · 3m ago"]); }
+      } catch { if (!cancelled) setTicker([]); }
     }
     load();
     const iv = setInterval(load, 30000);
     return () => { cancelled=true; clearInterval(iv); };
   }, []);
 
-  const totalEvents = stats?.metrics?.events ?? stats?.counts?.physi_events ?? 42;
-  const verifiedCount = stats?.metrics?.verifications ?? stats?.metrics?.events_by_status?.verified ?? Math.round(totalEvents*0.35);
+  const totalEvents = stats?.metrics?.events ?? stats?.counts?.physi_events ?? 0;
+  const verifiedCount = stats?.metrics?.verifications ?? stats?.metrics?.events_by_status?.verified ?? 0;
 
   return (
     <div className="min-h-screen bg-[#0d3b2a] text-[#f0fdf4] selection:bg-[#34d399] selection:text-[#022c1e]" style={{ fontFamily: 'var(--font-fredoka), system-ui, sans-serif' }}>
@@ -110,17 +110,15 @@ export default function LandingPage() {
             </div>
           </div>
 
-          {/* Hero card — campus preview with winding road */}
+          {/* Hero card — campus preview */}
           <div className="relative">
             <div className="absolute -inset-6 -z-10 rounded-[28px] bg-[#1a5f48]/20 blur-xl" />
             <div className="overflow-hidden rounded-[20px] border border-[rgba(52,211,153,0.15)] bg-[#1a5f48] backdrop-blur-xl shadow-[0_16px_48px_rgba(2,44,30,0.45)]">
-              <div className="p-4">
-                <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-[rgba(240,253,244,0.55)]">Live campus · 8 buildings · tap a node to enter</p>
+              <div className="p-2">
                 <CampusPreview />
               </div>
-              <div className="flex items-center justify-center gap-2 border-t border-[rgba(52,211,153,0.12)] bg-[#0d3b2a]/30 px-4 py-3">
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#34d399] text-[10px] font-bold text-[#022c1e]">You</span>
-                <p className="text-[13px] text-[rgba(240,253,244,0.80)]">Were you there? Tap <span className="font-semibold text-[#f0fdf4]">Yes / No</span> — no forms.</p>
+              <div className="border-t border-[rgba(52,211,153,0.12)] bg-[#0d3b2a]/30 px-4 py-3 text-center">
+                <p className="font-mono text-[11px] text-[rgba(240,253,244,0.45)]">Map · List inside — tap nodes to verify</p>
               </div>
             </div>
           </div>

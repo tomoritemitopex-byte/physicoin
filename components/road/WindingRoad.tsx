@@ -1,11 +1,10 @@
 "use client";
-import React, { useEffect, useState, useMemo, useRef, useCallback } from "react";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { BUILDINGS, LEVELS, Building } from "@/lib/campus";
 import { GhostForm, ghostsForCount, ghostForSeed } from "@/lib/ghostAvatar";
 import GhostAvatar from "@/components/road/GhostAvatar";
 
 /** WindingRoad — Candy Crush-style serpentine road through the campus.
- * Replaces the old grid-of-cards CampusMap.
  * Events + verify calls flow up to the parent RoadmapPage via `events` prop.
  */
 
@@ -31,13 +30,11 @@ function pctOf(ev: EventRow) {
 
 /** Ephemeral avatar drift — no DB writes. */
 function useEphemeralGhosts(count: number) {
-  const [epoch, setEpoch] = useState(() => Date.now());
   const [forms, setForms] = useState<GhostForm[]>(() => ghostsForCount(count, Date.now()));
-  const prevCountRef = useRef(count);
+  const prevCountRef = React.useRef(count);
   useEffect(() => {
     if (count !== prevCountRef.current) {
       prevCountRef.current = count;
-      setEpoch(Date.now() + Math.floor(Math.random() * 9999));
       setForms(ghostsForCount(count, Date.now() + Math.floor(Math.random() * 9999)));
     }
   }, [count]);
@@ -52,11 +49,8 @@ function useEphemeralGhosts(count: number) {
 }
 
 /* ── Serpentine road path control points ── */
-// Fixed: 18px solid path + 3px white border + drop shadow; amplitude max 68px;
-// y-spacing 136px/node so hit targets never clip and clock tower sits inline at 300L y.
 const ROAD_WIDTH = 18;
 const ROAD_STROKE = 3;
-// Nodes at 136px spacing starting y=60 (6 nodes => 900px total run + 80px bottom pad above rail).
 const NODE_POSITIONS: Record<string, { x: number; y: number }> = {
   phys:   { x: 50,  y: 60  },
   mbbs:   { x: 14,  y: 196 },
@@ -67,11 +61,9 @@ const NODE_POSITIONS: Record<string, { x: number; y: number }> = {
   nutr:   { x: 14,  y: 604 },
   it:     { x: 86,  y: 604 },
 };
-// 300L midpoint clock tower inline at 300L y (NOT sticky) — intersectionObserver pulses once.
 const CLOCK_TOWER_POS = { x: 50, y: 468 };
 
 function buildSvgPath(nodeIds: string[]): string {
-  // smooth S-curve through node positions ordered by y
   const pts = nodeIds
     .map((id) => NODE_POSITIONS[id])
     .filter(Boolean)
@@ -90,8 +82,6 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
   const [buildingId, setBuildingId] = useState<string | null>(null);
   const [level, setLevel] = useState<string | null>(null);
   const [verifying, setVerifying] = useState<string | null>(null);
-  const [swipeIdx, setSwipeIdx] = useState<number | null>(null);
-  const roadRef = useRef<HTMLDivElement>(null);
   const building = useMemo(() => BUILDINGS.find((b) => b.id === buildingId) || null, [buildingId]);
 
   const buildingCounts = useMemo(() => {
@@ -113,6 +103,16 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
   }, [events]);
 
   useEffect(() => { if (buildingId) setLevel(null); }, [buildingId]);
+  useEffect(() => {
+    // Auto-restore level from localStorage profile on mount for student-native default
+    const raw = localStorage.getItem("physi_profile");
+    if (raw) {
+      try {
+        const level_ = JSON.parse(raw)?.level;
+        if (level_) setLevel(level_);
+      } catch {}
+    }
+  }, []);
 
   const filtered = useMemo(() => {
     if (!level) return [] as EventRow[];
@@ -128,14 +128,10 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
 
   const displayEvents = useMemo(() => {
     if (!level) return [] as EventRow[];
+    // Fix #2: No fake-event fallback — if no real events match, return empty
     if (filtered.length > 0) return filtered.slice(0, 14);
-    if (events.length === 0) return [];
-    const idx = LEVELS.indexOf(level as any);
-    const start = (idx * 2) % events.length;
-    const out: EventRow[] = [];
-    for (let i = 0; i < Math.min(6, events.length); i++) out.push(events[(start + i) % events.length]);
-    return out;
-  }, [filtered, events, level]);
+    return [];
+  }, [filtered, level]);
 
   const [verifyCounts, setVerifyCounts] = useState<Record<string, number>>({});
   useEffect(() => {
@@ -161,17 +157,15 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
     return () => { cancel = true; clearInterval(iv); };
   }, [level, displayEvents.map((e) => e.id).join(",")]);
 
-  // ephemeral ghosts
   const count = level ? Math.min(displayEvents.length, 6) : 0;
   const forms = useEphemeralGhosts(count);
 
-  // build the node order by y (top→bottom) for the winding road
   const orderedBuildings = useMemo(() => {
     return BUILDINGS.slice().sort((a, b) => (NODE_POSITIONS[a.id]?.y ?? 0) - (NODE_POSITIONS[b.id]?.y ?? 0));
   }, []);
   const svgPath = useMemo(() => buildSvgPath(orderedBuildings.map((b) => b.id)), [orderedBuildings]);
 
-  const handleVerify = useCallback(async (ev: EventRow) => {
+  const handleVerify = useCallback(async (ev: EventRow, vote: "YES" | "NO" = "YES") => {
     setVerifying(ev.id);
     try {
       let uid: string | null = null;
@@ -182,7 +176,11 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
         setVerifying(null);
         return;
       }
-      const r = await fetch("/api/verify", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ verifier_id: uid, event_id: ev.id, vote: "YES" }) });
+      const r = await fetch("/api/verify", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ verifier_id: uid, event_id: ev.id, vote }),
+      });
       const j = await r.json().catch(() => ({} as any));
       if (r.ok && j.ok !== false) {
         setVerifyCounts((m) => ({ ...m, [ev.id]: (m[ev.id] ?? 0) + 1 }));
@@ -199,21 +197,14 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
 
   // swipe handlers
   const handleSwipe = useCallback((ev: EventRow, dir: "yes" | "no" | "skip") => {
-    if (dir === "yes") handleVerify(ev);
-    else if (dir === "no") { /* No vote — stash locally */ }
+    if (dir === "yes") handleVerify(ev, "YES");
+    else if (dir === "no") handleVerify(ev, "NO");
     // skip = no-op
   }, [handleVerify]);
 
-  // building level counts from events (naive venue match for display)
-  const levelForBuilding = useMemo(() => {
-    if (!buildingId) return null;
-    // just show levels; count comes from displayEvents below
-    return "100L";
-  }, [buildingId]);
-
   return (
-    <div ref={roadRef} className="winding-road-container relative min-h-screen w-full overflow-y-auto px-2 pb-28" style={{ scrollSnapType: "y mandatory" }}>
-      {/* ── Forest 2.5D depth layers (fixed — parallax via scroll) ── */}
+    <div className="winding-road-container relative min-h-screen w-full overflow-y-auto px-2 pb-28" style={{ scrollSnapType: "y mandatory" }}>
+      {/* ── Forest 2.5D depth layers (fixed) ── */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden" aria-hidden="true">
         {/* layer 3 — far mountains */}
         <div className="absolute bottom-0 left-0 w-[140%] h-[45%] rounded-b-[50%] opacity-30" style={{ background: "linear-gradient(to top, rgba(16,55,32,0.9), transparent)", filter: "blur(3px)", transform: "translateX(-20%)", }} />
@@ -227,43 +218,18 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 w-[60%] h-14 rounded-full opacity-20" style={{ background: "radial-gradient(ellipse at center, rgba(52,211,153,0.15), transparent 70%)", filter: "blur(12px)" }} />
       </div>
 
-      {/* ── Road SVG — winding cream path (solid gummy + shadow, 18px wide) ── */}
-      <svg className="road-svg" viewBox="0 0 100 720" preserveAspectRatio="xMidYMid slice" style={{ minHeight: "100vh" }} aria-hidden="true" role="presentation">
+      {/* ── Road SVG ── */}
+      <svg className="road-svg" viewBox="0 0 100 720" preserveAspectRatio="xMidYMid slice" style={{ minHeight: "100vh" }} aria-hidden="true" role="img" aria-label="Serpentine campus road with 8 department buildings">
         <defs>
           <filter id="road-shadow"><feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="rgba(2,44,30,0.45)" /></filter>
           <filter id="road-glow"><feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="rgba(52,211,153,0.35)" /></filter>
         </defs>
-        {/* road — solid gummy cream with white border + shadow */}
         {svgPath && (
-          <path d={svgPath}
-            fill="none"
-            stroke="#f0fdf4"
-            strokeWidth={ROAD_WIDTH}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            filter="url(#road-shadow)"
-          />
-        )}
-        {svgPath && (
-          <path d={svgPath}
-            fill="none"
-            stroke="#1a5f48"
-            strokeWidth={ROAD_WIDTH + ROAD_STROKE}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            opacity="0.35"
-          />
-        )}
-        {svgPath && (
-          <path d={svgPath}
-            fill="none"
-            stroke="#34d399"
-            strokeWidth={ROAD_STROKE}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            opacity="0.6"
-            filter="url(#road-glow)"
-          />
+          <>
+            <path d={svgPath} fill="none" stroke="#0d3b2a" strokeWidth={ROAD_WIDTH} strokeLinecap="round" strokeLinejoin="round" filter="url(#road-shadow)" />
+            <path d={svgPath} fill="none" stroke="#f0fdf4" strokeWidth={ROAD_WIDTH + ROAD_STROKE} strokeLinecap="round" strokeLinejoin="round" opacity="0.35" />
+            <path d={svgPath} fill="none" stroke="#34d399" strokeWidth={ROAD_STROKE} strokeLinecap="round" strokeLinejoin="round" opacity="0.6" filter="url(#road-glow)" />
+          </>
         )}
         {/* roadside grass wisps */}
         {orderedBuildings.slice(0, -1).map((b, i) => {
@@ -280,11 +246,8 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
         })}
       </svg>
 
-      {/* ── Building nodes along the road ──
-       * NOTE: we render exactly the 8 BUILDINGS once each (not 6×8).
-       * displayEvents.slice(0, 14) already caps per-building events in the feed.
-       */}
-      {orderedBuildings.map((b, i) => {
+      {/* ── Building nodes along the road ── */}
+      {orderedBuildings.map((b) => {
         const pos = NODE_POSITIONS[b.id];
         const active = buildingId === b.id;
         const cnt = buildingCounts[b.id] ?? 0;
@@ -292,7 +255,7 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
           <button
             key={b.id}
             className={`building-node ${active ? "active" : ""}`}
-            style={{ left: `${pos.x}%`, top: `${pos.y}%`, position: "absolute", zIndex: active ? 20 : 10, }}
+            style={{ left: `${pos.x}%`, top: `${pos.y}%`, position: "absolute", zIndex: active ? 20 : 10 }}
             onClick={() => setBuildingId(active ? null : b.id)}
             aria-label={`${b.label} — ${cnt} events`}
             aria-pressed={active}
@@ -307,15 +270,15 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
         );
       })}
 
-      {/* ── Clock tower milestone (300L midpoint — inline, NOT sticky) ── */}
+      {/* ── Clock tower milestone ── */}
       <div className="clock-tower" style={{ left: `${CLOCK_TOWER_POS.x}%`, top: `${CLOCK_TOWER_POS.y}%`, position: "absolute", zIndex: 25 }}>
-        <div className="tower-icon" aria-hidden="true" role="img" aria-label="300L midpoint clock tower">🕛</div>
+        <div className="tower-icon" role="img" aria-label="300L midpoint clock tower">🕛</div>
         <span className="tower-label">300L · midpoint</span>
       </div>
 
-      {/* ── Building detail panel + events (when building selected) ── */}
+      {/* ── Building detail panel + events ── */}
       {buildingId && building && (
-        <div className="relative z-10 mt-2" style={{ scrollSnapAlign: "start" }}>
+        <div id="building-panel" className="relative z-10 mt-2" style={{ scrollSnapAlign: "start" }}>
           {/* building header */}
           <div className="mx-auto max-w-lg flex items-center gap-3 rounded-2xl border border-white/10 bg-[#1a5f48]/80 px-5 py-3 backdrop-blur-xl" style={{ scrollSnapAlign: "start" }}>
           <span className="flex h-10 w-10 items-center justify-center rounded-xl text-[22px]" style={{ background: building!.color, color: "white" }}>{building!.icon}</span>
@@ -336,7 +299,8 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
                   key={lv}
                   onClick={() => setLevel(active ? null : lv)}
                   aria-pressed={active}
-                  className={`rounded-xl border px-4 py-2.5 text-center font-black tracking-tight transition-all ${active ? "bg-white text-black border-white shadow-[0_6px_18px_rgba(0,0,0,0.25)] scale-[1.03]" : "bg-white/[0.06] text-white border-white/10 hover:bg-white/10"}`}>
+                  className={`rounded-xl border px-4 py-2.5 text-center font-black tracking-tight transition-all ${active ? "bg-white text-black border-white shadow-[0_6px_18px_rgba(0,0,0,0.25)] scale-[1.03]" : "bg-white/[0.06] text-white border-white/10 hover:bg-white/10"}`}
+                >
                   <span className="block text-[14px]">{lv}</span>
                   <span className="font-mono text-[10px] font-medium opacity-60">{active ? "selected" : "level"}</span>
                 </button>
@@ -405,15 +369,15 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
                         <div className="ghost-row">
                           {Array.from({ length: Math.min(cnt, 5) }).map((_, gi) => {
                             const gf = ghostForSeed(`w-${ev.id}-${gi}`, Date.now());
-                            return <span key={gi} className="ghost-dot inline-block rounded-full" style={{ background: gf.fg, width: 16, height: 16, border: "2px solid rgba(2,44,30,0.5)" }} aria-hidden="true" />;
+                            return <span key={gi} className="ghost-dot inline-block rounded-full" style={{ background: gf.fg, width: 16, height: 16, border: "2px solid rgba(2,44,30,0.5)" }} aria-hidden="true" />;;
                           })}
                         </div>
                       </div>
 
-                      {/* verify buttons */}
+                      {/* verify buttons — ✓ sends YES, ✕ sends NO */}
                       <div className="mt-3 flex items-center gap-3">
-                        <button onClick={(e) => { e.stopPropagation(); handleVerify(ev); }} disabled={verifying === ev.id} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-xl font-bold text-white shadow-lg hover:bg-emerald-400 disabled:opacity-50" style={{ minWidth: 48, minHeight: 48 }} aria-label={`Confirm ${ev.title} at ${ev.venue}`}>{verifying === ev.id ? "…" : "✓"}</button>
-                        <button onClick={(e) => { e.stopPropagation(); handleVerify(ev); }} disabled={verifying === ev.id} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-base font-bold text-slate-200 hover:bg-white hover:text-[#022c1e] disabled:opacity-50" style={{ minWidth: 48, minHeight: 48 }} aria-label={`No ${ev.title} at ${ev.venue}`}>✕</button>
+                        <button onClick={(e) => { e.stopPropagation(); handleVerify(ev, "YES"); }} disabled={verifying === ev.id} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-xl font-bold text-white shadow-lg hover:bg-emerald-400 disabled:opacity-50" style={{ minWidth: 48, minHeight: 48 }} aria-label={`Confirm ${ev.title} at ${ev.venue}`}>{verifying === ev.id ? "…" : "✓"}</button>
+                        <button onClick={(e) => { e.stopPropagation(); handleVerify(ev, "NO"); }} disabled={verifying === ev.id} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-base font-bold text-slate-200 hover:bg-white hover:text-[#022c1e] disabled:opacity-50" style={{ minWidth: 48, minHeight: 48 }} aria-label={`No ${ev.title} at ${ev.venue}`}>✕</button>
                         <span className="font-mono text-[10px] text-white/40">swipe → Yes / ← No / ↑ Skip</span>
                       </div>
                     </div>
@@ -437,10 +401,12 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
             const cnt = verifyCounts[ev.id] ?? Math.min(3, Math.round(Number(ev.authority_points ?? 0))) ?? 0;
             const ghostForm = forms[0];
             return (
-              <div key={ev.id} className="swipe-zone whatsapp-event" onTouchStart={(e) => { (e.currentTarget as any)._sx = e.touches[0].clientX; }} onTouchEnd={(e) => {
+              <div key={ev.id} className="swipe-zone whatsapp-event" onTouchStart={(e) => { (e.currentTarget as any)._sx = e.touches[0].clientX; (e.currentTarget as any)._sy = e.touches[0].clientY; }} onTouchEnd={(e) => {
                 const t = e.currentTarget as any;
                 const dx = e.changedTouches[0].clientX - (t._sx ?? 0);
-                if (Math.abs(dx) > 60) { handleSwipe(ev, dx > 0 ? "yes" : "no"); }
+                const dy = Math.abs(e.changedTouches[0].clientY - (t._sy ?? 0));
+                if (Math.abs(dx) > 60 && dy < 50) { handleSwipe(ev, dx > 0 ? "yes" : "no"); }
+                else if (dy > 60 && Math.abs(dx) < 50) { handleSwipe(ev, "skip"); }
               }}>
                 <span className="swipe-action swipe-yes">✓ Yes</span>
                 <span className="swipe-action swipe-no">✕ No</span>
@@ -465,8 +431,8 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
                   <div className="ghost-row">{Array.from({ length: Math.min(cnt, 5) }).map((_, gi) => { const gf = ghostForSeed(`f-${ev.id}-${gi}`, Date.now()); return <span key={gi} className="ghost-dot inline-block rounded-full" style={{ background: gf.fg, width: 14, height: 14, border: "2px solid rgba(2,44,30,0.5)" }} aria-hidden="true" />; })}</div>
                 </div>
                 <div className="mt-3 flex items-center gap-3">
-                  <button onClick={(e) => { e.stopPropagation(); handleVerify(ev); }} disabled={verifying === ev.id} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-xl font-bold text-white shadow-lg hover:bg-emerald-400 disabled:opacity-50" style={{ minWidth: 48, minHeight: 48 }} aria-label={`Confirm ${ev.title} at ${ev.venue}`}>{verifying === ev.id ? "…" : "✓"}</button>
-                  <button onClick={(e) => { e.stopPropagation(); handleVerify(ev); }} disabled={verifying === ev.id} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-base font-bold text-slate-200 hover:bg-white hover:text-[#022c1e] disabled:opacity-50" style={{ minWidth: 48, minHeight: 48 }} aria-label={`No ${ev.title} at ${ev.venue}`}>✕</button>
+                  <button onClick={(e) => { e.stopPropagation(); handleVerify(ev, "YES"); }} disabled={verifying === ev.id} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-xl font-bold text-white shadow-lg hover:bg-emerald-400 disabled:opacity-50" style={{ minWidth: 48, minHeight: 48 }} aria-label={`Confirm ${ev.title} at ${ev.venue}`}>{verifying === ev.id ? "…" : "✓"}</button>
+                  <button onClick={(e) => { e.stopPropagation(); handleVerify(ev, "NO"); }} disabled={verifying === ev.id} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-base font-bold text-slate-200 hover:bg-white hover:text-[#022c1e] disabled:opacity-50" style={{ minWidth: 48, minHeight: 48 }} aria-label={`No ${ev.title} at ${ev.venue}`}>✕</button>
                   <span className="font-mono text-[10px] text-white/40">swipe → ✓ / ← ✕</span>
                 </div>
               </div>
