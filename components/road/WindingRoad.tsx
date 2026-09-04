@@ -22,11 +22,6 @@ function isVerified(ev: EventRow) {
   const ap = Number(ev.authority_points ?? 0), rp = Number(ev.required_points ?? 0);
   return rp > 0 && ap >= rp;
 }
-function pctOf(ev: EventRow) {
-  const ap = Number(ev.authority_points ?? 0), rp = Number(ev.required_points ?? 0);
-  if (rp <= 0) return isVerified(ev) ? 100 : 0;
-  return Math.min(100, Math.round((ap / rp) * 100));
-}
 
 /** Ephemeral avatar drift — no DB writes. */
 function useEphemeralGhosts(count: number) {
@@ -96,20 +91,20 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
       }
     }
     const totalMatched = Object.values(m).reduce((a, b) => a + b, 0);
-    if (totalMatched === 0) {
-      BUILDINGS.forEach((b, i) => (m[b.id] = Math.floor(events.length / BUILDINGS.length) + (i < events.length % BUILDINGS.length ? 1 : 0)));
-    }
+    // No fake distribution — if no venue matches, show zeros. Honest empty state.
     return m;
   }, [events]);
 
-  useEffect(() => { if (buildingId) setLevel(null); }, [buildingId]);
+  const [levelRestored, setLevelRestored] = useState(false);
+  useEffect(() => { if (buildingId && levelRestored) setLevel(null); }, [buildingId, levelRestored]);
   useEffect(() => {
     // Auto-restore level from localStorage profile on mount for student-native default
+    if (typeof window === "undefined") return;
     const raw = localStorage.getItem("physi_profile");
     if (raw) {
       try {
         const level_ = JSON.parse(raw)?.level;
-        if (level_) setLevel(level_);
+        if (level_) { setLevel(level_); setLevelRestored(true); }
       } catch {}
     }
   }, []);
@@ -171,7 +166,9 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
       let uid: string | null = null;
       try { const raw = localStorage.getItem("physi_profile"); if (raw) uid = JSON.parse(raw)?.id ?? null; } catch {}
       if (!uid) {
-        setVerifyCounts((m) => ({ ...m, [ev.id]: (m[ev.id] ?? 0) + 1 }));
+        if (vote === "YES") {
+          setVerifyCounts((m) => ({ ...m, [ev.id]: (m[ev.id] ?? 0) + 1 }));
+        }
         if (onVerify) onVerify(ev);
         setVerifying(null);
         return;
@@ -219,7 +216,7 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
       </div>
 
       {/* ── Road SVG ── */}
-      <svg className="road-svg" viewBox="0 0 100 720" preserveAspectRatio="xMidYMid slice" style={{ minHeight: "100vh" }} aria-hidden="true" role="img" aria-label="Serpentine campus road with 8 department buildings">
+      <svg className="road-svg" viewBox="0 0 100 720" preserveAspectRatio="xMidYMid slice" style={{ minHeight: "100vh" }} role="img" aria-label="Serpentine campus road with 8 department buildings">
         <defs>
           <filter id="road-shadow"><feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="rgba(2,44,30,0.45)" /></filter>
           <filter id="road-glow"><feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="rgba(52,211,153,0.35)" /></filter>
@@ -257,7 +254,7 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
             className={`building-node ${active ? "active" : ""}`}
             style={{ left: `${pos.x}%`, top: `${pos.y}%`, position: "absolute", zIndex: active ? 20 : 10 }}
             onClick={() => setBuildingId(active ? null : b.id)}
-            aria-label={`${b.label} — ${cnt} events`}
+            aria-label={`${b.label} — ${cnt} events. Tap to enter`}
             aria-pressed={active}
             aria-controls={active ? "building-panel" : undefined}
           >
@@ -325,7 +322,6 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
                 displayEvents.map((ev, i) => {
                   const verified = isVerified(ev);
                   const cnt = verifyCounts[ev.id] ?? Math.min(3, Math.round(Number(ev.authority_points ?? 0))) ?? 0;
-                  const pct = pctOf(ev);
                   const ghostForm = forms[i % forms.length];
                   const timeLeft = ev.event_date ? Math.max(0, Math.round((new Date(ev.event_date + "T" + (ev.event_time || "00:00")).getTime() - Date.now()) / 3600000)) : 24;
                   const urgencyPct = Math.max(0, Math.min(100, 100 - (timeLeft / 24) * 100));
@@ -369,7 +365,7 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
                         <div className="ghost-row">
                           {Array.from({ length: Math.min(cnt, 5) }).map((_, gi) => {
                             const gf = ghostForSeed(`w-${ev.id}-${gi}`, Date.now());
-                            return <span key={gi} className="ghost-dot inline-block rounded-full" style={{ background: gf.fg, width: 16, height: 16, border: "2px solid rgba(2,44,30,0.5)" }} aria-hidden="true" />;;
+                            return <span key={gi} className="ghost-dot inline-block rounded-full" style={{ background: gf.fg, width: 16, height: 16, border: "2px solid rgba(2,44,30,0.5)" }} aria-hidden="true" />;
                           })}
                         </div>
                       </div>
@@ -428,7 +424,7 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
                 <div className="urgency-bar"><div className="urgency-fill" style={{ width: `${Math.max(0, Math.min(100, 100 - (Number(ev.authority_points ?? 0) / Math.max(1, Number(ev.required_points ?? 1))) * 100))}%` }} /></div>
                 <div className="flex items-center justify-between mt-1">
                   <span className="urgency-label">{cnt} verified</span>
-                  <div className="ghost-row">{Array.from({ length: Math.min(cnt, 5) }).map((_, gi) => { const gf = ghostForSeed(`f-${ev.id}-${gi}`, Date.now()); return <span key={gi} className="ghost-dot inline-block rounded-full" style={{ background: gf.fg, width: 14, height: 14, border: "2px solid rgba(2,44,30,0.5)" }} aria-hidden="true" />; })}</div>
+                  <div className="ghost-row">{Array.from({ length: Math.min(cnt, 5) }).map((_, gi) => { const gf = ghostForSeed(`f-${ev.id}-${gi}`, Date.now()); return <span key={gi} className="ghost-dot inline-block rounded-full" style={{ background: gf.fg, width: 14, height: 14, border: "2px solid rgba(2,44,30,0.5)" }} aria-hidden="true" /> })}</div>
                 </div>
                 <div className="mt-3 flex items-center gap-3">
                   <button onClick={(e) => { e.stopPropagation(); handleVerify(ev, "YES"); }} disabled={verifying === ev.id} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-xl font-bold text-white shadow-lg hover:bg-emerald-400 disabled:opacity-50" style={{ minWidth: 48, minHeight: 48 }} aria-label={`Confirm ${ev.title} at ${ev.venue}`}>{verifying === ev.id ? "…" : "✓"}</button>

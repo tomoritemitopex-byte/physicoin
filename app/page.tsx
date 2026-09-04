@@ -80,15 +80,12 @@ export default function LandingPage() {
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-[rgba(52,211,153,0.15)] bg-[#1a5f48] px-3 py-1.5">
               <span className="h-2 w-2 rounded-full bg-[#34d399] animate-pulse" />
-              <span className="font-mono text-xs font-medium text-[#f0fdf4]">Live · student-powered</span>
-              <span className="hidden sm:inline text-xs text-[rgba(240,253,244,0.60)]">· live</span>
+              <span className="font-mono text-xs font-medium text-[#f0fdf4]">student-powered · live</span>
             </div>
 
             <h1 className="mt-6 text-[34px] font-bold leading-[0.95] tracking-[-0.04em] sm:text-[44px] lg:text-[52px] text-[#f0fdf4]">
-              Never trek to
-              <br />
-              <span className="text-[rgba(240,253,244,0.70)]">the wrong hall</span>
-              <br />
+              Never trek to <br />
+              <span className="text-[rgba(240,253,244,0.70)]">the wrong hall</span> <br />
               again.
             </h1>
 
@@ -98,7 +95,7 @@ export default function LandingPage() {
 
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <a href="/app/roadmap" className="primary-cta inline-flex items-center gap-2 px-7 py-3.5 text-[15px]">
-                Open the road <ArrowRight className="h-4 w-4" />
+                See live timetable <ArrowRight className="h-4 w-4" />
               </a>
               <span className="inline-flex items-center gap-1.5 font-mono text-xs text-[rgba(240,253,244,0.60)]"><Clock3 className="h-3.5 w-3.5" /> 30s setup · no signup wall to preview</span>
             </div>
@@ -130,7 +127,7 @@ export default function LandingPage() {
           <span className="rounded-full border border-[rgba(52,211,153,0.15)] bg-[#022c1e]/30 px-3 py-1.5 font-mono text-xs text-[#f0fdf4]">{totalEvents} events</span>
           <span className="rounded-full border border-[rgba(251,191,36,0.18)] bg-[rgba(251,191,36,0.10)] px-3 py-1.5 font-mono text-xs text-[#fbbf24]">{verifiedCount} verified</span>
           <span className="ml-auto hidden sm:inline font-mono text-xs text-[rgba(240,253,244,0.55)]">updates every 30s · /api/stats</span>
-          <a href="/app/roadmap" className="rounded-full bg-[#34d399] px-4 py-1.5 text-xs font-bold text-[#022c1e] hover:bg-[#6ee7b7] transition">Open road →</a>
+          <a href="/app/roadmap" className="rounded-full bg-[#34d399] px-4 py-1.5 text-xs font-bold text-[#022c1e] hover:bg-[#6ee7b7] transition">See timetable →</a>
         </section>
 
         <div className="mt-3">
@@ -179,7 +176,7 @@ export default function LandingPage() {
           <h2 className="mx-auto mt-4 max-w-[520px] text-2xl font-bold tracking-tight text-[#f0fdf4] sm:text-[26px]">Don't miss the next venue change.</h2>
           <p className="mx-auto mt-2 max-w-[480px] text-sm leading-5 text-[rgba(240,253,244,0.70)]">Join your coursemates — post once, check once a day.</p>
           <div className="mt-6 flex justify-center">
-            <a href="/app/roadmap" className="primary-cta inline-flex items-center gap-2 px-7 py-3.5 text-[15px]">Open the road <ArrowRight className="h-4 w-4" /></a>
+            <a href="/app/roadmap" className="primary-cta inline-flex items-center gap-2 px-7 py-3.5 text-[15px]">See live timetable <ArrowRight className="h-4 w-4" /></a>
           </div>
           <p className="mt-4 font-mono text-xs text-[rgba(240,253,244,0.55)]"><a href="/terms" className="underline decoration-[rgba(52,211,153,0.22)] hover:text-[#f0fdf4]">Terms · PHYSI energy has no cash value →</a></p>
         </section>
