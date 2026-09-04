@@ -135,11 +135,12 @@ export default function CampusMap({ events, onVerify }: { events: EventRow[]; on
       const lv = level.toLowerCase();
       if (sv === lv) return true;
       if (sv === "" && String(ev.title).toLowerCase().includes(lv)) return true;
+      if (String(ev.scope_type).toLowerCase() === "general") return true;
       return false;
     });
   }, [events, level]);
 
-  // for empty filtered, show demo fallback: show all events sliced for that level
+  // No fake fallback — honest empty state
   const displayEvents = useMemo(() => {
     if (!level) return [] as EventRow[];
     if (filtered.length > 0) return filtered.slice(0, 12);

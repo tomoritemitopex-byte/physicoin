@@ -194,10 +194,11 @@ export default function LandingPage() {
           <div className="mt-6 flex justify-center">
             <a href="/app/roadmap" className="primary-cta inline-flex items-center gap-2 px-7 py-3.5 text-[15px]">See live timetable <ArrowRight className="h-4 w-4" /></a>
           </div>
-          <p className="mt-4 font-mono text-xs text-[rgba(240,253,244,0.55)]"><a href="/terms" className="underline decoration-[rgba(52,211,153,0.22)] hover:text-[#f0fdf4]">Terms · PHYSI energy has no cash value →</a></p>
+          <p className="mt-4 font-mono text-xs text-[rgba(240,253,244,0.55)]"><a href="/terms" className="underline decoration-[rgba(52,211,153,0.22)] hover:text-[#f0fdf4]">Terms · PHYSI points have no cash value →</a></p>
         </section>
-
-        <p className="py-8 text-center font-mono text-xs text-[rgba(240,253,244,0.40)]">PHYSI · built by students, for students</p>
+        <footer className="py-8 text-center font-mono text-xs text-[rgba(240,253,244,0.40)]">
+          PHYSI · built by students, for students
+        </footer>
 
       </main>
     </div>

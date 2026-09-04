@@ -83,7 +83,7 @@ export default function RepExplainer({ open, onClose, rep, levelInfo }: { open: 
             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-500 text-[11px] font-black text-white">3</span>
             <div>
               <p className="text-[13px] font-bold text-white">24h advisory</p>
-              <p className="font-mono text-[11px] leading-4 text-slate-400">Gists are advisory, not official. Green tick = coursemates confirmed. Confirm exams via HOD/board. PHYSI energy expires in 24h.</p>
+              <p className="font-mono text-[11px] leading-4 text-slate-400">Gists are advisory, not official. Green tick = coursemates confirmed. Confirm exams via HOD/board. PHYSI points expire in 24h.</p>
             </div>
           </li>
         </ul>

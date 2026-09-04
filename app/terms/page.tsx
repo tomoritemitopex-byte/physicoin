@@ -27,12 +27,12 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-[14px] font-semibold text-white">2. PHYSI energy — play energy, no cash value</h2>
+            <h2 className="text-[14px] font-semibold text-white">2. PHYSI points — play scoring, no cash value</h2>
             <p className="mt-2 text-[13.5px] leading-6 text-slate-400">
-              PHYSI energy is a scoring unit. It has <b className="text-slate-200">no cash value</b>, is <b className="text-slate-200">non-transferable</b>, <b className="text-slate-200">non-redeemable</b> and <b className="text-slate-200">expires 24 hours</b> after it is issued. It exists only to mark that you were active today — like an attendance streak for health. It cannot be exchanged for money, airtime, data or academic credit.
+              PHYSI points are a scoring unit. They have <b className="text-slate-200">no cash value</b>, are <b className="text-slate-200">non-transferable</b>, <b className="text-slate-200">non-redeemable</b> and <b className="text-slate-200">expire 24 hours</b> after issuance. They exist only to mark that you were active today — like an attendance streak for health. They cannot be exchanged for money, airtime, data or academic credit.
             </p>
             <ul className="mt-3 list-disc pl-5 text-[13px] leading-6 text-slate-400">
-              <li>Daily check-in grants up to ~1 PHYSI energy, multiplied by your handle&apos;s authority weight.</li>
+              <li>Daily check-in grants up to ~1 PHYSI point, multiplied by your handle&apos;s authority weight.</li>
               <li>Balance is reset/expiry after 24h — there is no wallet, no withdrawal, no promise of future value.</li>
               <li>PHYSI may change, pause or end energy rules at any time without notice.</li>
             </ul>
@@ -72,7 +72,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-[14px] font-semibold text-white">7. Scope & changes</h2>
             <p className="mt-2 text-[13.5px] leading-6 text-slate-400">
-              Features, thresholds (e.g. 80% quorum for light-off bubbles) and PHYSI energy rules may evolve as the community grows. Continued use after changes means you accept the updated terms. Your contributions shape the app.
+              Features, thresholds (e.g. 80% quorum for light-off bubbles) and PHYSI point rules may evolve as the community grows. Continued use after changes means you accept the updated terms. Your contributions shape the app.
             </p>
           </section>
 
@@ -85,7 +85,7 @@ export default function TermsPage() {
 
           <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
             <p className="font-mono text-[11px] leading-4 text-slate-400">
-              By using PHYSI you agree to these terms. If you don&apos;t agree, please don&apos;t post or vote. Advisory only — confirm exams with your department. PHYSI energy has no cash value and expires in 24h.
+              By using PHYSI you agree to these terms. If you don&apos;t agree, please don&apos;t post or vote. Advisory only — confirm exams with your department. PHYSI points have no cash value and expire in 24h.
             </p>
           </div>
         </div>
