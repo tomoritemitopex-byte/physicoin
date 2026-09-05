@@ -348,7 +348,7 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
                           <p className="event-venue">{ev.venue}</p>
                           <p className="event-title">{ev.title}</p>
                         </div>
-                        <span className={`shrink-0 rounded-full px-2 py-1 font-mono text-[10px] font-bold ${verified ? "bg-emerald-500 text-white" : "bg-white/10 text-slate-300"}`}>{verified ? "✓" : "·"}</span>
+                        <span className={`shrink-0 rounded-full px-2 py-1 font-mono text-[10px] font-bold ${verified ? "bg-emerald-500 text-[#022c1e]" : "bg-white/10 text-slate-300"}`}>{verified ? "✓" : "·"}</span>
                       </div>
 
                       <div className="flex items-center gap-2">
@@ -373,8 +373,8 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
 
                       {/* verify buttons — ✓ sends YES, ✕ sends NO */}
                       <div className="mt-3 flex items-center gap-3">
-                        <button onClick={(e) => { e.stopPropagation(); handleVerify(ev, "YES"); }} disabled={verifying === ev.id} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-xl font-bold text-white shadow-lg hover:bg-emerald-400 disabled:opacity-50" style={{ minWidth: 48, minHeight: 48 }} aria-label={`Confirm ${ev.title} at ${ev.venue}`}>{verifying === ev.id ? "…" : "✓"}</button>
-                        <button onClick={(e) => { e.stopPropagation(); handleVerify(ev, "NO"); }} disabled={verifying === ev.id} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-base font-bold text-slate-200 hover:bg-white hover:text-[#022c1e] disabled:opacity-50" style={{ minWidth: 48, minHeight: 48 }} aria-label={`No ${ev.title} at ${ev.venue}`}>✕</button>
+                        <button onClick={(e) => { e.stopPropagation(); handleVerify(ev, "YES"); }} disabled={verifying === ev.id} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-xl font-bold text-[#022c1e] shadow-lg hover:bg-emerald-400 disabled:opacity-50" style={{ minWidth: 48, minHeight: 48 }} aria-label={`Verify ${ev.title} at ${ev.venue}`}>{verifying === ev.id ? "…" : "✓"}</button>
+                        <button onClick={(e) => { e.stopPropagation(); handleVerify(ev, "NO"); }} disabled={verifying === ev.id} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-base font-bold text-slate-200 hover:bg-white hover:text-[#022c1e] disabled:opacity-50" style={{ minWidth: 48, minHeight: 48 }} aria-label={`Reject ${ev.title} at ${ev.venue}`}>✕</button>
                         <span className="font-mono text-[10px] text-white/40">swipe → Yes / ← No / ↑ Skip</span>
                       </div>
                     </div>
@@ -415,7 +415,7 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
                     <p className="event-venue">{ev.venue}</p>
                     <p className="event-title">{ev.title}</p>
                   </div>
-                  <span className={`shrink-0 rounded-full px-2 py-1 font-mono text-[10px] font-bold ${verified ? "bg-emerald-500 text-white" : "bg-white/10 text-slate-300"}`}>{verified ? "✓" : "·"}</span>
+                  <span className={`shrink-0 rounded-full px-2 py-1 font-mono text-[10px] font-bold ${verified ? "bg-emerald-500 text-[#022c1e]" : "bg-white/10 text-slate-300"}`}>{verified ? "✓" : "·"}</span>
                 </div>
                 <div className="flex items-center gap-2 mt-1">
                   <span className="rounded-full bg-black/20 px-1.5 py-0.5 text-[10px] text-slate-300">{ev.severity ? ev.severity.toUpperCase() : "advisory"}</span>
