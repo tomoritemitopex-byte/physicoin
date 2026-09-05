@@ -67,6 +67,15 @@ h1 { font-size: clamp(2rem, 5vw, 3.25rem); }
 h2 { font-size: clamp(1.25rem, 3vw, 1.5rem); }
 h3 { font-size: clamp(1rem, 2vw, 1.125rem); }
 
+/* Glass fallback for browsers without backdrop-filter support */
+@supports not (backdrop-filter: blur(12px)) {
+  .physi-card, .liquid-glass, .whatsapp-event, .one-rail,
+  .secondary-cta, .building-node .node-label, .building-node .node-count {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
 /* Anims */
 
 /* — Cards — tonal surface #1a5f48 with mint border — */
@@ -333,7 +342,7 @@ h3 { font-size: clamp(1rem, 2vw, 1.125rem); }
 .urgency-bar .urgency-fill {
   height: 100%; border-radius: 2px;
   background: linear-gradient(90deg, #34d399, #fbbf24, #f43f5e);
-  animation: urgencyShrink 24h linear forwards;
+  animation: urgencyShrink 86400s linear forwards;
 }
 .urgency-bar .urgency-fill.fading {
   animation-duration: 0.6s;
@@ -360,6 +369,7 @@ h3 { font-size: clamp(1rem, 2vw, 1.125rem); }
   touch-action: pan-y;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 .swipe-zone .swipe-action {
   position: absolute; top: 0; bottom: 0; width: 60px;
@@ -449,4 +459,22 @@ h3 { font-size: clamp(1rem, 2vw, 1.125rem); }
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Reduced transparency — disable glass effects for users who prefer opaque */
+@media (prefers-reduced-transparency: reduce) {
+  .physi-card,
+  .liquid-glass,
+  .whatsapp-event,
+  .one-rail,
+  .secondary-cta,
+  .building-node .node-label,
+  .building-node .node-count,
+  .clock-tower .tower-label {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: var(--physi-card);
+  }
+  .whatsapp-event { background: var(--physi-card); }
+  .one-rail { background: rgba(2,44,30,0.95); }
 }
