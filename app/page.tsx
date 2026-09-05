@@ -53,11 +53,20 @@ export default function LandingPage() {
   const totalEvents = stats?.metrics?.events ?? stats?.counts?.physi_events ?? 0;
   const verifiedCount = stats?.metrics?.events_by_status?.verified ?? 0;
   const statsLoaded = !!stats;
-  const [showSplash, setShowSplash] = useState(true);
+  const [showSplash, setShowSplash] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return !localStorage.getItem("physi_splash_skipped");
+  });
+  useEffect(() => {
+    // Only show splash on first visit, skip on refresh/revisit
+    if (typeof window !== "undefined" && !showSplash) {
+      localStorage.setItem("physi_splash_skipped", "1");
+    }
+  }, [showSplash]);
 
   return (
     <div className="min-h-screen bg-[#0d3b2a] text-[#f0fdf4] selection:bg-[#34d399] selection:text-[#022c1e]" style={{ fontFamily: 'var(--font-fredoka), system-ui, sans-serif' }}>
-      {/* Splash overlay — fades out after load */}
+      {/* Splash overlay — fades out after load, only on first visit */}
       {showSplash && <SplashScreen onReady={() => setShowSplash(false)} />}
 
       {/* Tonal depth — mid green glow over forest base */}
@@ -131,16 +140,24 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* ── Live proof — only show after stats loaded ── */}
-        {statsLoaded && (
+        {/* ── Live proof — show stats if loaded, static badge if not ── */}
         <section className="flex flex-wrap items-center gap-3 rounded-2xl border border-[rgba(52,211,153,0.15)] bg-[#1a5f48]/60 px-5 py-4">
-          <span className="inline-flex items-center gap-2 rounded-full bg-[rgba(251,191,36,0.14)] border border-[rgba(251,191,36,0.18)] px-3 py-1.5 font-mono text-xs font-semibold text-[#fbbf24]"><span className="h-2 w-2 rounded-full bg-[#fbbf24] animate-pulse" /> Live proof</span>
-          <span className="rounded-full border border-[rgba(52,211,153,0.15)] bg-[#022c1e]/30 px-3 py-1.5 font-mono text-xs text-[#f0fdf4]">{totalEvents} events</span>
-          <span className="rounded-full border border-[rgba(251,191,36,0.18)] bg-[rgba(251,191,36,0.10)] px-3 py-1.5 font-mono text-xs text-[#fbbf24]">{verifiedCount} verified</span>
-          <span className="ml-auto hidden sm:inline font-mono text-xs text-[rgba(240,253,244,0.55)]">updates every 30s</span>
+          <span className="inline-flex items-center gap-2 rounded-full bg-[rgba(251,191,36,0.14)] border border-[rgba(251,191,36,0.18)] px-3 py-1.5 font-mono text-xs font-semibold text-[#fbbf24]"><span className="h-2 w-2 rounded-full bg-[#fbbf24] animate-pulse" /> {statsLoaded ? "Live proof" : "Built by students"}</span>
+          {statsLoaded ? (
+            <>
+              <span className="rounded-full border border-[rgba(52,211,153,0.15)] bg-[#022c1e]/30 px-3 py-1.5 font-mono text-xs text-[#f0fdf4]">{totalEvents} events</span>
+              <span className="rounded-full border border-[rgba(251,191,36,0.18)] bg-[rgba(251,191,36,0.10)] px-3 py-1.5 font-mono text-xs text-[#fbbf24]">{verifiedCount} verified</span>
+              <span className="ml-auto hidden sm:inline font-mono text-xs text-[rgba(240,253,244,0.55)]">updates every 30s</span>
+            </>
+          ) : (
+            <>
+              <span className="rounded-full border border-[rgba(52,211,153,0.15)] bg-[#022c1e]/30 px-3 py-1.5 font-mono text-xs text-[#f0fdf4]">Campus-wide</span>
+              <span className="rounded-full border border-[rgba(251,191,36,0.18)] bg-[rgba(251,191,36,0.10)] px-3 py-1.5 font-mono text-xs text-[#fbbf24]">8 departments</span>
+              <span className="ml-auto hidden sm:inline font-mono text-xs text-[rgba(240,253,244,0.55)]">No signup wall</span>
+            </>
+          )}
           <a href="/app/roadmap" className="rounded-full bg-[#34d399] px-4 py-1.5 text-xs font-bold text-[#022c1e] hover:bg-[#6ee7b7] transition">See timetable →</a>
         </section>
-        )}
 
         <div className="mt-3">
           {statsLoaded ? <LiveTicker items={ticker} /> : (
