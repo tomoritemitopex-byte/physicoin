@@ -8,13 +8,12 @@ export default async function RoadmapPage({
   searchParams?: { filter?: string };
 }) {
   const filterParam = searchParams?.filter || "all";
-  const { events, ok, stats } = await getTimetableFeed();
+  const { events, ok } = await getTimetableFeed();
 
   return (
     <RoadmapShell
       initialEvents={events}
       initialOk={ok}
-      initialStats={stats}
       filterParam={filterParam}
       fallback={<RoadSkeleton />}
     />
