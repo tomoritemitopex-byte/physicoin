@@ -1,82 +1,71 @@
-"use client";
-
-import { useEffect, useState } from 'react';
 import { ArrowRight, ShieldCheck, Clock3, Users, Sparkles, MapPin } from 'lucide-react';
 import CampusPreview from '@/components/road/CampusPreview';
-import SplashScreen from '@/components/road/SplashScreen';
+import { getStatsData, getTimetableFeed } from '@/lib/data';
 
-function LiveTicker({ items }: { items: string[] }) {
-  if (!items.length) {
-    return (
-      <div className="rounded-full border border-[rgba(52,211,153,0.15)] bg-[#1a5f48]/60 px-4 py-2.5 font-mono text-xs text-[rgba(240,253,244,0.55)]">
-        No recent confirmations — be the first to post
-      </div>
-    );
-  }
-  const doubled = [...items, ...items];
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+async function StatsAndTicker() {
+  const stats = await getStatsData();
+  const timetable = await getTimetableFeed();
+  const totalEvents = stats.metrics?.events ?? timetable.events.length;
+  const verifiedCount = stats.metrics?.events_by_status?.verified ?? 0;
+
+  const fallbackTicker = [
+    "PHYS · built by students",
+    "green tick = confirmed",
+    "8 departments · live feed",
+  ];
+
+  const recentItems: string[] = (stats.ok && Array.isArray(stats.recent) && stats.recent.length > 0)
+    ? stats.recent.slice(0, 5).map((x: any) => `${String(x.handle || x.name || "someone")} verified ${String(x.title || "event")} · now`)
+    : [];
+
+  const tickerItems = recentItems.length > 0 ? recentItems : fallbackTicker;
+  const doubled = [...tickerItems, ...tickerItems];
+
   return (
-    <div className="overflow-hidden rounded-full border border-[rgba(52,211,153,0.15)] bg-[#1a5f48]/60 backdrop-blur">
-      <div className="flex animate-[ticker_22s_linear_infinite] items-center gap-6 whitespace-nowrap px-4 py-2.5">
-        {doubled.map((t,i)=> (
-          <span key={i} className="inline-flex items-center gap-1.5 font-mono text-xs text-[rgba(240,253,244,0.70)]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#34d399]/70" />{t}
-          </span>
-        ))}
+    <>
+      <span className="inline-flex items-center gap-2 rounded-full border border-[rgba(52,211,153,0.15)] bg-[#1a5f48] px-3 py-1.5">
+        <span className="h-2 w-2 rounded-full bg-[#34d399] animate-pulse" />
+        <span className="font-mono text-xs font-medium text-[#f0fdf4]">student-powered · live</span>
+      </span>
+
+      <section className="mt-6 rounded-2xl border border-[rgba(52,211,153,0.15)] bg-[#1a5f48]/60 px-5 py-4">
+        <span className="inline-flex items-center gap-2 rounded-full bg-[rgba(251,191,36,0.14)] border border-[rgba(251,191,36,0.18)] px-3 py-1.5 font-mono text-xs font-semibold text-[#fbbf24]">
+          <span className="h-2 w-2 rounded-full bg-[#fbbf24] animate-pulse" />
+          Live proof
+        </span>
+        <span className="rounded-full border border-[rgba(52,211,153,0.15)] bg-[#022c1e]/30 px-3 py-1.5 font-mono text-xs text-[#f0fdf4]">{totalEvents} events</span>
+        <span className="rounded-full border border-[rgba(251,191,36,0.18)] bg-[rgba(251,191,36,0.10)] px-3 py-1.5 font-mono text-xs text-[#fbbf24]">{verifiedCount} verified</span>
+        <span className="ml-auto hidden sm:inline font-mono text-xs text-[rgba(240,253,244,0.55)]">updates every 30s</span>
+        <a href="/app/roadmap" className="rounded-full bg-[#34d399] px-4 py-1.5 text-xs font-bold text-[#022c1e] hover:bg-[#6ee7b7] transition">See timetable →</a>
+      </section>
+
+      <div className="mt-3 overflow-hidden rounded-full border border-[rgba(52,211,153,0.15)] bg-[#1a5f48]/60 backdrop-blur">
+        <div className="flex animate-[ticker_22s_linear_infinite] items-center gap-6 whitespace-nowrap px-4 py-2.5">
+          {doubled.map((t, i) => (
+            <span key={i} className="inline-flex items-center gap-1.5 font-mono text-xs text-[rgba(240,253,244,0.70)]">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#34d399]/70" />{t}
+            </span>
+          ))}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
 export default function LandingPage() {
-  const [stats, setStats] = useState<any>(null);
-  const [ticker, setTicker] = useState<string[]>([]);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        const r = await fetch('/api/stats', { cache: 'no-store' });
-        const j = await r.json().catch(()=>null);
-        if (!j || cancelled) return;
-        setStats(j);
-        const fallbacks: string[] = [];
-        let items: string[] | null = null;
-        if (Array.isArray(j?.recent)) items = j.recent.slice(0,5).map((x:any)=> `${String(x.handle||x.name||"someone")} verified ${String(x.title||"event")} · now`);
-        if (items?.length) setTicker(items); else setTicker(fallbacks);
-      } catch { if (!cancelled) setTicker([]); }
-    }
-    load();
-    const iv = setInterval(load, 30000);
-    return () => { cancelled=true; clearInterval(iv); };
-  }, []);
-
-  const totalEvents = stats?.metrics?.events ?? stats?.counts?.physi_events ?? 0;
-  const verifiedCount = stats?.metrics?.events_by_status?.verified ?? 0;
-  const statsLoaded = !!stats;
-  const [showSplash, setShowSplash] = useState(() => {
-    if (typeof window === "undefined") return true;
-    return !localStorage.getItem("physi_splash_skipped");
-  });
-  useEffect(() => {
-    // Only show splash on first visit, skip on refresh/revisit
-    if (typeof window !== "undefined" && !showSplash) {
-      localStorage.setItem("physi_splash_skipped", "1");
-    }
-  }, [showSplash]);
-
   return (
     <div className="min-h-screen bg-[#0d3b2a] text-[#f0fdf4] selection:bg-[#34d399] selection:text-[#022c1e]" style={{ fontFamily: 'var(--font-fredoka), system-ui, sans-serif' }}>
-      {/* Splash overlay — fades out after load, only on first visit */}
-      {showSplash && <SplashScreen onReady={() => setShowSplash(false)} />}
-
-      {/* Tonal depth — mid green glow over forest base */}
+      {/* Tonal depth */}
       <div aria-hidden="true" className="pointer-events-none fixed inset-0">
         <div className="absolute inset-0 bg-[#0d3b2a]" />
         <div className="absolute -top-40 left-1/2 h-[520px] w-[900px] -translate-x-1/2 rounded-full opacity-[0.32]" style={{ background: "radial-gradient(ellipse at center, #1a5f48, transparent 70%)" }} />
         <div className="absolute top-[32%] right-[-4%] h-[380px] w-[380px] rounded-full opacity-[0.10]" style={{ background: "radial-gradient(ellipse at center, #022c1e, transparent 70%)" }} />
       </div>
 
-      {/* ── Header — tonal ── */}
+      {/* Header */}
       <header className="sticky top-0 z-20 border-b border-[rgba(52,211,153,0.15)] bg-[#0d3b2a]/80 backdrop-blur-xl">
         <div className="mx-auto flex max-w-[1120px] items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">
@@ -92,14 +81,10 @@ export default function LandingPage() {
       </header>
 
       <main className="relative mx-auto max-w-[1120px] px-6">
-
-        {/* ── HERO ── */}
+        {/* Hero */}
         <section className="grid gap-10 pt-10 pb-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center lg:pt-16 lg:pb-12">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-[rgba(52,211,153,0.15)] bg-[#1a5f48] px-3 py-1.5">
-              <span className="h-2 w-2 rounded-full bg-[#34d399] animate-pulse" />
-              <span className="font-mono text-xs font-medium text-[#f0fdf4]">student-powered · live</span>
-            </div>
+            <StatsAndTicker />
 
             <h1 className="mt-6 text-[34px] font-bold leading-[0.95] tracking-[-0.04em] sm:text-[44px] lg:text-[52px] text-[#f0fdf4]">
               <span>
@@ -129,7 +114,7 @@ export default function LandingPage() {
             </div>
           </div>
 
-          {/* Hero card — campus preview */}
+          {/* Hero card */}
           <div className="relative">
             <div className="absolute -inset-6 -z-10 rounded-[28px] bg-[#1a5f48]/20 blur-xl" />
             <div className="overflow-hidden rounded-[20px] border border-[rgba(52,211,153,0.15)] bg-[#1a5f48] backdrop-blur-xl shadow-[0_16px_48px_rgba(2,44,30,0.45)]">
@@ -140,34 +125,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* ── Live proof — show stats if loaded, static badge if not ── */}
-        <section className="flex flex-wrap items-center gap-3 rounded-2xl border border-[rgba(52,211,153,0.15)] bg-[#1a5f48]/60 px-5 py-4">
-          <span className="inline-flex items-center gap-2 rounded-full bg-[rgba(251,191,36,0.14)] border border-[rgba(251,191,36,0.18)] px-3 py-1.5 font-mono text-xs font-semibold text-[#fbbf24]"><span className="h-2 w-2 rounded-full bg-[#fbbf24] animate-pulse" /> {statsLoaded ? "Live proof" : "Built by students"}</span>
-          {statsLoaded ? (
-            <>
-              <span className="rounded-full border border-[rgba(52,211,153,0.15)] bg-[#022c1e]/30 px-3 py-1.5 font-mono text-xs text-[#f0fdf4]">{totalEvents} events</span>
-              <span className="rounded-full border border-[rgba(251,191,36,0.18)] bg-[rgba(251,191,36,0.10)] px-3 py-1.5 font-mono text-xs text-[#fbbf24]">{verifiedCount} verified</span>
-              <span className="ml-auto hidden sm:inline font-mono text-xs text-[rgba(240,253,244,0.55)]">updates every 30s</span>
-            </>
-          ) : (
-            <>
-              <span className="rounded-full border border-[rgba(52,211,153,0.15)] bg-[#022c1e]/30 px-3 py-1.5 font-mono text-xs text-[#f0fdf4]">Campus-wide</span>
-              <span className="rounded-full border border-[rgba(251,191,36,0.18)] bg-[rgba(251,191,36,0.10)] px-3 py-1.5 font-mono text-xs text-[#fbbf24]">8 departments</span>
-              <span className="ml-auto hidden sm:inline font-mono text-xs text-[rgba(240,253,244,0.55)]">No signup wall</span>
-            </>
-          )}
-          <a href="/app/roadmap" className="rounded-full bg-[#34d399] px-4 py-1.5 text-xs font-bold text-[#022c1e] hover:bg-[#6ee7b7] transition">See timetable →</a>
-        </section>
-
-        <div className="mt-3">
-          {statsLoaded ? <LiveTicker items={ticker} /> : (
-            <div className="animate-pulse rounded-full border border-[rgba(52,211,153,0.15)] bg-[#1a5f48]/60 px-4 py-2.5 font-mono text-xs text-[rgba(240,253,244,0.55)]">
-              Loading live confirmations…
-            </div>
-          )}
-        </div>
-
-        {/* ── How it works — 3 steps, tonal cards ── */}
+        {/* How it works */}
         <section className="mt-10">
           <div className="flex items-baseline justify-between">
             <h2 className="text-xl font-semibold tracking-tight text-[#f0fdf4]">How it works</h2>
@@ -175,11 +133,11 @@ export default function LandingPage() {
           </div>
           <div className="mt-5 grid gap-4 sm:grid-cols-3">
             {[
-              { n: '01', title: 'Hear gist', desc: 'Lecturer says "we moved to Hall B". Post it — shows instantly as advisory.', icon: Sparkles, tint: 'border-[rgba(52,211,153,0.15)]' },
-              { n: '02', title: 'Coursemates confirm', desc: 'Were you there? Tap Yes / No. Enough Yes turns it gold.', icon: Users, tint: 'border-[rgba(251,191,36,0.18)]' },
-              { n: '03', title: 'Everyone knows', desc: 'Gold tick = trust it. No tick = double-check. No more wrong hall.', icon: ShieldCheck, tint: 'border-[rgba(52,211,153,0.15)]' },
+              { n: '01', title: 'Hear gist', desc: 'Lecturer says "we moved to Hall B". Post it — shows instantly as advisory.', icon: Sparkles },
+              { n: '02', title: 'Coursemates confirm', desc: 'Were you there? Tap Yes / No. Enough Yes turns it gold.', icon: Users },
+              { n: '03', title: 'Everyone knows', desc: 'Gold tick = trust it. No tick = double-check. No more wrong hall.', icon: ShieldCheck },
             ].map((s) => (
-              <div key={s.n} className={`rounded-[20px] border bg-[#1a5f48] p-6 shadow-[0_8px_24px_rgba(2,44,30,0.25)] ${s.tint}`}>
+              <div key={s.n} className="rounded-[20px] border border-[rgba(52,211,153,0.15)] bg-[#1a5f48] p-6 shadow-[0_8px_24px_rgba(2,44,30,0.25)]">
                 <div className="flex items-center justify-between">
                   <span className="font-mono text-xs font-medium tracking-[0.14em] text-[rgba(240,253,244,0.55)]">{s.n}</span>
                   <span className="flex h-8 w-8 items-center justify-center rounded-full border border-[rgba(52,211,153,0.12)] bg-[#0d3b2a]/40 text-[#34d399]"><s.icon className="h-4 w-4" /></span>
@@ -191,9 +149,13 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* ── Why students built this ── */}
+        {/* Why students built this */}
         <section className="mt-10 grid gap-4 sm:grid-cols-3">
-          {[['For freshers', 'Trek to the right hall on day one. No "sorry, we moved" after three floors.'], ['For class reps', 'You hear it first. Post before the broadcast chaos — votes do the rest.'], ['For everyone', 'One post helps ten coursemates. Ten confirms help the whole department.']].map(([t,d])=> (
+          {[
+            ['For freshers', 'Trek to the right hall on day one. No "sorry, we moved" after three floors.'],
+            ['For class reps', 'You hear it first. Post before the broadcast chaos — votes do the rest.'],
+            ['For everyone', 'One post helps ten coursemates. Ten confirms help the whole department.'],
+          ].map(([t, d]) => (
             <div key={t} className="rounded-2xl border border-[rgba(52,211,153,0.12)] bg-[#1a5f48]/50 px-5 py-4">
               <p className="text-sm font-semibold text-[#f0fdf4]">{t}</p>
               <p className="mt-1.5 text-sm leading-5 text-[rgba(240,253,244,0.70)]">{d}</p>
@@ -201,11 +163,7 @@ export default function LandingPage() {
           ))}
         </section>
 
-        {statsLoaded && (
-          <p className="mt-10 text-center font-mono text-xs text-[rgba(240,253,244,0.55)]">Live from campus: {totalEvents} events · {verifiedCount} verified · updates every 30s</p>
-        )}
-
-        {/* ── Final CTA — mint on shadow, gold accent ── */}
+        {/* Final CTA */}
         <section className="mt-10 overflow-hidden rounded-[20px] border border-[rgba(52,211,153,0.18)] bg-gradient-to-br from-[#1a5f48] to-[#0d3b2a] px-6 py-10 text-center sm:px-10 shadow-[0_12px_32px_rgba(2,44,30,0.35)]">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-[rgba(251,191,36,0.18)] bg-[rgba(251,191,36,0.10)] px-3 py-1 font-mono text-xs text-[#fbbf24]"><ShieldCheck className="h-3 w-3" /> Advisory · confirm exams with your department</span>
           <h2 className="mx-auto mt-4 max-w-[520px] text-2xl font-bold tracking-tight text-[#f0fdf4] sm:text-[26px]">Don't miss the next venue change.</h2>
@@ -218,7 +176,6 @@ export default function LandingPage() {
         <footer className="py-8 text-center font-mono text-xs text-[rgba(240,253,244,0.40)]">
           PHYSI · built by students, for students
         </footer>
-
       </main>
     </div>
   );
