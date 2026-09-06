@@ -46,7 +46,7 @@ export default function BottomNavClient() {
   const isRoadmap = pathname?.startsWith("/app/roadmap");
 
   return (
-    <nav className="fixed bottom-0 inset-x-0 z-40 border-t border-[rgba(52,211,153,0.15)] bg-[#022c1e]/92 backdrop-blur-xl">
+    <nav className="fixed bottom-0 inset-x-0 z-40 border-t border-sky/20 bg-white/92 backdrop-blur-xl">
       <div className="mx-auto flex max-w-[480px] items-center gap-2 px-3 py-3">
         {BOTTOM_TABS.map((t) => {
           const active = pathname === t.href || pathname?.startsWith(t.href + "/");
@@ -55,27 +55,27 @@ export default function BottomNavClient() {
             <a key={t.href} href={t.href}
               className={`relative flex flex-1 items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-semibold transition ${
                 active
-                  ? "bg-[#34d399] text-[#022c1e] shadow-lg shadow-[rgba(52,211,153,0.18)]"
-                  : "border border-[rgba(52,211,153,0.15)] bg-[#1a5f48]/70 text-[rgba(240,253,244,0.80)] hover:bg-[#1a5f48] hover:text-[#f0fdf4]"
+                  ? "bg-sky text-white shadow-md"
+                  : "border border-sky/25 bg-white text-ink hover:bg-sky/10"
               }`}
             >
               <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs ${
-                active ? "bg-[#022c1e] text-[#34d399]" : "bg-[#022c1e]/40 text-[#f0fdf4] border border-[rgba(52,211,153,0.15)]"
+                active ? "bg-white/20 text-white" : "bg-sky/15 text-sky"
               }`}>{t.short}</span>
               {t.label}
               {isRoad && mineDot && (
-                <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-[#fbbf24] ring-2 ring-[#022c1e] animate-pulse" />
+                <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-gold ring-2 ring-white animate-pulse" />
               )}
             </a>
           );
         })}
       </div>
       {isRoadmap && (
-        <p className="pb-2 text-center font-mono text-[11px] text-[rgba(240,253,244,0.50)]">
+        <p className="pb-2 text-center font-mono text-[11px] text-ink/60">
           Map · List inside — tap nodes to verify
         </p>
       )}
-      <div className="h-[env(safe-area-inset-bottom)] bg-[#022c1e]" />
+      <div className="h-[env(safe-area-inset-bottom)] bg-white" />
     </nav>
   );
 }
