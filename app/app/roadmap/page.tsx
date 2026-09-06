@@ -2,6 +2,7 @@ import { RoadSkeleton } from "@/components/Skeletons";
 import RoadmapShell from "@/components/road/RoadmapShell";
 import { getTimetableFeed } from "@/lib/data";
 
+// Server Component — fetches data and renders initial HTML
 export default async function RoadmapPage({
   searchParams,
 }: {
