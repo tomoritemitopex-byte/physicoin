@@ -553,6 +553,7 @@ export async function ensureAuthColumns(): Promise<void> {
 /**
  * Idempotent bootstrap — safe to call on every request.
  * Cached via module-level flag so DDL only runs once per warm instance.
+ * On cold start, checks pg_tables first — skips ALL DDL if tables already exist.
  * Parallel leaves, ordered root; single retry for cold start (500ms wake).
  */
 let _tablesEnsured = false;
@@ -560,6 +561,15 @@ export async function ensureAllTables(): Promise<void> {
   if (_tablesEnsured) return;
   const c = getSql() ?? sql;
   if (!c) return;
+  // Fast path: check if core tables already exist (single query)
+  // Avoids running 22 DDL CREATE TABLE IF NOT EXISTS on every cold start
+  try {
+    const existing = await c`SELECT to_regclass('physi_users') AS u, to_regclass('physi_events') AS e, to_regclass('physi_verifications') AS v` as any;
+    if (existing?.[0]?.u && existing?.[0]?.e && existing?.[0]?.v) {
+      _tablesEnsured = true; // tables already exist, skip DDL entirely
+      return;
+    }
+  } catch { /* fall through to DDL */ }
   const run = async () => {
     await ensureUsers();
     await ensureEvents();
