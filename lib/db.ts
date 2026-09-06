@@ -552,9 +552,12 @@ export async function ensureAuthColumns(): Promise<void> {
 
 /**
  * Idempotent bootstrap — safe to call on every request.
+ * Cached via module-level flag so DDL only runs once per warm instance.
  * Parallel leaves, ordered root; single retry for cold start (500ms wake).
  */
+let _tablesEnsured = false;
 export async function ensureAllTables(): Promise<void> {
+  if (_tablesEnsured) return;
   const c = getSql() ?? sql;
   if (!c) return;
   const run = async () => {
@@ -575,10 +578,12 @@ export async function ensureAllTables(): Promise<void> {
   };
   try {
     await run();
+    _tablesEnsured = true;
   } catch (e) {
     console.warn("[db] cold-start retry:", (e as Error).message);
     await new Promise((r) => setTimeout(r, 350));
     await run();
+    _tablesEnsured = true;
   }
 }
 
