@@ -1,37 +1,31 @@
 {
-  "name": "PHYSI",
+  "name": "PHYSI — Live Timetable",
   "short_name": "PHYSI",
-  "description": "Student-powered timetable — share what you hear, confirm what you see. Advisory feed.",
-  "theme_color": "#0d3b2a",
-  "background_color": "#070a12",
+  "description": "Student-powered real-time timetable. Share what you hear, confirm what you see.",
+  "start_url": "/?source=pwa",
   "display": "standalone",
+  "background_color": "#0d3b2a",
+  "theme_color": "#0d3b2a",
   "orientation": "portrait",
-  "start_url": "/app/roadmap",
-  "scope": "/",
   "icons": [
     {
-      "src": "/ref1.webp",
+      "src": "/pwa-192.png",
       "sizes": "192x192",
-      "type": "image/webp",
-      "purpose": "any maskable"
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
-      "src": "/ref2.webp",
+      "src": "/pwa-512.png",
       "sizes": "512x512",
-      "type": "image/webp",
-      "purpose": "any maskable"
-    },
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
     {
-      "src": "/ref1.jpg",
-      "sizes": "192x192",
-      "type": "image/jpeg",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/ref2.jpg",
-      "sizes": "512x512",
-      "type": "image/jpeg",
-      "purpose": "any maskable"
+      "src": "/pwa-splash.png",
+      "sizes": "1280x720",
+      "type": "image/png"
     }
   ]
 }
