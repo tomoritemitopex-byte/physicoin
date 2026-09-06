@@ -2,8 +2,6 @@ import Link from 'next/link';
 import BottomNavClient from '@/components/nav/BottomNavClient';
 import HeaderClient from '@/components/nav/HeaderClient';
 
-export const dynamic = "force-dynamic";
-
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const ALL_TABS = [
     { href: '/app/roadmap', label: 'Road', short: 'R' },
