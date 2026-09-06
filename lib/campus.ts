@@ -16,14 +16,14 @@ export type Building = {
 };
 
 export const BUILDINGS: Building[] = [
-  { id: "phys", code: "PHYS", label: "Physiology", short: "Phys", color: "#10b981", accent: "#065f46", icon: "🧬", desc: "Home of Physio" },
-  { id: "mbbs", code: "MBBS", label: "Medicine & Surgery", short: "MBBS", color: "#0ea5e9", accent: "#0c4a6e", icon: "🩺", desc: "College of Medicine" },
-  { id: "dpt", code: "DPT", label: "Physiotherapy", short: "DPT", color: "#34d399", accent: "#4c1d95", icon: "🦴", desc: "Rehab Sciences" },
-  { id: "bnsc", code: "BNSc", label: "Nursing Science", short: "Nursing", color: "#ec4899", accent: "#831843", icon: "🩹", desc: "Nursing" },
-  { id: "bmls", code: "BMLS", label: "Medical Lab Science", short: "BMLS", color: "#f59e0b", accent: "#78350f", icon: "🔬", desc: "Lab Science" },
-  { id: "pharm", code: "PHARM", label: "Pharmacy", short: "Pharm", color: "#06b6d4", accent: "#164e63", icon: "💊", desc: "Pharmaceutical Sci" },
-  { id: "nutr", code: "NUTR", label: "Nutrition & Dietetics", short: "Nutrition", color: "#84cc16", accent: "#365314", icon: "🥗", desc: "Nutrition" },
-  { id: "it", code: "IT", label: "Information Tech", short: "IT", color: "#f43f5e", accent: "#881337", icon: "💻", desc: "Health Informatics" },
+  { id: "anat", code: "ANAT", label: "Anatomy", short: "Anat", color: "#d97706", accent: "#7c2d12", icon: "🦴", desc: "Department of Anatomy" },
+  { id: "phys", code: "PHYSIOL", label: "Physiology", short: "Phys", color: "#2563eb", accent: "#1e3a8a", icon: "❤️", desc: "Department of Physiology" },
+  { id: "biochem", code: "BIOCHEM", label: "Biochemistry", short: "Biochem", color: "#16a34a", accent: "#14532d", icon: "🧪", desc: "Department of Biochemistry" },
+  { id: "mbbs", code: "MBBS", label: "Medicine & Surgery", short: "MBBS", color: "#b91c1c", accent: "#450a0a", icon: "🩺", desc: "College of Medicine — clock tower" },
+  { id: "pharm", code: "PHARM", label: "Pharmacology", short: "Pharm", color: "#9333ea", accent: "#4c1d95", icon: "💊", desc: "Department of Pharmacology" },
+  { id: "commed", code: "COMM MED", label: "Community Medicine", short: "ComMed", color: "#0891b2", accent: "#164e63", icon: "🏥", desc: "Department of Community Medicine" },
+  { id: "nursing", code: "NURS", label: "Nursing Science", short: "Nursing", color: "#db2777", accent: "#831843", icon: "🩹", desc: "Nursing Science" },
+  { id: "lab", code: "BMLS", label: "Medical Lab Science", short: "BMLS", color: "#ea580c", accent: "#7c2d12", icon: "🔬", desc: "Medical Laboratory Science" },
 ];
 
 export const LEVELS = ["100L", "200L", "300L", "400L", "500L", "600L"] as const;
@@ -31,13 +31,13 @@ export type Level = typeof LEVELS[number];
 
 export function buildingForProgramme(programme: string): Building | undefined {
   const p = String(programme||"").toLowerCase();
+  if (p.includes("anat") || p.includes("anatomy")) return BUILDINGS.find(b=>b.id==="anat");
   if (p.includes("physiol")) return BUILDINGS.find(b=>b.id==="phys");
+  if (p.includes("biochem")) return BUILDINGS.find(b=>b.id==="biochem");
   if (p.includes("medicine") || p.includes("surgery") || p.includes("mbbs")) return BUILDINGS.find(b=>b.id==="mbbs");
-  if (p.includes("physio") || p.includes("dpt")) return BUILDINGS.find(b=>b.id==="dpt");
-  if (p.includes("nurs")) return BUILDINGS.find(b=>b.id==="bnsc");
-  if (p.includes("lab") || p.includes("bmls")) return BUILDINGS.find(b=>b.id==="bmls");
   if (p.includes("pharm")) return BUILDINGS.find(b=>b.id==="pharm");
-  if (p.includes("nutr") || p.includes("diet")) return BUILDINGS.find(b=>b.id==="nutr");
-  if (p.includes("inform") || p.includes("tech")) return BUILDINGS.find(b=>b.id==="it");
+  if (p.includes("community")) return BUILDINGS.find(b=>b.id==="commed");
+  if (p.includes("nurs")) return BUILDINGS.find(b=>b.id==="nursing");
+  if (p.includes("lab") || p.includes("bmls")) return BUILDINGS.find(b=>b.id==="lab");
   return BUILDINGS[0];
 }

@@ -1,58 +1,94 @@
 /**
- * lib/adapters/theme.ts — ThemeAdapter (design adapter)
+ * lib/adapters/theme.ts — ThemeAdapter
  *
- * Modular design tokens: registerAdapter() plugs a new theme without hard-codes.
- * Default: forest (#0d3b2a) — mint #34d399 + gold #fbbf24 on shadow #022c1e
- * Consumers: tailwind.config.ts, globals.css (via CSS vars), layout components.
+ * Default: campus day (sky/brick/stone) for roadmap
  */
 
 import { createRegistry } from "./registry";
 
 export interface ThemeTokens {
-  /** page background */
   bg: string;
-  /** card fill */
   card: string;
-  /** card border */
   border: string;
-  /** muted text */
   muted: string;
-  /** primary accent (e.g. for CTAs) */
   accent: string;
-  /** accent foreground */
   accentFg: string;
-  /** success/green tick */
   success: string;
-  /** warning/advisory */
   warning: string;
-  /** CSS vars map for :root */
   cssVars: Record<string, string>;
 }
 
 export interface ThemeAdapter {
   id: string;
   name: string;
-  /** semantic family: "forest" | ... */
   variant: string;
   tokens: ThemeTokens;
-  /** optional Tailwind color extension helper */
   twColors?: Record<string, string | Record<string, string>>;
 }
 
-// registry
 const reg = createRegistry<ThemeAdapter>();
 export const registerTheme = reg.registerAdapter;
 export const listThemes = reg.listAdapters;
 export const getTheme = reg.getAdapter;
-export function getDefaultTheme(): ThemeAdapter {
-  return getTheme("forest") ?? reg.listAdapters()[0]!;
+
+function getEnvTheme(): string | undefined {
+  if (typeof process !== 'undefined' && process.env) {
+    return process.env.NEXT_PUBLIC_THEME || process.env.THEME;
+  }
+  return undefined;
 }
+
+export function getDefaultTheme(): ThemeAdapter {
+  const envTheme = getEnvTheme();
+  const themeId = envTheme === "forest" ? "forest" : "campus";
+  return getTheme(themeId) ?? reg.listAdapters()[0]!;
+}
+
 export function themeCssVars(id?: string): Record<string, string> {
   const t = (id ? getTheme(id) : null) ?? getDefaultTheme();
   return t.tokens.cssVars;
 }
 
-// ── built-in: forest (default) ───────────────────────────────────────────────
+const campus: ThemeAdapter = {
+  id: "campus",
+  name: "Campus Day",
+  variant: "campus",
+  tokens: {
+    bg: "#ffffff",
+    card: "#ffffff",
+    border: "rgba(30,58,138,0.15)",
+    muted: "rgba(12,30,58,0.70)",
+    accent: "#0369a1",
+    accentFg: "#ffffff",
+    success: "#15803d",
+    warning: "#d97706",
+    cssVars: {
+      "--physi-bg": "#ffffff",
+      "--physi-card": "#ffffff",
+      "--physi-border": "rgba(30,58,138,0.15)",
+      "--physi-muted": "rgba(12,30,58,0.70)",
+      "--physi-accent": "#0369a1",
+      "--physi-accent-fg": "#ffffff",
+      "--physi-success": "#15803d",
+      "--physi-warning": "#d97706",
+      "--physi-shadow": "#0c1e3a",
+      "--physi-sky": "#7dd3fc",
+      "--paper": "#ffffff",
+      "--coral": "#0369a1",
+    },
+  },
+  twColors: {
+    sky: { DEFAULT: "#7dd3fc", 2: "#bae6fd", 3: "#e0f2fe" },
+    ink: { DEFAULT: "#0c1e3a", 2: "#1e3a8a" },
+    stone: { DEFAULT: "#78716c", 2: "#a8a29e" },
+    brick: { DEFAULT: "#dc2626", dark: "#991b1b" },
+    forest: { DEFAULT: "#15803d", 2: "#166534" },
+    phys: { bg: "#ffffff", card: "#ffffff", accent: "#0369a1" },
+  },
+};
+
+registerTheme(campus);
+
 const forest: ThemeAdapter = {
   id: "forest",
   name: "Forest Road",
@@ -99,13 +135,11 @@ const forest: ThemeAdapter = {
 
 registerTheme(forest);
 
-/** Resolve Tailwind 'theme.extend.colors' from registry (no hard-codes). */
 export function tailwindColors(): Record<string, unknown> {
   const t = getDefaultTheme();
   return (t.twColors as Record<string, unknown>) ?? {};
 }
 
-/** Emit :root CSS string for globals.css injection (optional helper). */
 export function themeRootCss(id?: string): string {
   const vars = themeCssVars(id);
   const lines = Object.entries(vars).map(([k, v]) => `  ${k}: ${v};`);

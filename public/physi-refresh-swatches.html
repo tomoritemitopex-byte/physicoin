@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PHYSI — Refresh Swatch Browser · Dawn Valley</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --paper: #fdf6e3; --paper-2:#f3ead3; --paper-3:#ede5cc;
+    --ink:#0f1f1a; --ink-2:#1c332b; --stone:#9aa99d; --stone-2:#c2b8a3;
+    --forest:#0d3b2a; --forest-2:#143d2e; --forest-3:#1a4d3a; --shadow:#071a12;
+    --coral:#ff6b6b; --coral-hover:#ff8787; --coral-soft:rgba(255,107,107,0.14); --coral-border:rgba(255,107,107,0.24);
+    --mint:#2ec4a3; --gold:#f5b94d;
+    --contour: rgba(15,31,26,0.12); --contour-strong: rgba(15,31,26,0.18);
+    --contour-ink: rgba(253,246,227,0.10);
+    --font-display:"Instrument Serif", Georgia, serif;
+    --font-body:"Inter", system-ui, sans-serif;
+    --font-mono:"JetBrains Mono", monospace;
+  }
+  *{box-sizing:border-box} html{scroll-behavior:smooth}
+  body{margin:0; background:var(--paper); color:var(--ink); font-family:var(--font-body); -webkit-font-smoothing:antialiased;}
+  body::before{content:""; position:fixed; inset:0; z-index:-1; pointer-events:none;
+    background:
+      radial-gradient(900px 520px at 50% -10%, rgba(219,234,254,0.90) 0%, transparent 62%),
+      radial-gradient(700px 420px at 85% 6%, rgba(186,230,204,0.55) 0%, transparent 60%),
+      linear-gradient(180deg, #fdf6e3 0%, #eef7f1 52%, #e8f2ec 100%);
+  }
+  .wrap{max-width:1120px; margin:0 auto; padding:28px 20px 60px}
+  h1{font-family:var(--font-display); font-size:clamp(32px,5vw,52px); line-height:0.95; letter-spacing:-0.03em; margin:0}
+  h1 em{font-style:italic; font-weight:400; color:var(--forest)}
+  h2{font-family:var(--font-display); font-size:22px; margin:36px 0 12px; letter-spacing:-0.02em}
+  .kicker{font-family:var(--font-mono); font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:var(--stone); display:inline-flex; align-items:center; gap:8px}
+  .kicker::before{content:""; width:22px; height:1px; background:var(--coral)}
+  .lead{color:rgba(15,31,26,0.66); max-width:52ch; line-height:1.6; margin:12px 0 0}
+  .grid{ display:grid; gap:12px}
+  .grid-4{grid-template-columns: repeat(4, minmax(0,1fr))}
+  .grid-3{grid-template-columns: repeat(3, minmax(0,1fr))}
+  @media(max-width:860px){ .grid-4{grid-template-columns: repeat(2,1fr)} .grid-3{grid-template-columns:1fr} }
+  .swatch{border-radius:14px; overflow:hidden; border:1px solid var(--contour); background:#fff; box-shadow:0 1px 2px rgba(15,31,26,0.06)}
+  .swatch-fill{height:72px; display:flex; align-items:flex-end; padding:8px 10px; font-family:var(--font-mono); font-size:11px; font-weight:600}
+  .swatch-meta{padding:8px 10px; font-size:12px; color:rgba(15,31,26,0.66)}
+  .swatch-meta b{color:var(--ink)}
+  .card{background:#fff; border:1px solid var(--contour); border-radius:16px; padding:16px; box-shadow:0 1px 2px rgba(15,31,26,0.06), 0 8px 24px rgba(15,31,26,0.08)}
+  .card:hover{border-color:var(--contour-strong); transform:translateY(-1px); box-shadow:0 4px 16px rgba(15,31,26,0.10)}
+  .btn{appearance:none; border:1px solid transparent; border-radius:9999px; padding:12px 20px; font:600 14px var(--font-body); cursor:pointer; transition:all 160ms ease}
+  .btn-primary{background:var(--coral); color:#fff; box-shadow:0 4px 16px rgba(255,107,107,0.28)}
+  .btn-primary:hover{background:var(--coral-hover); transform:translateY(-1px); box-shadow:0 8px 24px rgba(255,107,107,0.34)}
+  .btn-secondary{background:#fff; color:var(--ink); border-color:var(--contour)}
+  .btn-secondary:hover{background:var(--paper-2); border-color:var(--contour-strong)}
+  .pill{display:inline-flex; align-items:center; gap:6px; padding:6px 12px; border-radius:9999px; font:600 11px var(--font-mono); letter-spacing:0.06em; text-transform:uppercase; border:1px solid var(--contour); background:var(--paper-2)}
+  .pill--coral{background:var(--coral-soft); border-color:var(--coral-border); color:#c53030}
+  .pill--mint{background:rgba(46,196,163,0.12); border-color:rgba(46,196,163,0.22); color:#0f5a4a}
+  .demo-row{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+  .icon-grid{display:grid; grid-template-columns: repeat(3, 1fr); gap:16px}
+  @media(max-width:700px){ .icon-grid{grid-template-columns:1fr} }
+  .icon-card{text-align:center; padding:18px}
+  .icon-card img, .icon-card svg{width:96px; height:96px; border-radius:22px; box-shadow:0 8px 24px rgba(15,31,26,0.12)}
+  .code{font-family:var(--font-mono); font-size:11px; background:var(--paper-2); border:1px solid var(--contour); padding:10px 12px; border-radius:10px; overflow:auto}
+  .compare{display:grid; grid-template-columns:1fr 1fr; gap:14px}
+  @media(max-width:720px){ .compare{grid-template-columns:1fr} }
+  .forest-demo{background:var(--forest); color:#fdf6e3; border:1px solid rgba(253,246,227,0.12); border-radius:16px; padding:14px}
+  .forest-demo .btn-primary{box-shadow:0 4px 16px rgba(0,0,0,0.25)}
+  .bar{height:4px; border-radius:2px; background:rgba(15,31,26,0.08); overflow:hidden; margin-top:10px}
+  .bar-fill{height:100%; background:linear-gradient(90deg, var(--mint), var(--gold), var(--coral))}
+  header.shell{position:sticky; top:0; z-index:20; background:rgba(13,59,42,0.84); backdrop-filter:blur(12px) saturate(1.1); border-bottom:1px solid rgba(253,246,227,0.12); color:#fdf6e3}
+  header.shell .inner{max-width:1120px; margin:0 auto; display:flex; justify-content:space-between; align-items:center; padding:12px 20px}
+  .mono{font-family:var(--font-mono)}
+</style>
+</head>
+<body>
+<header class="shell">
+  <div class="inner">
+    <div style="display:flex; gap:10px; align-items:center">
+      <div style="width:28px;height:28px; border-radius:8px; background:#fdf6e3; color:#071a12; display:grid; place-items:center; font:800 10px var(--font-body)">PHYSI</div>
+      <span style="font:600 13px var(--font-body); letter-spacing:-0.02em">PHYSI · Refresh Swatches</span>
+      <span class="pill mono" style="background:rgba(253,246,227,0.12); color:#fdf6e3; border-color:rgba(253,246,227,0.14)">Dawn Valley · proposal</span>
+    </div>
+    <a href="../docs/design-refresh-swatches.md" style="color:#fdf6e3; font:500 12px var(--font-mono); opacity:0.85">Spec →</a>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="kicker">Design swatch browser</div>
+  <h1>Vault in the Valley <em>at Dawn</em></h1>
+  <p class="lead">Forest stays — but as depth, not wash. Paper opens to sky, coral sparks the human. Mint retires to verified-only. All swatches below are the proposed tokens live-previewed on this page.</p>
+
+  <h2>1 · Before → After</h2>
+  <div class="compare">
+    <div class="card">
+      <div class="mono" style="font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:var(--stone)">Before — Forest Mint</div>
+      <div style="display:flex; gap:8px; margin-top:10px">
+        <span style="flex:1; height:44px; border-radius:10px; background:#0d3b2a"></span>
+        <span style="flex:1; height:44px; border-radius:10px; background:#34d399"></span>
+        <span style="flex:1; height:44px; border-radius:10px; background:#fbbf24"></span>
+        <span style="flex:1; height:44px; border-radius:10px; background:#f0fdf4; border:1px solid var(--contour)"></span>
+      </div>
+      <div class="mono" style="margin-top:8px; font-size:11px; color:var(--stone)">Solid #0d3b2a · mint #34d399 · gold #fbbf24 · f0fdf4 · glass blur</div>
+    </div>
+    <div class="card">
+      <div class="mono" style="font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:var(--stone)">After — Dawn Valley</div>
+      <div style="display:flex; gap:8px; margin-top:10px">
+        <span style="flex:1; height:44px; border-radius:10px; background:linear-gradient(180deg,#fdf6e3,#dbeafe)"></span>
+        <span style="flex:1; height:44px; border-radius:10px; background:#ff6b6b"></span>
+        <span style="flex:1; height:44px; border-radius:10px; background:#f5b94d"></span>
+        <span style="flex:1; height:44px; border-radius:10px; background:#0d3b2a; border:1px solid var(--contour)"></span>
+      </div>
+      <div class="mono" style="margin-top:8px; font-size:11px; color:var(--stone)">Gradient paper→sky · coral #ff6b6b · warm gold · forest kept as depth</div>
+    </div>
+  </div>
+
+  <h2>2 · Palette</h2>
+  <div class="grid grid-4">
+    <div class="swatch"><div class="swatch-fill" style="background:#fdf6e3; color:var(--ink)">#fdf6e3</div><div class="swatch-meta"><b>Paper</b> · page bg</div></div>
+    <div class="swatch"><div class="swatch-fill" style="background:#f3ead3; color:var(--ink)">#f3ead3</div><div class="swatch-meta"><b>Paper-2</b> · field / pill</div></div>
+    <div class="swatch"><div class="swatch-fill" style="background:#0f1f1a; color:#fdf6e3">#0f1f1a</div><div class="swatch-meta"><b>Ink</b> · body</div></div>
+    <div class="swatch"><div class="swatch-fill" style="background:#9aa99d; color:#fff">#9aa99d</div><div class="swatch-meta"><b>Stone</b> · label</div></div>
+    <div class="swatch"><div class="swatch-fill" style="background:#0d3b2a; color:#fdf6e3">#0d3b2a</div><div class="swatch-meta"><b>Forest</b> · depth</div></div>
+    <div class="swatch"><div class="swatch-fill" style="background:#143d2e; color:#fdf6e3">#143d2e</div><div class="swatch-meta"><b>Forest-2</b> · rail</div></div>
+    <div class="swatch"><div class="swatch-fill" style="background:#ff6b6b; color:#fff">#ff6b6b</div><div class="swatch-meta"><b>Coral</b> · primary CTA</div></div>
+    <div class="swatch"><div class="swatch-fill" style="background:#2ec4a3; color:#fff">#2ec4a3</div><div class="swatch-meta"><b>Mint</b> · verified (secondary)</div></div>
+    <div class="swatch"><div class="swatch-fill" style="background:#f5b94d; color:var(--ink)">#f5b94d</div><div class="swatch-meta"><b>Gold</b> · warning</div></div>
+    <div class="swatch"><div class="swatch-fill" style="background:#12b981; color:#fff">#12b981</div><div class="swatch-meta"><b>Success</b> · verified tick</div></div>
+    <div class="swatch"><div class="swatch-fill" style="background:rgba(255,107,107,0.14); color:#c53030; border-bottom:1px solid rgba(255,107,107,0.24)">soft</div><div class="swatch-meta"><b>Coral soft</b> · chip bg</div></div>
+    <div class="swatch"><div class="swatch-fill" style="background:linear-gradient(180deg,#fdf6e3,#dbeafe); color:var(--ink)">gradient</div><div class="swatch-meta"><b>Bg gradient</b> · sky→forest</div></div>
+  </div>
+
+  <h2>3 · Typography</h2>
+  <div class="card">
+    <div style="font-family:var(--font-display); font-size:40px; line-height:0.95; letter-spacing:-0.03em">Instrument Serif <em style="font-style:italic; color:var(--forest)">at Dawn</em></div>
+    <div class="mono" style="color:var(--stone); margin-top:6px">Display · --font-display — keep as hero identity</div>
+    <div style="margin-top:16px; font:700 18px var(--font-body); letter-spacing:-0.02em">Inter — body & UI</div>
+    <div style="margin-top:4px; color:rgba(15,31,26,0.66); line-height:1.6">Lecturer moved class to Hall B and nobody told you? PHYSI is a live timetable built by students — post what you hear, tap Yes if you were there. Coral is the human spark.</div>
+    <div class="mono" style="margin-top:10px; color:var(--stone)">JetBrains Mono · 12px labels · mono for data, timestamps, counts</div>
+    <div class="bar"><div class="bar-fill" style="width:62%"></div></div>
+  </div>
+
+  <h2>4 · Components</h2>
+  <div class="grid grid-3">
+    <div class="card">
+      <div class="pill pill--coral">Live proof · 12 events</div>
+      <div style="font:600 18px var(--font-display); margin-top:10px; letter-spacing:-0.02em">PHT 302 — moved to LT2</div>
+      <div style="font-size:13px; color:rgba(15,31,26,0.66); margin-top:4px">Confirmed by 3 coursemates · 2m ago</div>
+      <div class="demo-row" style="margin-top:12px">
+        <button class="btn btn-primary">Confirm ✓</button>
+        <button class="btn btn-secondary">Skip</button>
+      </div>
+      <div class="bar"><div class="bar-fill" style="width:78%"></div></div>
+      <div class="mono" style="font-size:10px; color:var(--stone); margin-top:4px">urgency · coral→gold→mint</div>
+    </div>
+    <div class="card" style="border-left:3px solid var(--coral)">
+      <div class="mono" style="font-size:10px; letter-spacing:0.10em; text-transform:uppercase; color:var(--stone)">Verified</div>
+      <div style="font:500 16px var(--font-body); margin-top:6px">Green tick = your coursemates confirmed it</div>
+      <div style="margin-top:10px; display:flex; gap:6px">
+        <span class="pill pill--mint">● 5 verified</span>
+        <span class="pill">Hall B</span>
+      </div>
+    </div>
+    <div class="forest-demo">
+      <div class="mono" style="font-size:10px; letter-spacing:0.10em; text-transform:uppercase; opacity:0.7">Forest depth (kept)</div>
+      <div style="font:500 16px var(--font-display); margin-top:6px">One Rail · pill nav</div>
+      <div style="margin-top:10px; display:flex; gap:8px">
+        <button class="btn btn-primary" style="padding:8px 14px; font-size:12px">Live</button>
+        <span class="pill" style="background:rgba(253,246,227,0.12); color:#fdf6e3; border-color:rgba(253,246,227,0.14)">advisory · not official</span>
+      </div>
+    </div>
+  </div>
+
+  <h2>5 · PWA Icons — Real Mark</h2>
+  <div class="icon-grid">
+    <div class="card icon-card">
+      <svg viewBox="0 0 512 512" role="img" aria-label="PHYSI P glyph on forest disc">
+        <rect width="512" height="512" rx="112" fill="#0d3b2a"/>
+        <circle cx="256" cy="256" r="168" fill="#ff6b6b"/>
+        <path d="M 182 148 L 182 364 L 212 364 L 212 296 L 258 296 C 312 296 342 262 342 212 C 342 166 310 148 258 148 Z M 212 172 L 254 172 C 290 172 312 186 312 212 C 312 238 290 272 254 272 L 212 272 Z" fill="#fdf6e3"/>
+        <circle cx="276" cy="232" r="18" fill="#0d3b2a" opacity="0.18"/>
+      </svg>
+      <div style="font:600 13px var(--font-body); margin-top:10px">Source — icon.svg</div>
+      <div class="mono" style="color:var(--stone); font-size:11px">512×512 · P on coral disc · 80% safe</div>
+    </div>
+    <div class="card icon-card">
+      <svg viewBox="0 0 512 512" role="img" aria-label="Maskable safe zone preview">
+        <rect width="512" height="512" rx="112" fill="#143d2e"/>
+        <rect x="56" y="56" width="400" height="400" rx="80" fill="none" stroke="#fdf6e3" stroke-width="2" stroke-dasharray="8 6" opacity="0.5"/>
+        <circle cx="256" cy="256" r="168" fill="#ff6b6b"/>
+        <path d="M 182 148 L 182 364 L 212 364 L 212 296 L 258 296 C 312 296 342 262 342 212 C 342 166 310 148 258 148 Z M 212 172 L 254 172 C 290 172 312 186 312 212 C 312 238 290 272 254 272 L 212 272 Z" fill="#fdf6e3"/>
+        <text x="256" y="418" text-anchor="middle" font-family="JetBrains Mono" font-size="10" fill="#fdf6e3" opacity="0.7">80% safe zone</text>
+      </svg>
+      <div style="font:600 13px var(--font-body); margin-top:10px">Maskable — 512</div>
+      <div class="mono" style="color:var(--stone); font-size:11px">80% glyph within 80% circle · 12% pad</div>
+    </div>
+    <div class="card icon-card">
+      <div style="display:flex; gap:10px; justify-content:center; align-items:end">
+        <span style="width:48px; height:48px; border-radius:12px; background:#0d3b2a; display:grid; place-items:center; color:#ff6b6b; font:800 18px var(--font-body)">P</span>
+        <span style="width:72px; height:72px; border-radius:16px; background:#0d3b2a; display:grid; place-items:center; color:#fdf6e3; font:800 26px var(--font-body); border:2px solid rgba(253,246,227,0.12)">P</span>
+        <span style="width:96px; height:96px; border-radius:22px; background:#ff6b6b; display:grid; place-items:center; color:#0d3b2a; font:800 36px var(--font-body)">P</span>
+      </div>
+      <div style="font:600 13px var(--font-body); margin-top:12px">Sizes — 192 / 512 / 180</div>
+      <div class="mono" style="color:var(--stone); font-size:11px">any maskable · apple-touch 180</div>
+    </div>
+  </div>
+  <div class="code" style="margin-top:12px">public/pwa-192.png (192×192) · public/pwa-512.png (512×512) · public/pwa-512-maskable.png (512 maskable) · public/apple-touch-icon.png (180) · public/icon.svg (vector) — run: node scripts/generate-pwa-icons.mjs</div>
+
+  <h2>6 · Tokens (copy-paste)</h2>
+  <div class="code">:root{
+  --paper:#fdf6e3; --paper-2:#f3ead3; --ink:#0f1f1a; --stone:#9aa99d;
+  --forest:#0d3b2a; --forest-2:#143d2e; --shadow:#071a12;
+  --coral:#ff6b6b; --coral-hover:#ff8787; --coral-soft:rgba(255,107,107,0.14);
+  --mint:#2ec4a3; --gold:#f5b94d; --success:#12b981;
+  --contour:rgba(15,31,26,0.12); --contour-strong:rgba(15,31,26,0.18);
+  --font-display:"Instrument Serif", Georgia, serif;
+  --font-body:"Inter", system-ui, sans-serif;
+  --font-mono:"JetBrains Mono", monospace;
+}
+body{ background:var(--paper); color:var(--ink) }
+.btn-primary{ background:var(--coral); color:#fff; border-radius:9999px }
+.card{ background:#fff; border:1px solid var(--contour); border-radius:16px }</div>
+
+  <p class="mono" style="margin-top:28px; color:var(--stone); font-size:11px">Swatch version 1.0 · 2026-09-06 · Spec: physicoin/docs/design-refresh-swatches.md · Old reference kept at public/physi-design-reference.html</p>
+</div>
+</body>
+</html>

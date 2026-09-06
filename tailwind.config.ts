@@ -9,7 +9,15 @@ const config: Config = {
   ],
   theme: {
     extend: {
-      colors: tailwindColors() as unknown as Config['theme'] extends { extend?: { colors?: infer C } } ? C : never,
+      colors: {
+        ...tailwindColors() as Record<string, string | Record<string, string>>,
+        campus: {
+          DEFAULT: '#e0f2fe',
+          sky: '#7dd3fc',
+          brick: '#dc2626',
+          stone: '#78716c',
+        }
+      },
       fontFamily: {
         mono: ['JetBrains Mono', 'monospace'],
         sans: ['Inter', 'system-ui', 'sans-serif'],
@@ -24,9 +32,8 @@ const config: Config = {
         '3xl': '1.25rem',
       },
       boxShadow: {
-        'candy': '0 8px 32px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.06)',
-        'glow-mint': '0 8px 24px rgba(52,211,153,0.35)',
-        'liquid-glass': '0 0 0 1px rgba(255,255,255,0.05), 0 8px 32px rgba(2,44,30,0.45)',
+        'campus': '0 8px 32px rgba(12,30,58,0.28), inset 0 1px 0 rgba(255,255,255,0.06)',
+        'glow-sky': '0 8px 24px rgba(3,105,161,0.35)',
       },
       transform: {
         'road-parallax': 'perspective(1000px) rotateX(3deg) translateZ(0)',
