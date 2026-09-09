@@ -74,7 +74,13 @@ export default function ProfilePage(){
     if(h.length<2){ setErr("Handle too short — like alex_02"); return; }
     setBusy(true); setErr(null);
     try{
-      const r=await fetch("/api/profile",{ method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify({ nickname:h, full_name: fullName.trim()||h, programme, level, statuses:[], authority_base:1, authority_final:1 }) });
+      // Read select values from DOM directly — React onChange won't fire if
+      // .value was set programmatically (e.g. automation, keyboard-only blur).
+      // Fall back to React state only if the DOM element isn't available.
+      const selects = document.querySelectorAll('select');
+      const domProgramme = selects[0]?.value ?? programme;
+      const domLevel = selects[1]?.value ?? level;
+      const r=await fetch("/api/profile",{ method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify({ nickname:h, full_name: fullName.trim()||h, programme: domProgramme, level: domLevel, statuses:[], authority_base:1, authority_final:1 }) });
       const j=await r.json(); if(!r.ok||j.ok===false) throw new Error(j.error||"couldn't create — try another handle");
       localStorage.setItem("physi_profile", JSON.stringify(j.user));
       setProfile(j.user); setToastKind("earn"); setToast(`Welcome @${h} — Wallet ready ✓`);
