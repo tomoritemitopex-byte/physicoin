@@ -78,7 +78,7 @@ export default function LandingPage() {
             <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[11px]" style={{ borderColor: 'var(--physi-sky)', color: 'var(--physi-ink-60)' }}>advisory · not official</span>
           </div>
           <nav className="flex items-center gap-2">
-            <a href="/app/roadmap" className="hidden sm:inline-flex text-sm font-medium transition px-3 py-1.5" style={{ color: 'var(--physi-ink-70)', '&:hover': { color: 'var(--physi-ink)' } }}>See live timetable</a>
+            <a href="/app/roadmap" className="hidden sm:inline-flex text-sm font-medium transition px-3 py-1.5">See live timetable</a>
             <a href="/app/roadmap" className="primary-cta inline-flex items-center gap-1.5 px-5 py-2 text-sm font-semibold">See live timetable <ArrowRight className="h-4 w-4" /></a>
           </nav>
         </div>
