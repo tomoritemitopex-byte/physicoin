@@ -61,7 +61,7 @@ async function StatsAndTicker() {
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen selection:text-white" style={{ backgroundColor: 'var(--physi-paper)', color: 'var(--physi-ink)', selectionColor: 'var(--physi-accent)' }}>
+    <div className="min-h-screen selection:text-white" style={{ backgroundColor: 'var(--physi-paper)', color: 'var(--physi-ink)',  }}>
       {/* Soft gradient backdrop */}
       <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10">
         <div className="absolute inset-0" style={{ backgroundColor: 'var(--physi-paper)' }} />
