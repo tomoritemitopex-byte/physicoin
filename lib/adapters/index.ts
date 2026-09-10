@@ -32,6 +32,7 @@ import "./features/mining";
 import "./features/roadmap";
 import "./features/stats";
 import "./features/health";
+import "./features/schools";
 
 // Generic registry factory for custom domains
 export * from "./error";
