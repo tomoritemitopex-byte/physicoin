@@ -361,6 +361,114 @@ export async function ensureZkAuthority(): Promise<void> {
   await c`CREATE INDEX IF NOT EXISTS physi_events_zk_idx ON physi_events (is_zk_attested)`;
 }
 
+export async function ensureSchools(): Promise<void> {
+  const c = getSql() ?? sql;
+  if (!c) return;
+  await ensureUsers();
+  await c`
+    CREATE TABLE IF NOT EXISTS physi_schools (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name TEXT NOT NULL,
+      created_by UUID REFERENCES physi_users(id) ON DELETE SET NULL,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','verified','rejected')),
+      verified_by UUID REFERENCES physi_users(id) ON DELETE SET NULL,
+      verified_at TIMESTAMPTZ,
+      rejection_reason TEXT,
+      event_count INT NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`;
+  await c`CREATE INDEX IF NOT EXISTS physi_schools_status_idx ON physi_schools (status)`;
+  await c`CREATE INDEX IF NOT EXISTS physi_schools_name_idx ON physi_schools (lower(name))`;
+  await c`CREATE INDEX IF NOT EXISTS physi_schools_created_idx ON physi_schools (created_at DESC)`;
+  await c`CREATE INDEX IF NOT EXISTS physi_schools_event_count_idx ON physi_schools (event_count DESC)`;
+}
+
+export async function ensureSchoolDepartments(): Promise<void> {
+  const c = getSql() ?? sql;
+  if (!c) return;
+  await ensureSchools();
+  await c`
+    CREATE TABLE IF NOT EXISTS physi_school_departments (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      school_id UUID NOT NULL REFERENCES physi_schools(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      years INT NOT NULL DEFAULT 4,
+      created_by UUID REFERENCES physi_users(id) ON DELETE SET NULL,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','verified','rejected')),
+      verified_by UUID REFERENCES physi_users(id) ON DELETE SET NULL,
+      verified_at TIMESTAMPTZ,
+      rejection_reason TEXT,
+      event_count INT NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`;
+  await c`CREATE INDEX IF NOT EXISTS physi_school_depts_school_idx ON physi_school_departments (school_id)`;
+  await c`CREATE INDEX IF NOT EXISTS physi_school_depts_name_idx ON physi_school_departments (lower(name))`;
+  await c`CREATE INDEX IF NOT EXISTS physi_school_depts_status_idx ON physi_school_departments (status)`;
+  await c`CREATE INDEX IF NOT EXISTS physi_school_depts_event_count_idx ON physi_school_departments (event_count DESC)`;
+  await c`CREATE UNIQUE INDEX IF NOT EXISTS physi_school_depts_school_name_uidx ON physi_school_departments (school_id, lower(name))`;
+}
+
+export async function ensureSchoolDisputes(): Promise<void> {
+  const c = getSql() ?? sql;
+  if (!c) return;
+  await ensureSchools();
+  await c`
+    CREATE TABLE IF NOT EXISTS physi_school_disputes (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      school_id_a UUID REFERENCES physi_schools(id) ON DELETE CASCADE,
+      school_id_b UUID REFERENCES physi_schools(id) ON DELETE CASCADE,
+      dept_id_a UUID REFERENCES physi_school_departments(id) ON DELETE CASCADE,
+      dept_id_b UUID REFERENCES physi_school_departments(id) ON DELETE CASCADE,
+      dispute_type TEXT NOT NULL CHECK (dispute_type IN ('school_name','department_name','same_school')),
+      status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','resolved_a_wins','resolved_b_wins','expired','creator_decided')),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      resolved_at TIMESTAMPTZ,
+      resolved_by UUID REFERENCES physi_users(id) ON DELETE SET NULL,
+      resolution_notes TEXT
+    )`;
+  await c`CREATE INDEX IF NOT EXISTS physi_school_disputes_status_idx ON physi_school_disputes (status)`;
+  await c`CREATE INDEX IF NOT EXISTS physi_school_disputes_created_idx ON physi_school_disputes (created_at DESC)`;
+  await c`CREATE INDEX IF NOT EXISTS physi_school_disputes_school_a_idx ON physi_school_disputes (school_id_a)`;
+  await c`CREATE INDEX IF NOT EXISTS physi_school_disputes_school_b_idx ON physi_school_disputes (school_id_b)`;
+}
+
+export async function ensureCoinsBurned(): Promise<void> {
+  const c = getSql() ?? sql;
+  if (!c) return;
+  await ensureSchoolDisputes();
+  await c`
+    CREATE TABLE IF NOT EXISTS physi_coins_burned (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      dispute_id UUID REFERENCES physi_school_disputes(id) ON DELETE SET NULL,
+      loser_school_id UUID REFERENCES physi_schools(id) ON DELETE SET NULL,
+      loser_dept_id UUID REFERENCES physi_school_departments(id) ON DELETE SET NULL,
+      amount_burned NUMERIC(14,2) NOT NULL,
+      creator_fee NUMERIC(14,2) NOT NULL DEFAULT 0,
+      winner_gets NUMERIC(14,2) NOT NULL DEFAULT 0,
+      burned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      burned_by UUID REFERENCES physi_users(id) ON DELETE SET NULL
+    )`;
+  await c`CREATE INDEX IF NOT EXISTS physi_coins_burned_dispute_idx ON physi_coins_burned (dispute_id)`;
+  await c`CREATE INDEX IF NOT EXISTS physi_coins_burned_school_idx ON physi_coins_burned (loser_school_id)`;
+  await c`CREATE INDEX IF NOT EXISTS physi_coins_burned_created_idx ON physi_coins_burned (burned_at DESC)`;
+}
+
+export async function ensureSchoolEventCounts(): Promise<void> {
+  const c = getSql() ?? sql;
+  if (!c) return;
+  await ensureSchools();
+  await ensureSchoolDepartments();
+  await c`
+    CREATE TABLE IF NOT EXISTS physi_school_event_counts (
+      school_id UUID PRIMARY KEY REFERENCES physi_schools(id) ON DELETE CASCADE,
+      dept_id UUID REFERENCES physi_school_departments(id) ON DELETE CASCADE,
+      event_count INT NOT NULL DEFAULT 0,
+      last_updated TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`;
+}
+
 // ── Student intuitions: Find My People (squad locator), Bunk Radar, Notes Drop ──
 export async function ensureSquadTables(): Promise<void> {
   const c = getSql() ?? sql;
@@ -573,7 +681,7 @@ export async function ensureAllTables(): Promise<void> {
   const run = async () => {
     await ensureUsers();
     await ensureEvents();
-    await Promise.all([ensureVerifications(), ensureMiningLogs(), ensureCanonicalLog(), ensureEventHistory(), ensureScopeVotes(), ensureScopeResolution(), ensureGhostWitness(), ensureScopeMiningColumns(), ensureZkAuthority(), ensureSquadTables(), ensureBunkTables(), ensureNotesTables(), ensureHallAliases(), ensureProfAliases(), ensureSlotClaims(), ensureHeaders(), ensureVoteBonds(), ensureRevokedTokens(), ensureAuthColumns()]);
+    await Promise.all([ensureVerifications(), ensureMiningLogs(), ensureCanonicalLog(), ensureEventHistory(), ensureScopeVotes(), ensureScopeResolution(), ensureGhostWitness(), ensureScopeMiningColumns(), ensureZkAuthority(), ensureSquadTables(), ensureBunkTables(), ensureNotesTables(), ensureHallAliases(), ensureProfAliases(), ensureSlotClaims(), ensureHeaders(), ensureVoteBonds(), ensureRevokedTokens(), ensureAuthColumns(), ensureSchools(), ensureSchoolDepartments(), ensureSchoolDisputes(), ensureCoinsBurned(), ensureSchoolEventCounts()]);
     // ensure columns idempotently after tables exist
     await ensureGhostWitness();
     await ensureScopeMiningColumns();

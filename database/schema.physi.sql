@@ -154,6 +154,89 @@ CREATE TABLE IF NOT EXISTS physi_hall_alias_votes (
 );
 CREATE INDEX IF NOT EXISTS physi_hall_alias_votes_voter_idx ON physi_hall_alias_votes (voter_id);
 
+-- Schools + Departments — student-created, creator-verified
+-- A school becomes "real" when students post verified timetable events for its departments.
+-- Fake schools die naturally — no events, no proof, no one uses them.
+CREATE TABLE IF NOT EXISTS physi_schools (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  created_by UUID REFERENCES physi_users(id) ON DELETE SET NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','verified','rejected')),
+  verified_by UUID REFERENCES physi_users(id) ON DELETE SET NULL,
+  verified_at TIMESTAMPTZ,
+  rejection_reason TEXT,
+  event_count INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS physi_schools_status_idx ON physi_schools (status);
+CREATE INDEX IF NOT EXISTS physi_schools_name_idx ON physi_schools (lower(name));
+CREATE INDEX IF NOT EXISTS physi_schools_created_idx ON physi_schools (created_at DESC);
+CREATE INDEX IF NOT EXISTS physi_schools_event_count_idx ON physi_schools (event_count DESC);
+
+CREATE TABLE IF NOT EXISTS physi_school_departments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  school_id UUID NOT NULL REFERENCES physi_schools(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  years INT NOT NULL DEFAULT 4,
+  created_by UUID REFERENCES physi_users(id) ON DELETE SET NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','verified','rejected')),
+  verified_by UUID REFERENCES physi_users(id) ON DELETE SET NULL,
+  verified_at TIMESTAMPTZ,
+  rejection_reason TEXT,
+  event_count INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS physi_school_depts_school_idx ON physi_school_departments (school_id);
+CREATE INDEX IF NOT EXISTS physi_school_depts_name_idx ON physi_school_departments (lower(name));
+CREATE INDEX IF NOT EXISTS physi_school_depts_status_idx ON physi_school_departments (status);
+CREATE INDEX IF NOT EXISTS physi_school_depts_event_count_idx ON physi_school_departments (event_count DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS physi_school_depts_school_name_uidx ON physi_school_departments (school_id, lower(name));
+
+-- School disputes — two departments/schools claim the same name
+CREATE TABLE IF NOT EXISTS physi_school_disputes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  school_id_a UUID REFERENCES physi_schools(id) ON DELETE CASCADE,
+  school_id_b UUID REFERENCES physi_schools(id) ON DELETE CASCADE,
+  dept_id_a UUID REFERENCES physi_school_departments(id) ON DELETE CASCADE,
+  dept_id_b UUID REFERENCES physi_school_departments(id) ON DELETE CASCADE,
+  dispute_type TEXT NOT NULL CHECK (dispute_type IN ('school_name','department_name','same_school')),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','resolved_a_wins','resolved_b_wins','expired','creator_decided')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  resolved_at TIMESTAMPTZ,
+  resolved_by UUID REFERENCES physi_users(id) ON DELETE SET NULL,
+  resolution_notes TEXT
+);
+CREATE INDEX IF NOT EXISTS physi_school_disputes_status_idx ON physi_school_disputes (status);
+CREATE INDEX IF NOT EXISTS physi_school_disputes_created_idx ON physi_school_disputes (created_at DESC);
+CREATE INDEX IF NOT EXISTS physi_school_disputes_school_a_idx ON physi_school_disputes (school_id_a);
+CREATE INDEX IF NOT EXISTS physi_school_disputes_school_b_idx ON physi_school_disputes (school_id_b);
+
+-- Coins burned in disputes — tracked for creator fee + deflation record
+CREATE TABLE IF NOT EXISTS physi_coins_burned (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  dispute_id UUID REFERENCES physi_school_disputes(id) ON DELETE SET NULL,
+  loser_school_id UUID REFERENCES physi_schools(id) ON DELETE SET NULL,
+  loser_dept_id UUID REFERENCES physi_school_departments(id) ON DELETE SET NULL,
+  amount_burned NUMERIC(14,2) NOT NULL,
+  creator_fee NUMERIC(14,2) NOT NULL DEFAULT 0,
+  winner_gets NUMERIC(14,2) NOT NULL DEFAULT 0,
+  burned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  burned_by UUID REFERENCES physi_users(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS physi_coins_burned_dispute_idx ON physi_coins_burned (dispute_id);
+CREATE INDEX IF NOT EXISTS physi_coins_burned_school_idx ON physi_coins_burned (loser_school_id);
+CREATE INDEX IF NOT EXISTS physi_coins_burned_created_idx ON physi_coins_burned (burned_at DESC);
+
+-- School event count tracker — updated when events verified for a department
+CREATE TABLE IF NOT EXISTS physi_school_event_counts (
+  school_id UUID PRIMARY KEY REFERENCES physi_schools(id) ON DELETE CASCADE,
+  dept_id UUID REFERENCES physi_school_departments(id) ON DELETE CASCADE,
+  event_count INT NOT NULL DEFAULT 0,
+  last_updated TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Prof Deduper — peer voting on canonical prof name (missing from original schema)
 CREATE TABLE IF NOT EXISTS physi_prof_aliases (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
