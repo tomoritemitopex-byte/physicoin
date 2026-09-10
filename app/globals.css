@@ -2,380 +2,195 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── PHYSI Tonal Palette — Campus Day (roadmap-only campus theme) ──
-   Default site remains clean modern; campus theme applied in roadmap */
+/* ── PHYSI v2 Design Refresh — Light Paper + Coral ──
+   Dawn theme: white paper cards, coral accents (#ff6b6b), no glass morphism
+   Rationale: modern, readable, warm, human-centered
+*/
 
 :root {
-  /* — campus surfaces — */
-  --campus-sky:       #7dd3fc;
-  --campus-sky-2:     #bae6fd;
-  --campus-sky-3:     #e0f2fe;
-  --campus-card:      #ffffff;
-  --campus-card-hover:#f8fafc;
+  /* — page & cards — */
+  --physi-paper: #fdf6e3;
+  --physi-card: #ffffff;
+  --physi-card-hover: #fafafa;
+  --physi-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 16px rgba(0, 0, 0, 0.08);
 
-  /* — inks — */
-  --campus-ink:       #0c1e3a;
-  --campus-ink-2:     #1e3a8a;
-  --campus-stone:     #78716c;
+  /* — accents & semantic — */
+  --physi-accent: #ff6b6b;        /* coral primary */
+  --physi-accent-hover: #ff5252;  /* darker coral */
+  --physi-sky: #0369a1;            /* sky blue (secondary) */
+  --physi-sky-hover: #0ea5e9;      /* lighter sky */
+  --physi-green: #15803d;          /* verified green */
+  --physi-green-bright: #22c55e;   /* bright green for highlights */
+  --physi-amber: #d97706;          /* warning/amber */
 
-  /* — campus earth tones — */
-  --campus-brick:     #dc2626;
-  --campus-brick-dark:#991b1b;
-  --campus-forest:    #15803d;
-  --campus-forest-2:  #166534;
-  --campus-sand:      #fef3c7;
-  --campus-shadow:    #0c1e3a;
-
-  /* — accents — */
-  --campus-accent:    #0369a1;
-  --campus-accent-hover: #0ea5e9;
-  --campus-accent-ring: 0 0 0 2px #ffffff, 0 0 0 4px #0369a1;
-
-  /* — semantic — */
-  --campus-success:   #15803d;
-  --campus-verified:  #22c55e;
-  --campus-warning:   #d97706;
+  /* — inks & text — */
+  --physi-ink: #0c1e3a;            /* dark text */
+  --physi-ink-70: rgba(12, 30, 58, 0.7);
+  --physi-ink-60: rgba(12, 30, 58, 0.6);
+  --physi-stone: #78716c;          /* tertiary text */
 }
 
 /* Base */
-html { scroll-behavior: smooth; -webkit-font-smoothing: antialiased; }
-html, body {
-  background: #ffffff;
-  color: var(--campus-ink);
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+}
+
+html,
+body {
+  background: var(--physi-paper);
+  color: var(--physi-ink);
   font-family: var(--font-inter), system-ui, sans-serif;
   line-height: 1.6;
   letter-spacing: -0.01em;
 }
-h1, h2, h3 { font-family: var(--font-instrument-serif), Georgia, serif; font-weight: 400; letter-spacing: -0.03em; line-height: 1.08; }
 
-/* Campus sky background — roadmap only */
-.campus-day::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background:
-    linear-gradient(180deg, var(--campus-sky) 0%, var(--campus-sky-2) 40%, var(--campus-sky-3) 70%, #f0fdf4 100%);
+h1,
+h2,
+h3 {
+  font-family: var(--font-instrument-serif), Georgia, serif;
+  font-weight: 400;
+  letter-spacing: -0.03em;
+  line-height: 1.08;
 }
 
 /* Cards */
 .physi-card {
-  border-radius: 16px;
-  border: 1px solid rgba(30,58,138,0.15);
-  background: var(--campus-card);
-  box-shadow: 0 1px 2px rgba(12,30,58,0.06), 0 4px 16px rgba(12,30,58,0.08);
+  border-radius: 20px;
+  border: 1px solid rgba(3, 105, 161, 0.15);
+  background: var(--physi-card);
+  box-shadow: var(--physi-shadow);
+  backdrop-filter: none; /* no glass */
 }
+
 .physi-card:hover {
-  background: var(--campus-card-hover);
-  border-color: rgba(30,58,138,0.25);
+  background: var(--physi-card-hover);
+  border-color: rgba(3, 105, 161, 0.25);
   transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(12,30,58,0.10);
+  transition: all 200ms ease-out;
 }
 
-/* Focus */
-*:focus-visible {
-  outline: 2px solid var(--campus-accent);
-  outline-offset: 2px;
-  box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px var(--campus-accent);
-}
-
-/* Primary CTA */
+/* Primary CTA buttons */
 .primary-cta {
-  background: var(--campus-accent);
+  background: var(--physi-accent);
   color: #ffffff;
-  font-weight: 600;
-  font-size: 14px;
-  padding: 12px 20px;
-  border-radius: 9999px;
-  box-shadow: 0 4px 16px rgba(3,105,161,0.28);
-  transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
-}
-.primary-cta:hover { background: var(--campus-accent-hover); transform: translateY(-1px); }
-.primary-cta:active { transform: translateY(0); }
-
-/* Secondary CTA */
-.secondary-cta {
-  background: #ffffff;
-  color: var(--campus-ink);
-  border: 1px solid rgba(30,58,138,0.15);
-  border-radius: 9999px;
-  padding: 12px 20px;
-  font-weight: 600;
-  transition: all 160ms ease;
-}
-.secondary-cta:hover { border-color: rgba(30,58,138,0.25); background: var(--campus-card-hover); }
-
-/* Pill */
-.pill {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 6px 12px;
-  border-radius: 9999px;
-  font-family: var(--font-mono, ui-monospace); font-size: 11px; font-weight: 600;
-  letter-spacing: 0.06em; text-transform: uppercase;
-  border: 1px solid rgba(30,58,138,0.15);
-  background: var(--campus-card-hover);
-}
-
-/* Animations */
-@keyframes fadeInUp { from { opacity:0; transform: translateY(10px); } to { opacity:1; transform: translateY(0); } }
-@keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
-@keyframes pulseSoft { 0%,100% { opacity:1; } 50% { opacity:0.7; } }
-
-/* ── Winding Road — campus path ── */
-.winding-road-container {
-  position: relative;
-  overflow-x: hidden;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  scroll-snap-type: y mandatory;
-}
-.winding-road-container::-webkit-scrollbar { width: 6px; }
-.winding-road-container::-webkit-scrollbar-track { background: rgba(30,58,138,0.3); }
-.winding-road-container::-webkit-scrollbar-thumb { background: rgba(3,105,161,0.3); border-radius: 3px; }
-
-.road-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
-.road-svg .road-dash {
-  stroke: rgba(255,255,255,0.5);
-  stroke-width: 4;
-  stroke-dasharray: 12 8;
-  animation: pathDashFlow 1.8s linear infinite;
-}
-.road-svg .road-glow {
-  stroke: rgba(3,105,161,0.25);
-  stroke-width: 18;
-  stroke-linecap: round;
-}
-
-/* Building node */
-.building-node {
-  position: absolute;
-  z-index: 5;
-  cursor: pointer;
-  transition: transform 280ms cubic-bezier(.34,1.56,.64,1), filter 280ms ease;
-  transform: translate(-50%, -50%);
-}
-.building-node:hover { transform: translate(-50%, -50%) scale(1.12); filter: drop-shadow(0 0 12px rgba(3,105,161,0.5)); }
-.building-node:focus-visible { outline: 2px solid #0369a1; outline-offset: 4px; }
-.building-node.active {
-  animation: nodeBounce 400ms cubic-bezier(.34,1.56,.64,1);
-  filter: drop-shadow(0 0 20px rgba(251,191,36,0.6));
-}
-.building-node .node-icon {
-  width: 60px; height: 60px; border-radius: 16px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 26px;
-  border: 3px solid rgba(255,255,255,0.3);
-  box-shadow: 0 6px 20px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.2);
-  transition: border-color 280ms ease, box-shadow 280ms ease;
-}
-.building-node.active .node-icon {
-  border-color: rgba(251,191,36,0.7);
-  box-shadow: 0 8px 28px rgba(251,191,36,0.25), inset 0 1px 0 rgba(255,255,255,0.9), 0 0 20px rgba(251,191,36,0.3);
-}
-.building-node .node-label {
-  position: absolute; top: 68px; left: 50%; transform: translateX(-50%);
-  white-space: nowrap;
-  background: rgba(255,255,255,0.95);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(30,58,138,0.15);
-  border-radius: 10px;
-  padding: 3px 10px;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--campus-ink);
-  font-family: var(--font-inter), system-ui, sans-serif;
-  opacity: 0;
-  transition: opacity 200ms ease;
-  pointer-events: none;
-}
-.building-node:hover .node-label,
-.building-node.active .node-label { opacity: 1; }
-.building-node .node-count {
-  position: absolute; top: -6px; right: -6px;
-  min-width: 20px; height: 20px; border-radius: 10px;
-  background: rgba(3,105,161,0.9);
-  border: 2px solid #ffffff;
-  font-size: 10px; font-weight: 700;
-  color: #ffffff;
-  display: flex; align-items: center; justify-content: center;
-  font-family: var(--font-mono, ui-monospace);
-}
-
-/* Clock tower — MBBS landmark */
-.clock-tower {
-  position: absolute;
-  z-index: 8;
-  transform: translate(-50%, -50%);
-  animation: clockPulse 2.5s ease-in-out infinite;
-}
-.clock-tower .tower-icon {
-  width: 72px; height: 72px; border-radius: 50%;
-  background: linear-gradient(135deg, #1e3a8a 0%, #0c1e3a 100%);
-  border: 4px solid #d97706;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 32px;
-  box-shadow: 0 8px 30px rgba(0,0,0,0.35), 0 0 40px rgba(217,119,6,0.2), inset 0 2px 0 rgba(255,255,255,0.15);
-}
-.clock-tower .tower-label {
-  position: absolute; top: 80px; left: 50%; transform: translateX(-50%);
-  white-space: nowrap;
-  background: rgba(255,255,255,0.95);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(30,58,138,0.15);
   border-radius: 12px;
-  padding: 4px 14px;
-  font-size: 12px;
-  font-weight: 700;
-  color: #1e3a8a;
-  font-family: var(--font-inter), system-ui, sans-serif;
+  font-weight: 600;
+  transition: all 200ms ease-out;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
-/* Event card */
-.whatsapp-event {
-  position: relative;
-  z-index: 10;
-  scroll-snap-align: start;
-  background: rgba(255,255,255,0.9);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(30,58,138,0.12);
-  border-radius: 18px;
-  padding: 14px 16px;
-  margin: 6px 12px;
-  transition: border-color 200ms ease, background 200ms ease;
-}
-.whatsapp-event:hover { border-color: rgba(3,105,161,0.3); background: rgba(255,255,255,0.98); }
-.whatsapp-event .event-header {
-  display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
-}
-.whatsapp-event .event-time {
-  font-size: 11px; font-weight: 600; color: #0369a1;
-  font-family: var(--font-mono, ui-monospace);
-}
-.whatsapp-event .event-venue {
-  font-size: 14px; font-weight: 700; color: var(--campus-ink);
-}
-.whatsapp-event .event-title {
-  font-size: 13px; color: rgba(12,30,58,0.75); margin-top: 2px;
+.primary-cta:hover {
+  background: var(--physi-accent-hover);
+  transform: scale(1.02);
 }
 
-/* Urgency bar */
-.urgency-bar {
-  height: 4px; border-radius: 2px;
-  background: rgba(30,58,138,0.08);
-  overflow: hidden; margin-top: 10px;
-}
-.urgency-bar .urgency-fill {
-  height: 100%; border-radius: 2px;
-  background: linear-gradient(90deg, #22c55e, #d97706, #dc2626);
-  animation: urgencyShrink 86400s linear forwards;
-}
-.urgency-bar .urgency-label {
-  font-size: 9px; font-weight: 600; color: rgba(12,30,58,0.45);
-  font-family: var(--font-mono, ui-monospace);
-  margin-top: 3px;
+.primary-cta:active {
+  transform: scale(0.98);
 }
 
-/* Ghost row */
-.ghost-row {
-  display: flex; align-items: center; gap: 4px; margin-top: 8px;
-}
-.ghost-row .ghost-dot {
-  width: 24px; height: 24px; border-radius: 50%;
-  border: 2px solid rgba(12,30,58,0.6);
-}
-
-/* Swipe zone */
-.swipe-zone {
-  position: relative;
-  touch-action: pan-y;
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-tap-highlight-color: transparent;
-}
-.swipe-zone .swipe-action {
-  position: absolute; top: 0; bottom: 0; width: 60px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 28px; font-weight: 800;
-  opacity: 0;
-  transition: opacity 150ms ease;
-  border-radius: 18px;
-}
-.swipe-zone .swipe-yes { left: 0; background: rgba(21,128,61,0.25); color: #15803d; }
-.swipe-zone .swipe-no { right: 0; background: rgba(220,38,38,0.2); color: #dc2626; }
-.swipe-zone .swipe-skip {
-  top: 50%; left: 50%; transform: translate(-50%, -50%);
-  background: rgba(217,119,6,0.2); color: #d97706;
-  border-radius: 50%; width: 50px; height: 50px;
-}
-.swipe-zone.swiping-yes .swipe-yes,
-.swipe-zone.swiping-no .swipe-no { opacity: 1; }
-.swipe-zone.swiping-skip .swipe-skip { opacity: 1; }
-
-/* Bottom nav */
-.one-rail {
-  position: fixed;
-  bottom: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 40;
-  width: min(520px, 94vw);
-  background: rgba(255,255,255,0.92);
-  backdrop-filter: blur(20px) saturate(1.2);
-  -webkit-backdrop-filter: blur(20px) saturate(1.2);
-  border: 1px solid rgba(30,58,138,0.15);
-  border-radius: 9999px;
-  box-shadow: 0 12px 40px rgba(12,30,58,0.15), inset 0 1px 0 rgba(255,255,255,0.9);
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 8px; padding: 6px 8px;
-}
-.one-rail a[aria-current="page"] { background: var(--campus-accent); color: #ffffff; }
-
-/* Helpers */
-.section-y { padding: 3rem 0; }
-@media (min-width: 640px) { .section-y { padding: 4rem 0; } }
-.muted { color: var(--campus-stone); }
-.muted-2 { color: rgba(12,30,58,0.45); }
-
-/* Hide scrollbar */
-.no-scrollbar::-webkit-scrollbar { display: none; }
-.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
-@keyframes ticker { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
-
-/* Campus motion */
-@keyframes ghost-drift {
-  0%   { transform: translate(0, 0) scale(1); }
-  25%  { transform: translate(var(--ghost-drift, 4px), -6px) scale(1.04); }
-  50%  { transform: translate(calc(var(--ghost-drift, 4px) * -1), 2px) scale(0.97); }
-  75%  { transform: translate(calc(var(--ghost-drift, 4px) * 0.5), -8px) scale(1.02); }
-  100% { transform: translate(0, 0) scale(1); }
-}
-@keyframes urgencyShrink {
-  0%   { width: 100%; opacity: 1; }
-  100% { width: 0%; opacity: 0; }
-}
-@keyframes clockPulse {
-  0%   { box-shadow: 0 0 0 0 rgba(217,119,6,0.45); }
-  70%  { box-shadow: 0 0 0 18px rgba(217,119,6,0); }
-  100% { box-shadow: 0 0 0 0 rgba(217,119,6,0); }
-}
-@keyframes nodeGlow {
-  0%, 100% { filter: drop-shadow(0 0 6px rgba(3,105,161,0.4)); }
-  50%      { filter: drop-shadow(0 0 14px rgba(3,105,161,0.75)); }
-}
-@keyframes pathDashFlow {
-  to { stroke-dashoffset: -24; }
-}
-@keyframes nodeBounce {
-  0%, 100% { transform: translateY(0); }
-  40%      { transform: translateY(-8px); }
-  60%      { transform: translateY(-4px); }
+/* Secondary CTA (sky) */
+.secondary-cta {
+  background: var(--physi-sky);
+  color: #ffffff;
+  border-radius: 12px;
+  font-weight: 600;
+  transition: all 200ms ease-out;
 }
 
-.ghost-drift {
-  animation: ghost-drift var(--ghost-wobble, 1200ms) ease-in-out infinite;
-  will-change: transform;
+.secondary-cta:hover {
+  background: var(--physi-sky-hover);
+}
+
+/* Badges & tags */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 20px;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border: 1px solid;
+}
+
+.badge-success {
+  background: rgba(34, 197, 94, 0.1);
+  border-color: rgba(34, 197, 94, 0.3);
+  color: var(--physi-green-bright);
+}
+
+.badge-warning {
+  background: rgba(217, 119, 6, 0.1);
+  border-color: rgba(217, 119, 6, 0.3);
+  color: var(--physi-amber);
+}
+
+.badge-info {
+  background: rgba(3, 105, 161, 0.1);
+  border-color: rgba(3, 105, 161, 0.3);
+  color: var(--physi-sky);
+}
+
+/* Ticker animation */
+@keyframes ticker {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-ticker {
+  animation: ticker 22s linear infinite;
+}
+
+/* Live pulse indicator */
+.pulse-live {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Form elements */
+input,
+textarea,
+select {
+  background: var(--physi-card);
+  color: var(--physi-ink);
+  border: 1px solid rgba(3, 105, 161, 0.2);
+  border-radius: 12px;
+  padding: 0.625rem 1rem;
+  font-size: 1rem;
+  font-family: inherit;
+  transition: all 200ms ease-out;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--physi-sky);
+  box-shadow: 0 0 0 3px rgba(3, 105, 161, 0.1);
+}
+
+/* Selection */
+::selection {
+  background: var(--physi-accent);
+  color: #ffffff;
+}
+
+/* Link styling */
+a {
+  color: var(--physi-sky);
+  text-decoration: none;
+  transition: color 200ms ease-out;
+}
+
+a:hover {
+  color: var(--physi-sky-hover);
+}
+
+/* Responsive utilities */
+@media (max-width: 640px) {
+  html {
+    font-size: 14px;
+  }
 }

@@ -32,7 +32,7 @@ export const viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: '#0369a1',
+  themeColor: '#ff6b6b',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -47,14 +47,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="icon" href="/icon-192.png" sizes="192x192" type="image/png" />
         <link rel="apple-touch-icon" href="/icon-512.png" sizes="512x512" />
         <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="#0369a1" />
+        <meta name="theme-color" content="#ff6b6b" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-title" content="PHYSI" />
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
       <body
         className="min-h-screen bg-sky-3 text-ink font-inter antialiased"
-        style={{ fontFamily: 'var(--font-inter), system-ui, sans-serif' }}
+        style={{
+          backgroundColor: 'var(--physi-paper)',
+          color: 'var(--physi-ink)',
+          fontFamily: 'var(--font-inter), system-ui, sans-serif',
+        }}
       >
         <noscript>
           <div
