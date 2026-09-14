@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSql, isDbConfigured, dbNotConfigured, ensureAllTables } from "@/lib/db";
+import { getSql, isDbConfigured, dbNotConfigured, } from "@/lib/db";
 import { logError, getErrorMessage } from "@/lib/adapters/error";
 import { computeVoteWeight, weightFromTotal } from "@/lib/voteWeight";
 
@@ -9,7 +9,6 @@ export async function GET(req: NextRequest) {
   try {
     const sql = getSql();
     if (!isDbConfigured() || !sql) return NextResponse.json(dbNotConfigured(), { status: 503 });
-    try { await ensureAllTables(); } catch {}
     const uid = new URL(req.url).searchParams.get("user_id") || new URL(req.url).searchParams.get("voter_id");
     if (!uid) return NextResponse.json({ ok: false, code: "BAD_INPUT", message: "user_id required" }, { status: 400 });
     const weight = await computeVoteWeight(sql, uid);

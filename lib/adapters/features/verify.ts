@@ -4,7 +4,7 @@
  * Satoshi P0: all vote INSERT + quorum + promotion is a single atomic transaction.
  */
 import { NextResponse } from "next/server";
-import { getSql, isDbConfigured, dbNotConfigured, ensureAllTables } from "@/lib/db";
+import { getSql, isDbConfigured, dbNotConfigured, } from "@/lib/db";
 import { registerApiAdapter } from "../api";
 import { registerFeature } from "../features";
 import { logError, getErrorMessage } from "../error";
@@ -133,7 +133,6 @@ async function handleVerify(req: Request): Promise<Response> {
     if (!isDbConfigured() || !sql) return NextResponse.json(dbNotConfigured(), { status: 503 });
     if (req.method === "POST") {
       try {
-        await ensureAllTables();
       } catch (e) {
         logError("VERIFY_SUBMIT_FAILED", e, { route: "/api/verify", phase: "ensure" });
       }
@@ -346,7 +345,6 @@ async function handleVerify(req: Request): Promise<Response> {
     }
     // GET
     try {
-      await ensureAllTables();
     } catch (e) {
       logError("VERIFY_FETCH_FAILED", e, { route: "/api/verify", phase: "ensure" });
     }

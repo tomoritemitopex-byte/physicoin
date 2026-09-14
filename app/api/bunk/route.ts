@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSql, isDbConfigured, dbNotConfigured, ensureAllTables, ensureBunkTables } from "@/lib/db";
+import { getSql, isDbConfigured, dbNotConfigured, } from "@/lib/db";
 import { liveStatus } from "@/lib/bunkRadar";
 import { weightFromTotal } from "@/lib/voteWeight";
 
@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   const sql = getSql();
   if (!isDbConfigured() || !sql) return NextResponse.json(dbNotConfigured(), { status: 503 });
-  try { await ensureAllTables(); await ensureBunkTables(); } catch {}
+  try {   } catch {}
   const { searchParams } = new URL(req.url);
   const eventId = searchParams.get("event_id") || searchParams.get("id") || "";
 
@@ -109,7 +109,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const sql = getSql();
   if (!isDbConfigured() || !sql) return NextResponse.json(dbNotConfigured(), { status: 503 });
-  try { await ensureAllTables(); await ensureBunkTables(); } catch {}
+  try {   } catch {}
   let body: any;
   try { body = await req.json(); } catch { return NextResponse.json({ ok: false, code: "BAD_INPUT", message: "JSON required" }, { status: 400 }); }
   const eventId = String(body?.event_id || body?.id || "").trim();

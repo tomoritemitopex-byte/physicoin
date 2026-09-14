@@ -5,7 +5,7 @@
  * Departments with years. Disputes + coin burning.
  */
 import { NextResponse } from "next/server";
-import { getSql, isDbConfigured, dbNotConfigured, ensureAllTables } from "@/lib/db";
+import { getSql, isDbConfigured, dbNotConfigured, } from "@/lib/db";
 import { registerApiAdapter } from "../api";
 import { registerFeature } from "../features";
 import { logError, getErrorMessage } from "../error";
@@ -40,7 +40,7 @@ async function handleSchools(req: Request): Promise<Response> {
     if (!isDbConfigured() || !sql) return NextResponse.json(dbNotConfigured(), { status: 503 });
 
     if (req.method === "POST") {
-      try { await ensureAllTables(); } catch (e) { logError("SCHOOLS_CREATE_FAILED", e, { route: "/api/schools", phase: "ensure" }); }
+      try {  } catch (e) { logError("SCHOOLS_CREATE_FAILED", e, { route: "/api/schools", phase: "ensure" }); }
       const b = await req.json().catch(() => null);
       if (!b?.name) return NextResponse.json({ ok: false, code: "BAD_INPUT", message: getErrorMessage("BAD_INPUT") }, { status: 400 });
 
@@ -66,7 +66,7 @@ async function handleSchools(req: Request): Promise<Response> {
     }
 
     if (req.method === "GET") {
-      try { await ensureAllTables(); } catch (e) { logError("SCHOOLS_FETCH_FAILED", e, { route: "/api/schools", phase: "ensure" }); }
+      try {  } catch (e) { logError("SCHOOLS_FETCH_FAILED", e, { route: "/api/schools", phase: "ensure" }); }
       const url = new URL(req.url);
       const id = url.searchParams.get("id");
       const name = url.searchParams.get("name");
@@ -103,7 +103,7 @@ async function handleSchools(req: Request): Promise<Response> {
     }
 
     if (req.method === "PATCH") {
-      try { await ensureAllTables(); } catch (e) { logError("SCHOOLS_UPDATE_FAILED", e, { route: "/api/schools", phase: "ensure" }); }
+      try {  } catch (e) { logError("SCHOOLS_UPDATE_FAILED", e, { route: "/api/schools", phase: "ensure" }); }
       const b = await req.json().catch(() => null);
       const schoolId = String(b?.id ?? b?.school_id ?? "").trim();
       if (!schoolId) return NextResponse.json({ ok: false, code: "BAD_INPUT" }, { status: 400 });
@@ -185,7 +185,7 @@ async function handleDepartments(req: Request): Promise<Response> {
     if (!isDbConfigured() || !sql) return NextResponse.json(dbNotConfigured(), { status: 503 });
 
     if (req.method === "POST") {
-      try { await ensureAllTables(); } catch (e) { logError("DEPTS_CREATE_FAILED", e, { route: "/api/schools/departments", phase: "ensure" }); }
+      try {  } catch (e) { logError("DEPTS_CREATE_FAILED", e, { route: "/api/schools/departments", phase: "ensure" }); }
       const b = await req.json().catch(() => null);
       const schoolId = String(b?.school_id ?? b?.schoolId ?? "").trim();
       if (!schoolId) return NextResponse.json({ ok: false, code: "BAD_INPUT", message: "school_id required" }, { status: 400 });
@@ -219,7 +219,7 @@ async function handleDepartments(req: Request): Promise<Response> {
     }
 
     if (req.method === "GET") {
-      try { await ensureAllTables(); } catch (e) { logError("DEPTS_FETCH_FAILED", e, { route: "/api/schools/departments", phase: "ensure" }); }
+      try {  } catch (e) { logError("DEPTS_FETCH_FAILED", e, { route: "/api/schools/departments", phase: "ensure" }); }
       const url = new URL(req.url);
       const schoolId = url.searchParams.get("school_id");
       const id = url.searchParams.get("id");
@@ -243,7 +243,7 @@ async function handleDepartments(req: Request): Promise<Response> {
     }
 
     if (req.method === "PATCH") {
-      try { await ensureAllTables(); } catch (e) { logError("DEPTS_UPDATE_FAILED", e, { route: "/api/schools/departments", phase: "ensure" }); }
+      try {  } catch (e) { logError("DEPTS_UPDATE_FAILED", e, { route: "/api/schools/departments", phase: "ensure" }); }
       const b = await req.json().catch(() => null);
       const deptId = String(b?.id ?? b?.department_id ?? "").trim();
       if (!deptId) return NextResponse.json({ ok: false, code: "BAD_INPUT" }, { status: 400 });
@@ -321,7 +321,7 @@ async function handleDisputes(req: Request): Promise<Response> {
     if (!isDbConfigured() || !sql) return NextResponse.json(dbNotConfigured(), { status: 503 });
 
     if (req.method === "POST") {
-      try { await ensureAllTables(); } catch (e) { logError("DISPUTES_CREATE_FAILED", e, { route: "/api/schools/disputes", phase: "ensure" }); }
+      try {  } catch (e) { logError("DISPUTES_CREATE_FAILED", e, { route: "/api/schools/disputes", phase: "ensure" }); }
       const b = await req.json().catch(() => null);
       const schoolA = String(b?.school_id_a ?? b?.schoolA ?? "").trim();
       const schoolB = String(b?.school_id_b ?? b?.schoolB ?? "").trim();
@@ -370,7 +370,7 @@ async function handleDisputes(req: Request): Promise<Response> {
     }
 
     if (req.method === "GET") {
-      try { await ensureAllTables(); } catch (e) { logError("DISPUTES_FETCH_FAILED", e, { route: "/api/schools/disputes", phase: "ensure" }); }
+      try {  } catch (e) { logError("DISPUTES_FETCH_FAILED", e, { route: "/api/schools/disputes", phase: "ensure" }); }
       const url = new URL(req.url);
       const status = url.searchParams.get("status");
       const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "50", 10) || 50, 200);
@@ -400,7 +400,7 @@ async function handleDisputes(req: Request): Promise<Response> {
     }
 
     if (req.method === "PATCH") {
-      try { await ensureAllTables(); } catch (e) { logError("DISPUTES_RESOLVE_FAILED", e, { route: "/api/schools/disputes", phase: "ensure" }); }
+      try {  } catch (e) { logError("DISPUTES_RESOLVE_FAILED", e, { route: "/api/schools/disputes", phase: "ensure" }); }
       const b = await req.json().catch(() => null);
       const disputeId = String(b?.id ?? b?.dispute_id ?? "").trim();
       if (!disputeId) return NextResponse.json({ ok: false, code: "BAD_INPUT" }, { status: 400 });

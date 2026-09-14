@@ -4,7 +4,7 @@
  * Returns ONLY { count, pattern_strength } — NEVER peer IDs.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { getSql, isDbConfigured, dbNotConfigured, ensureAllTables } from "@/lib/db";
+import { getSql, isDbConfigured, dbNotConfigured, } from "@/lib/db";
 import { computeCohortPattern } from "@/lib/anonymousCoherence";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +13,6 @@ export async function GET(req: NextRequest) {
   try {
     const sql = getSql();
     if (!isDbConfigured() || !sql) return NextResponse.json(dbNotConfigured(), { status: 503 });
-    try { await ensureAllTables(); } catch {}
     const { searchParams } = new URL(req.url);
     let userId = searchParams.get("user_id")?.trim() || null;
     // Also accept header fallback (not exposing)

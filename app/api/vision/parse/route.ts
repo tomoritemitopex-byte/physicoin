@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSql, isDbConfigured, dbNotConfigured, ensureAllTables } from "@/lib/db";
+import { getSql, isDbConfigured, dbNotConfigured, } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -145,7 +145,6 @@ export async function POST(req: Request) {
       // return parsed even if DB not configured (still useful)
       return NextResponse.json({ ok: true, parsed, created: [], warning: dbNotConfigured().error });
     }
-    try { await ensureAllTables(); } catch {}
 
     // Idempotent Snap Receipt: pipe PHYSI|BIO|LT2|2026-09-01|08:00 try INSERT lower(title,venue,date) uid dup->fused x2 else venue_time_collision guard time<5m
     const created: unknown[] = [];

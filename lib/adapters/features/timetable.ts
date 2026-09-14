@@ -4,7 +4,7 @@
  * Severity + timeline diff history added (move/shift/cancelled)
  */
 import { NextResponse } from "next/server";
-import { getSql, isDbConfigured, dbNotConfigured, ensureAllTables } from "@/lib/db";
+import { getSql, isDbConfigured, dbNotConfigured, } from "@/lib/db";
 import { registerApiAdapter } from "../api";
 import { registerFeature } from "../features";
 import { logError, getErrorMessage } from "../error";
@@ -31,7 +31,7 @@ async function handleTimetable(req: Request): Promise<Response> {
 
     // PATCH / PUT — update venue/time and log history diff LT2->LT5
     if (req.method === "PATCH" || req.method === "PUT") {
-      try { await ensureAllTables(); } catch(e){ logError("TIMETABLE_CREATE_FAILED", e, { route:"/api/timetable", method:req.method, phase:"ensure"}); }
+      try {  } catch(e){ logError("TIMETABLE_CREATE_FAILED", e, { route:"/api/timetable", method:req.method, phase:"ensure"}); }
       // auth required for mutation
       const { getAuthUserId } = await import("@/lib/auth");
       const patchAuth = getAuthUserId(req as Request);
@@ -67,7 +67,6 @@ async function handleTimetable(req: Request): Promise<Response> {
 
     if (req.method === "POST") {
       try {
-        await ensureAllTables();
       } catch (e) {
         logError("TIMETABLE_CREATE_FAILED", e, { route: "/api/timetable", method: "POST", phase: "ensure" });
       }
@@ -232,7 +231,6 @@ async function handleTimetable(req: Request): Promise<Response> {
     }
     // GET
     try {
-      await ensureAllTables();
     } catch (e) {
       logError("TIMETABLE_FETCH_FAILED", e, { route: "/api/timetable", method: "GET", phase: "ensure" });
     }

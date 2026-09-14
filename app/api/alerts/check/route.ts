@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSql, isDbConfigured, dbNotConfigured, ensureAllTables } from "@/lib/db";
+import { getSql, isDbConfigured, dbNotConfigured, } from "@/lib/db";
 import { extractProfName, computeProfStats, riskFromReliability, minutesUntil } from "@/lib/profReliability";
 import { liveStatus } from "@/lib/bunkRadar";
 import { notifyCanonical } from "@/lib/adapters/notify";
@@ -16,7 +16,6 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   const sql = getSql();
   if (!isDbConfigured() || !sql) return NextResponse.json(dbNotConfigured(), { status: 503 });
-  try { await ensureAllTables(); } catch {}
 
   let body: any = {};
   try { body = await req.json().catch(() => ({})); } catch {}

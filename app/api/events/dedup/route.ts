@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSql, isDbConfigured, dbNotConfigured, ensureAllTables } from "@/lib/db";
+import { getSql, isDbConfigured, dbNotConfigured, } from "@/lib/db";
 import { logError, getErrorMessage } from "@/lib/adapters/error";
 import { findDuplicateEvents, suggestTitleFromScope, resolveCanonicalVenue } from "@/lib/eventDedup";
 
@@ -9,7 +9,6 @@ export async function GET(req: NextRequest) {
   try {
     const sql = getSql();
     if (!isDbConfigured() || !sql) return NextResponse.json(dbNotConfigured(), { status: 503 });
-    try { await ensureAllTables(); } catch {}
     const sp = new URL(req.url).searchParams;
     const title = sp.get("title");
     const venue = sp.get("venue");

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSql, isDbConfigured, dbNotConfigured, ensureAllTables } from "@/lib/db";
+import { getSql, isDbConfigured, dbNotConfigured, } from "@/lib/db";
 import { signSession, decodeSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +19,6 @@ export async function POST(req: NextRequest) {
     const otp = b?.otp != null ? String(b.otp) : null;
     const sql = getSql();
     if (isDbConfigured() && sql) {
-      try { await ensureAllTables(); } catch {}
       try {
         const rows: any[] = await sql`SELECT id, password_hash FROM physi_users WHERE id=${uid} LIMIT 1` as any;
         if (!rows.length) return NextResponse.json({ ok:false, code:"USER_NOT_FOUND", message:"user not found" }, { status:404 });
@@ -75,7 +74,6 @@ export async function GET(req: NextRequest) {
     const sql = getSql();
     if (isDbConfigured() && sql) {
       try {
-        await ensureAllTables();
       } catch {}
       try {
         const rows: any[] = await sql`SELECT id, password_hash FROM physi_users WHERE id=${checkUserId} LIMIT 1` as any;

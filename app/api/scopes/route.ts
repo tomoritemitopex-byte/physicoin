@@ -6,7 +6,7 @@
  * Extensions: Ghost Witness SHA256 chain + Scope Value Mining rewards.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { getSql, isDbConfigured, dbNotConfigured, ensureAllTables } from "@/lib/db";
+import { getSql, isDbConfigured, dbNotConfigured, } from "@/lib/db";
 import { logError, getErrorMessage } from "@/lib/adapters/error";
 import { GHOST_ACTIONS, prepareGhostChainQueries, buildGhostChainSigs } from "@/lib/ghostWitness";
 import { buildScopeRewardDetails, prepareScopeRewardQueries } from "@/lib/scopeMining";
@@ -21,7 +21,6 @@ export async function POST(req: NextRequest) {
   try {
     const sql = getSql();
     if (!isDbConfigured() || !sql) return NextResponse.json(dbNotConfigured(), { status: 503 });
-    try { await ensureAllTables(); } catch {}
 
     const b = await req.json().catch(() => null);
     // Auth: extract voter_id from HMAC session token (strict)
@@ -230,7 +229,6 @@ export async function GET(req: NextRequest) {
   try {
     const sql = getSql();
     if (!isDbConfigured() || !sql) return NextResponse.json(dbNotConfigured(), { status: 503 });
-    try { await ensureAllTables(); } catch {}
 
     const { searchParams } = new URL(req.url);
     const scopeA = searchParams.get("a");

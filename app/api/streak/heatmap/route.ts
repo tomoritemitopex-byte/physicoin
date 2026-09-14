@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSql, isDbConfigured, dbNotConfigured, ensureAllTables } from "@/lib/db";
+import { getSql, isDbConfigured, dbNotConfigured, } from "@/lib/db";
 import { logError, getErrorMessage } from "@/lib/adapters/error";
 import { getStreakHeatmap, weeklySummary, daysLeftToKeepFire } from "@/lib/streakHeatmap";
 
@@ -9,7 +9,6 @@ export async function GET(req: NextRequest) {
   try {
     const sql = getSql();
     if (!isDbConfigured() || !sql) return NextResponse.json(dbNotConfigured(), { status: 503 });
-    try { await ensureAllTables(); } catch {}
     const sp = new URL(req.url).searchParams;
     const userId = sp.get("user_id") || sp.get("userId") || sp.get("id");
     if (!userId) return NextResponse.json({ ok: false, code: "BAD_INPUT", message: "user_id required" }, { status: 400 });

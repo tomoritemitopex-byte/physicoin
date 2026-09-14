@@ -2,7 +2,7 @@
  * lib/adapters/features/stats.ts — Stats Feature + Api Adapter
  */
 import { NextResponse } from "next/server";
-import { getSql, isDbConfigured, dbNotConfigured, ensureAllTables, fanOutShards, listShardUrls, getShardCount } from "@/lib/db";
+import { getSql, isDbConfigured, dbNotConfigured, fanOutShards, listShardUrls, getShardCount } from "@/lib/db";
 import { registerApiAdapter } from "../api";
 import { registerFeature } from "../features";
 import { logError, getErrorMessage } from "../error";
@@ -75,7 +75,6 @@ async function handleStats(req: Request): Promise<Response> {
     const primary = getSql();
     if (!isDbConfigured() || !primary) return NextResponse.json(dbNotConfigured(), { status: 503 });
     try {
-      await ensureAllTables();
       // ensure across shards when multi-shard
       if (shardCount > 1) {
         await fanOutShards(async (sql) => { try { await sql`SELECT 1`; } catch {} return []; });

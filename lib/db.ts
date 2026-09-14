@@ -659,50 +659,16 @@ export async function ensureAuthColumns(): Promise<void> {
 }
 
 /**
- * Idempotent bootstrap — safe to call on every request.
- * Cached via module-level flag so DDL only runs once per warm instance.
- * On cold start, checks pg_tables first — skips ALL DDL if tables already exist.
- * Parallel leaves, ordered root; single retry for cold start (500ms wake).
+ * DEPRECATED — DDL moved to build-time migration.
+ * Runtime DDL is forbidden on hot path (Vercel Edge timeout / Neon DDL locks).
+ * Run `node scripts/migrate.mjs` locally or at build.
  */
-let _tablesEnsured = false;
+let _tablesEnsured = true; // force no-op; DDL no longer runs per-request
 export async function ensureAllTables(): Promise<void> {
-  if (_tablesEnsured) return;
-  const c = getSql() ?? sql;
-  if (!c) return;
-  // Fast path: check if core tables already exist (single query)
-  // Avoids running 22 DDL CREATE TABLE IF NOT EXISTS on every cold start
-  try {
-    const existing = await c`SELECT to_regclass('physi_users') AS u, to_regclass('physi_events') AS e, to_regclass('physi_verifications') AS v` as any;
-    if (existing?.[0]?.u && existing?.[0]?.e && existing?.[0]?.v) {
-      _tablesEnsured = true; // tables already exist, skip DDL entirely
-      return;
-    }
-  } catch { /* fall through to DDL */ }
-  const run = async () => {
-    await ensureUsers();
-    await ensureEvents();
-    await Promise.all([ensureVerifications(), ensureMiningLogs(), ensureCanonicalLog(), ensureEventHistory(), ensureScopeVotes(), ensureScopeResolution(), ensureGhostWitness(), ensureScopeMiningColumns(), ensureZkAuthority(), ensureSquadTables(), ensureBunkTables(), ensureNotesTables(), ensureHallAliases(), ensureProfAliases(), ensureSlotClaims(), ensureHeaders(), ensureVoteBonds(), ensureRevokedTokens(), ensureAuthColumns(), ensureSchools(), ensureSchoolDepartments(), ensureSchoolDisputes(), ensureCoinsBurned(), ensureSchoolEventCounts()]);
-    // ensure columns idempotently after tables exist
-    await ensureGhostWitness();
-    await ensureScopeMiningColumns();
-    await ensureZkAuthority();
-    await ensureHallAliases();
-    await ensureProfAliases();
-    await ensureSlotClaims();
-    await ensureHeaders();
-    await ensureVoteBonds();
-    await ensureRevokedTokens();
-    await ensureAuthColumns();
-  };
-  try {
-    await run();
-    _tablesEnsured = true;
-  } catch (e) {
-    console.warn("[db] cold-start retry:", (e as Error).message);
-    await new Promise((r) => setTimeout(r, 350));
-    await run();
-    _tablesEnsured = true;
+  if (process.env.PHYSI_MIGRATE === "1") {
+    console.warn("[db] ensureAllTables called with PHYSI_MIGRATE=1 — use scripts/migrate.mjs instead");
   }
+  return;
 }
 
 // Compat aliases — old imports keep working

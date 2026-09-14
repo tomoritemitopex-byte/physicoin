@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSql, isDbConfigured, dbNotConfigured, ensureAllTables } from "@/lib/db";
+import { getSql, isDbConfigured, dbNotConfigured, } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +13,6 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   const sql = getSql();
   if (!isDbConfigured() || !sql) return NextResponse.json(dbNotConfigured(), { status:503 });
-  try { await ensureAllTables(); } catch {}
   let b:any;
   try { b = await req.json(); } catch { return NextResponse.json({ok:false, code:"BAD_INPUT", message:"JSON required"}, {status:400}); }
   const userId = String(b?.user_id || b?.userId || "").trim();

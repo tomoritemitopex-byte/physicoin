@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSql, isDbConfigured, dbNotConfigured, ensureAllTables, ensureNotesTables } from "@/lib/db";
+import { getSql, isDbConfigured, dbNotConfigured, } from "@/lib/db";
 import { buildGhostChainSigs, prepareGhostChainQueries, GHOST_GENESIS } from "@/lib/ghostWitness";
 
 export const dynamic = "force-dynamic";
@@ -37,7 +37,7 @@ async function ocrViaVision(imageBase64: string, mime: string): Promise<string> 
 export async function GET(req: NextRequest) {
   const sql = getSql();
   if (!isDbConfigured() || !sql) return NextResponse.json(dbNotConfigured(), { status: 503 });
-  try { await ensureAllTables(); await ensureNotesTables(); } catch {}
+  try {   } catch {}
   const { searchParams } = new URL(req.url);
   const buildingId = (searchParams.get("building_id") || searchParams.get("building") || "").trim().toLowerCase();
   const level = (searchParams.get("level") || "").trim();
@@ -109,7 +109,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const sql = getSql();
   if (!isDbConfigured() || !sql) return NextResponse.json(dbNotConfigured(), { status: 503 });
-  try { await ensureAllTables(); await ensureNotesTables(); } catch {}
+  try {   } catch {}
 
   const ct = req.headers.get("content-type") || "";
   let title = "", buildingId = "phys", level = "100L", uploaderId: string | null = null;

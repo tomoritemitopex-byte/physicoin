@@ -3,7 +3,7 @@
  * GET /api/halls/resolve?alias=LT2  → { resolved: true, canonical: "LT 2", alias: "LT2" }
  */
 import { NextRequest, NextResponse } from "next/server";
-import { getSql, isDbConfigured, dbNotConfigured, ensureAllTables } from "@/lib/db";
+import { getSql, isDbConfigured, dbNotConfigured, } from "@/lib/db";
 import { logError, getErrorMessage } from "@/lib/adapters/error";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +12,6 @@ export async function GET(req: NextRequest){
   try{
     const sql=getSql();
     if(!isDbConfigured()||!sql) return NextResponse.json(dbNotConfigured(),{status:503});
-    try{ await ensureAllTables(); }catch{}
     const { searchParams }=new URL(req.url);
     const alias=String(searchParams.get("alias")||"").trim();
     const canonical=String(searchParams.get("canonical")||"").trim();

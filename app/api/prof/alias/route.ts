@@ -6,7 +6,7 @@
  * the canonical name is decided by students, not algorithm.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { getSql, isDbConfigured, dbNotConfigured, ensureAllTables } from "@/lib/db";
+import { getSql, isDbConfigured, dbNotConfigured, } from "@/lib/db";
 import { logError, getErrorMessage } from "@/lib/adapters/error";
 import { profGroupKey, profQuorumStatus } from "@/lib/profMatch";
 import { weightedQuorumStatus, getVoteWeights } from "@/lib/voteWeight";
@@ -18,7 +18,6 @@ export async function POST(req: NextRequest) {
   try {
     const sql = getSql();
     if (!isDbConfigured() || !sql) return NextResponse.json(dbNotConfigured(), { status: 503 });
-    try { await ensureAllTables(); } catch {}
     const b = await req.json().catch(() => null);
     const alias_name = String(b?.alias_name || b?.alias || "").trim().slice(0, 80);
     const canonical_name = String(b?.canonical_name || b?.canonical || "").trim().slice(0, 80);
@@ -110,7 +109,6 @@ export async function GET(req: NextRequest) {
   try {
     const sql = getSql();
     if (!isDbConfigured() || !sql) return NextResponse.json(dbNotConfigured(), { status: 503 });
-    try { await ensureAllTables(); } catch {}
     const { searchParams } = new URL(req.url);
     const statusFilter = searchParams.get("status") || "pending";
     const groupKey = searchParams.get("prof_group_key") || searchParams.get("group_key");

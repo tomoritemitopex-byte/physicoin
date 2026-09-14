@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSql, isDbConfigured, dbNotConfigured, ensureAllTables } from "@/lib/db";
+import { getSql, isDbConfigured, dbNotConfigured, } from "@/lib/db";
 import { profGroupKey } from "@/lib/profMatch";
 export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   const sql = getSql();
   if (!isDbConfigured() || !sql) return NextResponse.json(dbNotConfigured(), { status: 503 });
-  try { await ensureAllTables(); } catch {}
   const { searchParams } = new URL(req.url);
   const raw = String(searchParams.get("name") || searchParams.get("prof") || "").trim();
   if (!raw) return NextResponse.json({ ok: false, code: "BAD_INPUT", message: "name required" }, { status: 400 });

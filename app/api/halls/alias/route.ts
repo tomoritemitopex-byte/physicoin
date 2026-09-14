@@ -4,7 +4,7 @@
  * Reuses scope merge quorum pattern: 8-vote quorum + 70% consensus.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { getSql, isDbConfigured, dbNotConfigured, ensureAllTables } from "@/lib/db";
+import { getSql, isDbConfigured, dbNotConfigured, } from "@/lib/db";
 import { logError, getErrorMessage } from "@/lib/adapters/error";
 import { weightedQuorumStatus, getVoteWeights } from "@/lib/voteWeight";
 import { getCohesionMultipliers } from "@/lib/cohortTrust";
@@ -26,7 +26,6 @@ export async function POST(req: NextRequest) {
   try {
     const sql=getSql();
     if(!isDbConfigured()||!sql) return NextResponse.json(dbNotConfigured(),{status:503});
-    try{ await ensureAllTables(); }catch{}
     const b=await req.json().catch(()=>null);
     const alias_name=String(b?.alias_name||b?.alias||"").trim();
     const canonical_name=String(b?.canonical_name||b?.canonical||"").trim();
@@ -122,7 +121,6 @@ export async function GET(req: NextRequest){
   try{
     const sql=getSql();
     if(!isDbConfigured()||!sql) return NextResponse.json(dbNotConfigured(),{status:503});
-    try{ await ensureAllTables(); }catch{}
     const { searchParams }=new URL(req.url);
     const programme=searchParams.get("programme");
     const level=searchParams.get("level");

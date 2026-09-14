@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSql, isDbConfigured, dbNotConfigured, ensureAllTables } from "@/lib/db";
+import { getSql, isDbConfigured, dbNotConfigured, } from "@/lib/db";
 import { generateICSForMany } from "@/lib/calendar";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +13,6 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   const sql = getSql();
   if (!isDbConfigured() || !sql) return NextResponse.json(dbNotConfigured(), { status: 503 });
-  try { await ensureAllTables(); } catch {}
 
   const { searchParams } = new URL(req.url);
   let programme = String(searchParams.get("programme") || searchParams.get("program") || "").trim();

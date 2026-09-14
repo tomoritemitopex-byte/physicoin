@@ -5,7 +5,7 @@
  * Cap: mining_balance <= 10000
  */
 import { NextResponse } from "next/server";
-import { getSql, isDbConfigured, dbNotConfigured, ensureAllTables } from "@/lib/db";
+import { getSql, isDbConfigured, dbNotConfigured, } from "@/lib/db";
 import { registerApiAdapter } from "../api";
 import { registerFeature } from "../features";
 import { logError, getErrorMessage } from "../error";
@@ -43,7 +43,6 @@ async function handleMining(req: Request): Promise<Response> {
     if (!isDbConfigured() || !sql) return NextResponse.json(dbNotConfigured(), { status: 503 });
     if (req.method === "POST") {
       try {
-        await ensureAllTables();
       } catch (e) {
         logError("MINING_CHECKIN_FAILED", e, { route: "/api/mining", phase: "ensure" });
       }
@@ -86,7 +85,6 @@ async function handleMining(req: Request): Promise<Response> {
       }
     }
     try {
-      await ensureAllTables();
     } catch (e) {
       logError("MINING_FETCH_FAILED", e, { route: "/api/mining", phase: "ensure" });
     }

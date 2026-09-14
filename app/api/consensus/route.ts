@@ -11,7 +11,7 @@
  * Filter by programme/level when provided (halls filtered, others included).
  */
 import { NextRequest, NextResponse } from "next/server";
-import { getSql, isDbConfigured, dbNotConfigured, ensureAllTables } from "@/lib/db";
+import { getSql, isDbConfigured, dbNotConfigured, } from "@/lib/db";
 import { logError } from "@/lib/adapters/error";
 
 export const dynamic = "force-dynamic";
@@ -128,7 +128,6 @@ export async function GET(req: NextRequest) {
     const sql = getSql();
     if (!isDbConfigured() || !sql) return NextResponse.json(dbNotConfigured(), { status: 503 });
     try {
-      await ensureAllTables();
     } catch {}
     // lazy expiry: pending + expires_at < NOW() -> rejected (mempool RBF time-lock)
     try { const { expireMempool } = await import("@/lib/mempool"); await expireMempool(sql); } catch {}

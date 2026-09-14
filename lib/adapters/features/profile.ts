@@ -2,7 +2,7 @@
  * lib/adapters/features/profile.ts — Profile Feature + Api Adapter
  */
 import { NextResponse } from "next/server";
-import { getSql, isDbConfigured, dbNotConfigured, ensureAllTables } from "@/lib/db";
+import { getSql, isDbConfigured, dbNotConfigured, } from "@/lib/db";
 import { registerApiAdapter } from "../api";
 import { registerFeature } from "../features";
 import { logError, getErrorMessage } from "../error";
@@ -25,7 +25,6 @@ async function handleProfile(req: Request): Promise<Response> {
     if (!isDbConfigured() || !sql) return NextResponse.json(dbNotConfigured(), { status: 503 });
     if (req.method === "DELETE") {
       try {
-        await ensureAllTables();
       } catch (e) {
         logError("PROFILE_DELETE_FAILED", e, { route: "/api/profile", phase: "ensure" });
       }
@@ -63,7 +62,6 @@ async function handleProfile(req: Request): Promise<Response> {
     }
     if (req.method === "POST") {
       try {
-        await ensureAllTables();
       } catch (e) {
         logError("PROFILE_CREATE_FAILED", e, { route: "/api/profile", phase: "ensure" });
       }
@@ -102,7 +100,6 @@ async function handleProfile(req: Request): Promise<Response> {
     }
     // GET
     try {
-      await ensureAllTables();
     } catch (e) {
       logError("PROFILE_FETCH_FAILED", e, { route: "/api/profile", phase: "ensure" });
     }
