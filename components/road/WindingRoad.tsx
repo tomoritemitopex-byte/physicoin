@@ -210,6 +210,7 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
       {/* ── Building nodes ── */}
       {orderedBuildings.map((b) => {
         const pos = NODE_POSITIONS[b.id];
+        if (!pos) return null;
         const active = buildingId === b.id;
         const cnt = buildingCounts[b.id] ?? 0;
         return (

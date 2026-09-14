@@ -1,17 +1,17 @@
 import { BUILDINGS } from "@/lib/campus";
 
 const NODE_POSITIONS: Record<string, { x: number; y: number }> = {
-  phys:  { x: 50,  y: 76  },
-  mbbs:  { x: 18,  y: 212 },
-  pharm: { x: 82,  y: 212 },
-  dpt:   { x: 18,  y: 364 },
-  bnsc:  { x: 82,  y: 364 },
-  bmls:  { x: 50,  y: 516 },
-  nutr:  { x: 18,  y: 668 },
-  it:    { x: 82,  y: 668 },
+  anat:    { x: 50,  y: 60  },
+  phys:    { x: 18,  y: 190 },
+  biochem: { x: 82,  y: 190 },
+  mbbs:    { x: 18,  y: 320 },
+  pharm:   { x: 82,  y: 320 },
+  commed:  { x: 50,  y: 450 },
+  nursing: { x: 18,  y: 580 },
+  lab:     { x: 82,  y: 580 },
 };
 
-const CLOCK_TOWER_POS = { x: 50, y: 516 };
+const CLOCK_TOWER_POS = { x: 50, y: 450 };
 
 function buildSvgPath(nodeIds: string[]): string {
   const pts = nodeIds
@@ -80,6 +80,7 @@ export default function CampusPreview() {
         {/* Building nodes — jewel-tone ellipses with gold bezels */}
         {orderedBuildings.map((b) => {
           const pos = NODE_POSITIONS[b.id];
+          if (!pos) return null;
           return (
             <g key={b.id}>
               <ellipse
