@@ -281,4 +281,152 @@ ALTER TABLE physi_verifications ADD COLUMN IF NOT EXISTS is_witness BOOLEAN NOT 
 ALTER TABLE physi_verifications ADD COLUMN IF NOT EXISTS squad_boost BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE physi_verifications ADD COLUMN IF NOT EXISTS award NUMERIC(3,2) NOT NULL DEFAULT 0.3;
 
+-- ── Appendix: runtime-only tables mirrored for build-time migration ──
+-- These were previously created only by lazy ensure*() calls in lib/db.ts
+-- (ensureSquadTables, ensureBunkTables, ensureNotesTables, ensureEventHistory,
+-- ensureSlotClaims, ensureHeaders, ensureVoteBonds, ensureRevokedTokens,
+-- ensureAuthColumns, ensureScopeMiningColumns). They are mirrored here so
+-- `node scripts/migrate.mjs` at build time creates the FULL schema and the
+-- runtime lazy ensures become harmless no-ops. Keep in sync with lib/db.ts.
+
+-- Squad locator (Find My People)
+CREATE TABLE IF NOT EXISTS physi_squad_pings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES physi_users(id) ON DELETE CASCADE,
+  programme TEXT NOT NULL DEFAULT 'PHYS',
+  level TEXT NOT NULL DEFAULT '100L',
+  building_id TEXT NOT NULL DEFAULT 'phys',
+  lat DOUBLE PRECISION,
+  lng DOUBLE PRECISION,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ NOT NULL DEFAULT NOW() + INTERVAL '12 minutes'
+);
+CREATE INDEX IF NOT EXISTS physi_squad_pings_prog_idx ON physi_squad_pings (programme, level);
+CREATE INDEX IF NOT EXISTS physi_squad_pings_building_idx ON physi_squad_pings (building_id);
+CREATE INDEX IF NOT EXISTS physi_squad_pings_expires_idx ON physi_squad_pings (expires_at);
+CREATE INDEX IF NOT EXISTS physi_squad_pings_user_idx ON physi_squad_pings (user_id, created_at DESC);
+CREATE TABLE IF NOT EXISTS physi_squad_waves (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  from_user UUID NOT NULL REFERENCES physi_users(id) ON DELETE CASCADE,
+  to_user UUID NOT NULL REFERENCES physi_users(id) ON DELETE CASCADE,
+  message TEXT NOT NULL DEFAULT '👋',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ NOT NULL DEFAULT NOW() + INTERVAL '5 minutes'
+);
+CREATE INDEX IF NOT EXISTS physi_squad_waves_to_idx ON physi_squad_waves (to_user, expires_at DESC);
+CREATE INDEX IF NOT EXISTS physi_squad_waves_from_idx ON physi_squad_waves (from_user);
+
+-- Bunk Radar
+CREATE TABLE IF NOT EXISTS physi_bunk_reports (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_id UUID NOT NULL REFERENCES physi_events(id) ON DELETE CASCADE,
+  reporter_id UUID REFERENCES physi_users(id) ON DELETE SET NULL,
+  vote TEXT NOT NULL DEFAULT 'no_show' CHECK (vote IN ('no_show','happening')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS physi_bunk_reports_pair_uidx ON physi_bunk_reports (event_id, reporter_id) WHERE reporter_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS physi_bunk_reports_event_idx ON physi_bunk_reports (event_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS physi_bunk_reports_time_idx ON physi_bunk_reports (created_at DESC);
+
+-- Notes Drop (+ unlock tracking)
+CREATE TABLE IF NOT EXISTS physi_notes_drops (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  uploader_id UUID REFERENCES physi_users(id) ON DELETE SET NULL,
+  title TEXT NOT NULL,
+  building_id TEXT NOT NULL DEFAULT 'phys',
+  level TEXT NOT NULL DEFAULT '100L',
+  lat DOUBLE PRECISION,
+  lng DOUBLE PRECISION,
+  ocr_text TEXT NOT NULL DEFAULT '',
+  image_data TEXT NOT NULL DEFAULT '',
+  preview_blur TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS physi_notes_drops_building_idx ON physi_notes_drops (building_id);
+CREATE INDEX IF NOT EXISTS physi_notes_drops_level_idx ON physi_notes_drops (level);
+CREATE INDEX IF NOT EXISTS physi_notes_drops_created_idx ON physi_notes_drops (created_at DESC);
+CREATE TABLE IF NOT EXISTS physi_notes_unlocks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  note_id UUID NOT NULL REFERENCES physi_notes_drops(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES physi_users(id) ON DELETE CASCADE,
+  cost NUMERIC(5,2) NOT NULL DEFAULT 1,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(note_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS physi_notes_unlocks_user_idx ON physi_notes_unlocks (user_id);
+CREATE INDEX IF NOT EXISTS physi_notes_unlocks_note_idx ON physi_notes_unlocks (note_id);
+
+-- Event edit history (venue/time change proof trail)
+CREATE TABLE IF NOT EXISTS physi_event_history (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_id UUID NOT NULL REFERENCES physi_events(id) ON DELETE CASCADE,
+  prev_venue TEXT,
+  prev_event_date DATE,
+  prev_event_time TIME,
+  new_venue TEXT NOT NULL,
+  new_event_date DATE NOT NULL,
+  new_event_time TIME NOT NULL,
+  changed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  changed_by UUID REFERENCES physi_users(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS physi_event_hist_event_idx ON physi_event_history (event_id, changed_at DESC);
+
+-- Slot claims (event dedup / RBF grouping)
+CREATE TABLE IF NOT EXISTS physi_slot_claims (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  slot_key TEXT NOT NULL,
+  event_id UUID REFERENCES physi_events(id) ON DELETE CASCADE,
+  claimer_id UUID REFERENCES physi_users(id) ON DELETE SET NULL,
+  venue TEXT NOT NULL,
+  event_time TIME NOT NULL,
+  title TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  vote_weight_yes NUMERIC(10,2) NOT NULL DEFAULT 0,
+  vote_weight_no NUMERIC(10,2) NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS physi_slot_claims_slot_idx ON physi_slot_claims (slot_key);
+CREATE INDEX IF NOT EXISTS physi_slot_claims_event_idx ON physi_slot_claims (event_id);
+ALTER TABLE physi_events ADD COLUMN IF NOT EXISTS slot_key TEXT;
+CREATE INDEX IF NOT EXISTS physi_events_slot_idx ON physi_events (slot_key) WHERE status='pending';
+
+-- Daily proof headers (merkle roots)
+CREATE TABLE IF NOT EXISTS physi_headers (
+  date DATE PRIMARY KEY,
+  merkle_root TEXT NOT NULL,
+  ghost_tip_root TEXT NOT NULL,
+  prev_hash TEXT NOT NULL,
+  hmac TEXT NOT NULL,
+  count INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS physi_headers_created_idx ON physi_headers (created_at DESC);
+
+-- Vote bonds (staked rep per verification)
+CREATE TABLE IF NOT EXISTS physi_vote_bonds (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  verifier_id UUID NOT NULL REFERENCES physi_users(id) ON DELETE CASCADE,
+  event_id UUID NOT NULL REFERENCES physi_events(id) ON DELETE CASCADE,
+  stake NUMERIC(5,2) NOT NULL DEFAULT 1.00,
+  status TEXT NOT NULL CHECK (status IN ('held','released','burned')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(verifier_id, event_id)
+);
+CREATE INDEX IF NOT EXISTS physi_vote_bonds_event_idx ON physi_vote_bonds (event_id);
+CREATE INDEX IF NOT EXISTS physi_vote_bonds_verifier_idx ON physi_vote_bonds (verifier_id);
+
+-- Revoked auth tokens
+CREATE TABLE IF NOT EXISTS physi_revoked_tokens (
+  jti TEXT PRIMARY KEY,
+  user_id UUID REFERENCES physi_users(id) ON DELETE SET NULL,
+  revoked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS physi_revoked_tokens_expires_idx ON physi_revoked_tokens (expires_at);
+
+-- Auth + scope-mining additive columns
+ALTER TABLE physi_users ADD COLUMN IF NOT EXISTS password_hash TEXT;
+ALTER TABLE physi_users ADD CONSTRAINT physi_users_balance_cap CHECK (mining_balance <= 10000);
+ALTER TABLE physi_users ADD CONSTRAINT physi_users_balance_nonneg CHECK (mining_balance >= 0);
+ALTER TABLE physi_scope_votes ADD COLUMN IF NOT EXISTS rep_earned NUMERIC(5,2) NOT NULL DEFAULT 0;
+
 

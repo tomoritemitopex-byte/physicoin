@@ -1,4 +1,5 @@
 import { Search, Plus } from "lucide-react";
+import WindingRoadStatic from "@/components/road/WindingRoadStatic";
 import WindingRoad from "@/components/road/WindingRoad";
 import ToastClient from "./ToastClient";
 
@@ -18,8 +19,9 @@ function isVerified(ev: EventRow) {
 
 /**
  * RoadmapShell — Server Component.
- * Renders the full road + events in initial HTML (no spinner).
- * Interactive parts (voting, search) are handled by client sub-components.
+ * Renders header + stats + the static road scene (WindingRoadStatic) in
+ * initial HTML. Only the interactive overlay (nodes, panels, feed,
+ * ghosts) hydrates as client JS via WindingRoad / ToastClient.
  */
 export default function RoadmapShell({
   initialEvents,
@@ -77,8 +79,11 @@ export default function RoadmapShell({
         <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-amber" /> {events.filter(e => !isVerified(e)).length} advisory</span>
       </div>
 
-      {/* WindingRoad — server-rendered static SVG + event cards */}
-      <WindingRoad events={events} />
+      {/* Road: static SSR scene + interactive client overlay */}
+      <div className="campus-day relative min-h-screen w-full overflow-y-auto px-2 pb-28" style={{ scrollSnapType: "y mandatory" }}>
+        <WindingRoadStatic />
+        <WindingRoad events={events} />
+      </div>
 
       {/* Toast — client-only, lazy */}
       <ToastClient />

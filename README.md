@@ -11,7 +11,7 @@ Bespoke SRE.ai style. No code reused from v1.
 ## Quick start
 ```bash
 export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-nvm use 20
+nvm use 22
 cp .env.local.example .env.local  # add DATABASE_URL
 npm install
 npm run build
