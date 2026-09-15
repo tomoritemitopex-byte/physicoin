@@ -58,6 +58,23 @@ async function promoteIfQuorum(tx: any, eventId: string, verifierId: string): Pr
     const q1 = tx`UPDATE physi_events SET status='verified', authority_points=${yesW}, required_points=${total}, updated_at=NOW() WHERE id=${eventId}`;
     const q2 = tx`INSERT INTO physi_canonical_log (event_id, yes_weight, total_weight, yes_ratio, promoted_by) VALUES (${eventId}, ${yesW}, ${total}, ${ratio}, ${verifierId})`;
     queries.push(q1, q2);
+    // Earn-for-truth (proof-of-useful-work, separate ledger from the mint):
+    // poster bounty 0.5, each YES voter their row award (0.3 default).
+    try {
+      const [posted] = await tx`SELECT created_by FROM physi_events WHERE id=${eventId} LIMIT 1`;
+      const yesVoters = await tx`SELECT verifier_id, award::float AS award FROM physi_verifications WHERE event_id=${eventId} AND vote='YES'`;
+      if (posted?.created_by) {
+        queries.push(tx`UPDATE physi_users SET mining_balance = LEAST(10000, mining_balance + 0.5) WHERE id=${posted.created_by}`);
+        queries.push(tx`INSERT INTO physi_truth_rewards (user_id, event_id, kind, amount) VALUES (${posted.created_by}, ${eventId}, 'truth_poster', 0.5)`);
+      }
+      for (const v of yesVoters as Array<{verifier_id:string; award:number}>) {
+        const amt = Number(v.award) || 0.3;
+        queries.push(tx`UPDATE physi_users SET mining_balance = LEAST(10000, mining_balance + ${amt}) WHERE id=${v.verifier_id}`);
+        queries.push(tx`INSERT INTO physi_truth_rewards (user_id, event_id, kind, amount) VALUES (${v.verifier_id}, ${eventId}, 'truth_voter', ${amt})`);
+      }
+    } catch (e) {
+      logError("TRUTH_PAYOUT_FAILED", e, { route: "/api/verify", eventId });
+    }
   } else if (demote) {
     const q1 = tx`UPDATE physi_events SET status='pending', authority_points=${yesW}, required_points=${required}, updated_at=NOW() WHERE id=${eventId}`;
     queries.push(q1);

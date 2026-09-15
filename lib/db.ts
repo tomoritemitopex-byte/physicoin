@@ -658,12 +658,39 @@ export async function ensureAuthColumns(): Promise<void> {
   try { await c`ALTER TABLE physi_users ADD CONSTRAINT physi_users_balance_nonneg CHECK (mining_balance >= 0)`; } catch {}
 }
 
+export async function ensureTruthRewards(): Promise<void> {
+  const c = getSql() ?? sql;
+  if (!c) return;
+  await c`
+    CREATE TABLE IF NOT EXISTS physi_truth_rewards (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES physi_users(id) ON DELETE CASCADE,
+      event_id UUID REFERENCES physi_events(id) ON DELETE SET NULL,
+      kind TEXT NOT NULL CHECK (kind IN ('truth_poster','truth_voter','faucet')),
+      amount NUMERIC(14,2) NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`;
+  await c`CREATE INDEX IF NOT EXISTS physi_truth_rewards_user_idx ON physi_truth_rewards (user_id, created_at DESC)`;
+}
+
+export async function ensureFaucetDrips(): Promise<void> {
+  const c = getSql() ?? sql;
+  if (!c) return;
+  await c`
+    CREATE TABLE IF NOT EXISTS physi_faucet_drips (
+      user_id UUID NOT NULL REFERENCES physi_users(id) ON DELETE CASCADE,
+      week TEXT NOT NULL,
+      amount NUMERIC(14,2) NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (user_id, week)
+    )`;
+}
+
 /**
  * DEPRECATED — DDL moved to build-time migration.
  * Runtime DDL is forbidden on hot path (Vercel Edge timeout / Neon DDL locks).
  * Run `node scripts/migrate.mjs` locally or at build.
- */
-let _tablesEnsured = true; // force no-op; DDL no longer runs per-request
+ */let _tablesEnsured = true; // force no-op; DDL no longer runs per-request
 export async function ensureAllTables(): Promise<void> {
   if (process.env.PHYSI_MIGRATE === "1") {
     console.warn("[db] ensureAllTables called with PHYSI_MIGRATE=1 — use scripts/migrate.mjs instead");

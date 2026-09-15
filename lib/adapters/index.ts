@@ -31,6 +31,7 @@ import "./features/verify";
 import "./features/mining";
 import "./features/roadmap";
 import "./features/stats";
+import "./features/faucet";
 import "./features/health";
 import "./features/schools";
 
