@@ -74,7 +74,19 @@ async function handleMining(req: Request): Promise<Response> {
         const r = await sql`
       INSERT INTO physi_mining_logs (user_id, base_reward, authority_multiplier, earned_amount)
       VALUES (${userId}, ${baseForLog}, ${mult}, ${cappedEarned}) RETURNING *`;
-        await sql`UPDATE physi_users SET mining_balance = LEAST(${BALANCE_CAP}, mining_balance + ${cappedEarned}), updated_at = NOW() WHERE id = ${userId}`;
+        // One small fix with honest scope — all sorts of background quirks
+        // could still drain or crash this old app, that's a full hardening
+        // track for another day — but this seam, where one coin comes out of
+        // nowhere, should only ever fire once.
+        try {
+          await sql`UPDATE physi_users SET mining_balance = LEAST(${BALANCE_CAP}, mining_balance + ${cappedEarned}), updated_at = NOW() WHERE id = ${userId}`;
+        } catch (e) {
+          try { await sql`DELETE FROM physi_mining_logs WHERE id = ${r[0].id}`; } catch {}
+          throw e;
+        }
+        // Ghost row can never fail the whole mint (handled by appendGhostChain's
+        // internal catch). Only unlink the mint row if the BALANCE update failed
+        // above — never for a late ghost-write failure (would undo earned money).
         try {
           await appendGhostChain(sql, String(userId), GHOST_ACTIONS.MINING_CHECKIN, { prevSig: (u[0] as any).rep_ghost_sig ?? null });
         } catch {}

@@ -175,8 +175,20 @@ async function handleVerify(req: Request): Promise<Response> {
       }
       try {
         // --- Pre-transaction reads & pure computation ---
-        const [u] = await sql`SELECT authority_final, rep_ghost_sig FROM physi_users WHERE id = ${b.verifier_id} LIMIT 1`;
+        const [u] = await sql`SELECT authority_final, rep_ghost_sig, mining_balance FROM physi_users WHERE id = ${b.verifier_id} LIMIT 1`;
         if (!u) throw new Error("USER_NOT_FOUND");
+
+        // Own post + balance: poster can't count toward their own green
+        // tick; voting costs 1 PHY (except CANCEL/unvote). Lets future
+        // PHY attach mean something while keeping play on pocket change.
+        const bal = Number((u as any).mining_balance ?? 1);
+        if (bal < 1 && b.vote !== "CANCEL") {
+          return NextResponse.json({ ok:false, code:"INSUFFICIENT_COINS", message:"Need 1 PHY to vote." }, { status:429 });
+        }
+        const [posted] = await sql`SELECT created_by FROM physi_events WHERE id=${b.event_id} LIMIT 1`;
+        if (posted && posted.created_by === b.verifier_id) {
+          return NextResponse.json({ ok:false, code:"SELF_VOUCH", message:"Can't vote on your own post." }, { status:403 });
+        }
 
         let w = Number((u as any).authority_final) || 1.0;
         if (b.vote === "NO") w = w * 0.5;
