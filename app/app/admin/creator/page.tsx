@@ -287,9 +287,9 @@ export default function CreatorDashboard() {
           </p>
         </div>
         <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2">
-          <h3 className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Initial Supply</h3>
+          <h3 className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Balance Cap</h3>
           <p className="mt-1 font-mono text-[11px] text-slate-500">
-            10,000,000 PHY (10M) — max supply. Coins are earned through verification, not minted. Burned = deflationary.
+            10,000 PHY per wallet — hard cap enforced in DB. Burned deflates supply; no 10M mint exists.
           </p>
         </div>
         <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2">
