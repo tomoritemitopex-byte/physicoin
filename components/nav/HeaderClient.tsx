@@ -43,7 +43,7 @@ export default function HeaderClient() {
   return (
     <>
       <header className={`sticky top-0 z-40 border-b transition ${
-        scrolled ? "border-sky/20 bg-white/90 backdrop-blur-xl shadow-lg shadow-sky/10" : "border-sky/15 bg-white/80 backdrop-blur-xl"
+        scrolled ? "border-sky/20 bg-[#07111f]/95 backdrop-blur-xl shadow-lg shadow-cyan-950/20" : "border-sky/15 bg-[#07111f]/90 backdrop-blur-xl"
       }`}>
         <div className="mx-auto flex max-w-[1280px] items-center justify-between gap-3 px-4 py-2.5 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
