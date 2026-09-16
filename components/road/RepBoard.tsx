@@ -201,9 +201,10 @@ export default function RepBoard({ repBoard, youHandle, streak, myRep, levelInfo
           </div>
         </div>
         <div className="rounded-2xl border border-white/10 bg-black/60 backdrop-blur px-4 py-3">
-          <p className="font-mono text-[11px] font-bold text-white">Invite → +1 Rep</p>
-          <p className="font-mono text-[11px] text-slate-400 leading-3 mt-1">Share your road link with a course mate.</p>
-          <button onClick={async ()=>{ const link = typeof window !== "undefined" ? window.location.origin+"/app/roadmap?invite="+encodeURIComponent(youHandle||"physicoin") : ""; try{ const anyNav:any=navigator as any; if(anyNav.share){ await anyNav.share({title:"Physicoin", text:"Join me on endless road", url:link}); return; } }catch{} try{ await navigator.clipboard.writeText(link); }catch{} }} className="mt-2 w-full rounded-full bg-white py-2 text-xs font-black text-black">Share link</button>
+          <p className="font-mono text-[11px] font-bold text-white">Invite — share link</p>
+          <p className="font-mono text-[11px] text-slate-400 leading-3 mt-1">Share your road link with a course mate. Rep is earned via daily check-in & quorum — no fake invite +1.</p>
+          <button onClick={async ()=>{ const link = typeof window !== "undefined" ? window.location.origin+"/app/roadmap?invite="+encodeURIComponent(youHandle||"physicoin") : ""; try{ const anyNav:any=navigator as any; if(anyNav.share){ await anyNav.share({title:"Physicoin", text:"Join me on endless road", url:link}); return; } }catch{} try{ await navigator.clipboard.writeText(link); window.dispatchEvent(new CustomEvent("physi-toast",{detail:"Link copied — sharing only (no auto +1 Rep)"})); }catch{} }} className="mt-2 w-full rounded-full bg-white py-2 text-xs font-black text-black">Share link</button>
+          <p className="mt-1 font-mono text-[10px] text-white/40">Honest: sharing copies link only. $PHY earned at /app/mining.</p>
         </div>
       </aside>
     </>

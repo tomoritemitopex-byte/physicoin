@@ -86,24 +86,22 @@ export function IsotopePanel({ rep }: { rep: number }) {
       </svg>
       <div className="mt-1 flex items-center justify-between">
         <p className="font-mono text-[9px] text-amber-100/60">client deterministic · verifiable · decayByHalfLife(N0,days,half) · 12.4→6.2 14d amber 30pt · live {liveN.toFixed(2)} · {vaultProof ? "vault sync green" : "vault grey"} · 7/8 verifyDecay proof in console</p>
-        <button
+          <button
           onClick={() => {
             const iso = new Date().toISOString();
             try { localStorage.setItem("physi_isotope_origin", iso); } catch {}
             setNowMs(Date.now());
             setVaultProof(true);
-            // rescue receipt +5 on profile: bump mining_balance +5
-            try {
-              const raw = localStorage.getItem("physi_profile");
-              if (raw) { const p = JSON.parse(raw); const cur = Number(p.mining_balance || 0); p.mining_balance = Number((cur + 5).toFixed(1)); localStorage.setItem("physi_profile", JSON.stringify(p)); setReceipt(`+5 → ${p.mining_balance.toFixed(1)} Rep`); setTimeout(() => setReceipt(null), 2200); }
-              else { setReceipt("+5 entangle receipt"); setTimeout(() => setReceipt(null), 2200); }
-            } catch {}
-            // also log verifyDecay
+            // honest: entangle is visual only — real $PHY only via /api/mining check-in, no localStorage theater
+            setReceipt(`Entangled · earn $PHY via daily check-in`);
+            setTimeout(() => setReceipt(null), 2200);
+            try { window.dispatchEvent(new CustomEvent("physi-toast", { detail: "Entangled — visual only. Earn $PHY at Check-in." })); } catch {}
             try { const pr = verifyDecayProof(ISOTOPE_N0, elapsedDays, ISOTOPE_HALF); console.log("[isotope] rescue entangle", pr); } catch {}
           }}
+          title="Entangle is visual only — $PHY earned via /app/mining"
           className="ml-2 shrink-0 rounded-full bg-amber-400 px-2.5 py-1 font-mono text-[10px] font-black text-black hover:bg-amber-500"
         >
-          Entangle +5
+          Entangle
         </button>
       </div>
       {receipt && <p className="mt-1 font-mono text-[10px] font-bold text-emerald-300">{receipt} · profile +5 receipt</p>}
@@ -120,18 +118,17 @@ export function StreakRescueCard() {
   const doRescue = () => {
     const restored = rescueStreak("friend");
     setS({ streak: restored, last: null, decayed: restored });
-    // rescue receipt +5 on profile
-    try {
-      const raw = localStorage.getItem("physi_profile");
-      if (raw) { const p = JSON.parse(raw); const cur = Number(p.mining_balance || 0); p.mining_balance = Number((cur + 5).toFixed(1)); localStorage.setItem("physi_profile", JSON.stringify(p)); setReceipt(`+5 → ${p.mining_balance.toFixed(1)} Rep`); setTimeout(() => setReceipt(null), 2400); }
-    } catch {}
+    // honest: rescue restores streak locally, no fake +5 Rep — real $PHY only via mining
+    setReceipt(`Streak rescued · streak ${restored} (no fake +5 Rep)`);
+    setTimeout(() => setReceipt(null), 2400);
+    try { window.dispatchEvent(new CustomEvent("physi-toast", { detail: "Streak rescued — earn $PHY via check-in" })); } catch {}
   };
   return (
     <div className="rounded-xl border border-orange-400/15 bg-orange-500/5 p-3">
       <div className="flex items-center justify-between"><span className="font-mono text-[11px] font-bold text-orange-200">🔥 Streak {s.streak}→{s.decayed} · half {7}d</span>{low && <button onClick={doRescue} className="rounded-full bg-white px-3 py-1 text-[11px] font-black text-black">Rescue +5</button>}</div>
       <p className="mt-1 font-mono text-[10px] text-orange-100/60">miss decays N·0.5^(d/7) · friend one-tap rescue entangles via BroadcastChannel + Vault · receipt +5 on profile</p>
       {receipt && <p className="mt-1 font-mono text-[10px] font-bold text-emerald-300">{receipt} · streak rescue</p>}
-      {!low && <button onClick={() => { const v = rescueStreak("you"); setS(getStreak()); try { const raw = localStorage.getItem("physi_profile"); if (raw) { const p = JSON.parse(raw); const cur = Number(p.mining_balance || 0); p.mining_balance = Number((cur + 5).toFixed(1)); localStorage.setItem("physi_profile", JSON.stringify(p)); setReceipt(`+5 → ${p.mining_balance.toFixed(1)}`); setTimeout(() => setReceipt(null), 2400); }} catch {} }} className="mt-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold text-white/70">test rescue (entangle +5)</button>}
+      {!low && <button onClick={() => { const v = rescueStreak("you"); setS(getStreak()); setReceipt(`Test rescue — streak ${v} (no fake +5)`); setTimeout(() => setReceipt(null), 2400); try { window.dispatchEvent(new CustomEvent("physi-toast", { detail: "Test rescue — visual only" })); } catch {} }} className="mt-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold text-white/70">test rescue (visual only)</button>}
     </div>
   );
 }

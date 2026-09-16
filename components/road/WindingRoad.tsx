@@ -100,8 +100,9 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
       let uid: string | null = null;
       try { const raw = localStorage.getItem("physi_profile"); if (raw) uid = JSON.parse(raw)?.id ?? null; } catch {}
       if (!uid) {
-        if (vote === "YES") setVerifyCounts((m) => ({ ...m, [ev.id]: (m[ev.id] ?? 0) + 1 }));
-        if (onVerify) onVerify(ev);
+        // honest: no fake +1, prompt to create handle
+        try { window.dispatchEvent(new CustomEvent("physi-needs-profile")); } catch {}
+        try { window.dispatchEvent(new CustomEvent("physi-toast", { detail: "Create a handle to vote — 1 $PHY stake required" })); } catch {}
         setVerifying(null);
         return;
       }
@@ -112,13 +113,26 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
       });
       const j = await r.json().catch(() => ({} as any));
       if (r.ok && j.ok !== false) {
-        if (vote === "YES") setVerifyCounts((m) => ({ ...m, [ev.id]: (m[ev.id] ?? 0) + 1 }));
+        // honest: only update count after server confirms, refetch canonical count (no fallback fake +1)
+        try {
+          const rr = await fetch(`/api/verify?event_id=${encodeURIComponent(ev.id)}`, { cache: "no-store" });
+          const jj = await rr.json().catch(() => ({} as any));
+          const rows: any[] = jj.verifications ?? jj.rows ?? [];
+          const yes = rows.filter((x: any) => String(x.vote).toUpperCase() === "YES").length;
+          setVerifyCounts((m) => ({ ...m, [ev.id]: yes }));
+        } catch {
+          // no fake increment — wait for poll to refresh
+        }
         if (onVerify) onVerify(ev);
+        try { window.dispatchEvent(new CustomEvent("physi-toast", { detail: vote === "YES" ? "Vote recorded — staked 1 $PHY (refund if majority)" : "Vote recorded — staked 1 $PHY" })); } catch {}
       } else {
-        if (onVerify) onVerify(ev);
+        // honest failure: no fake +1, surface real error
+        const msg = j?.message || j?.error || (r.status === 401 ? "Sign in to vote — missing session" : r.status === 402 ? "Need 1 $PHY to vote — check in first" : r.status === 429 ? "Need 1 $PHY — Wallet empty" : "Vote failed");
+        try { window.dispatchEvent(new CustomEvent("physi-toast", { detail: msg })); } catch {}
+        // do NOT call onVerify on failure — no fake success
       }
     } catch {
-      if (onVerify) onVerify(ev);
+      try { window.dispatchEvent(new CustomEvent("physi-toast", { detail: "Vote failed — try again" })); } catch {}
     } finally {
       setVerifying(null);
     }
