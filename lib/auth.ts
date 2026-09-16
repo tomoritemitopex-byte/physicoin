@@ -20,8 +20,7 @@ function getSecret(): string {
     console.warn("[auth] HMAC_SECRET unset — using dev fallback. Set HMAC_SECRET in production!");
     return DEV_FALLBACK;
   }
-  console.warn("[auth] HMAC_SECRET unset — using dev fallback (insecure)!");
-  return DEV_FALLBACK;
+  throw new Error("[auth] HMAC_SECRET unset in production — refusing to mint weak sessions.");
 }
 
 function b64uEncode(str: string): string {

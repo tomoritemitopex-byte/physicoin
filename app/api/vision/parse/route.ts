@@ -58,6 +58,10 @@ function normalizeEvents(raw: ParsedEvent[]): ParsedEvent[] {
 
 export async function POST(req: Request) {
   try {
+    // Snap-a-timetable burns paid vision API credit — enrolled session only.
+    const { requireSession } = await import("@/lib/auth");
+    const sess = requireSession(req);
+    if ("error" in sess) return sess.error;
     // 1) extract imageBase64
     let imageBase64: string | null = null;
     let mimeType = "image/jpeg";

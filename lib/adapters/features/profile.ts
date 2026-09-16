@@ -8,6 +8,7 @@ import { registerFeature } from "../features";
 import { logError, getErrorMessage } from "../error";
 import { computeAuthorityFinal } from "@/lib/authority";
 import { ghostNextSig, GHOST_GENESIS, GHOST_ACTIONS } from "@/lib/ghostWitness";
+import { requireSession } from "@/lib/auth";
 
 export const profileFeature = {
   id: "profile",
@@ -24,6 +25,9 @@ async function handleProfile(req: Request): Promise<Response> {
     const sql = getSql();
     if (!isDbConfigured() || !sql) return NextResponse.json(dbNotConfigured(), { status: 503 });
     if (req.method === "DELETE") {
+      // Own account only: session must belong to the id being wiped.
+      const sess = requireSession(req);
+      if ("error" in sess) return sess.error;
       try {
       } catch (e) {
         logError("PROFILE_DELETE_FAILED", e, { route: "/api/profile", phase: "ensure" });
@@ -36,6 +40,9 @@ async function handleProfile(req: Request): Promise<Response> {
         } catch {}
       }
       if (!id) return NextResponse.json({ ok: false, code: "BAD_INPUT", message: getErrorMessage("BAD_INPUT") }, { status: 400 });
+      if (id !== sess.userId) {
+        return NextResponse.json({ ok: false, code: "FORBIDDEN", message: "You can only delete your own account." }, { status: 403 });
+      }
       try {
         try {
           await sql`DELETE FROM physi_verifications WHERE verifier_id = ${id}`;
