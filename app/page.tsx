@@ -1,5 +1,5 @@
 import { ArrowUpRight, Check, Clock3, Radio, ShieldCheck, Users } from 'lucide-react';
-import CampusPreview from '@/components/road/CampusPreview';
+import SignalRadar from '@/components/road/SignalRadar';
 import { getStatsData, getTimetableFeed } from '@/lib/data';
 
 export const dynamic = 'force-dynamic';
@@ -48,7 +48,7 @@ export default function LandingPage() {
             <div className="mt-8 flex flex-wrap items-center gap-4"><a href="/app/roadmap" className="primary-cta px-5 py-3.5 text-sm">View the live timetable <ArrowUpRight className="h-4 w-4" /></a><span className="flex items-center gap-2 font-mono text-xs text-slate-500"><Clock3 className="h-3.5 w-3.5" /> updated continuously</span></div>
             <div className="mt-8 flex flex-wrap gap-x-5 gap-y-2 font-mono text-xs text-slate-500"><span className="flex items-center gap-2"><ShieldCheck className="h-3.5 w-3.5 text-[var(--physi-lime)]" /> visible trust</span><span className="flex items-center gap-2"><Users className="h-3.5 w-3.5 text-[var(--physi-cyan)]" /> built by students</span><span>not official university communication</span></div>
           </div>
-          <div className="landing-panel p-2 shadow-2xl shadow-cyan-950/20"><CampusPreview /></div>
+          <div><SignalRadar /><p className="mt-3 text-center font-mono text-[10px] uppercase tracking-[.12em] text-slate-500">confidence is a live property, not a badge</p></div>
         </section>
 
         <section className="border-y landing-rule py-10"><div className="flex flex-wrap items-end justify-between gap-4"><div><p className="landing-kicker">The protocol</p><h2 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">From rumour to signal.</h2></div><p className="max-w-sm text-sm leading-6 text-slate-400">No pretending the feed is official. No hiding uncertainty. PHYSI makes the strength of every update legible.</p></div><div className="mt-8 grid gap-3 md:grid-cols-3">{steps.map(([number, title, copy]) => <article key={number} className="landing-panel p-5"><span className="font-mono text-xs text-[var(--physi-cyan)]">/{number}</span><h3 className="mt-8 text-lg font-semibold">{title}</h3><p className="mt-2 text-sm leading-6 text-slate-400">{copy}</p></article>)}</div></section>
