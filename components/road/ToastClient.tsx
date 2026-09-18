@@ -5,15 +5,21 @@ export default function ToastClient() {
   const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
+    const onToast = (e: any) => setToast(String(e.detail ?? ""));
+    window.addEventListener("physi-toast", onToast as any);
+    return () => window.removeEventListener("physi-toast", onToast as any);
+  }, []);
+
+  useEffect(() => {
     if (!toast) return;
-    const t = setTimeout(() => setToast(null), 2600);
+    const t = setTimeout(() => setToast(null), 3200);
     return () => clearTimeout(t);
   }, [toast]);
 
   if (!toast) return null;
 
   return (
-    <div className="fixed bottom-20 left-1/2 -translate-x-1/2 rounded-full border border-[rgba(52,211,153,0.15)] bg-[#1a5f48]/80 px-4 py-2 font-mono text-xs text-[#f0fdf4] shadow-[0_4px_16px_rgba(0,0,0,0.3)]">
+    <div className="fixed bottom-20 left-1/2 z-50 -translate-x-1/2 rounded-full border border-[rgba(185,246,106,0.2)] bg-[#0d1b2e]/90 px-4 py-2.5 font-mono text-xs font-semibold text-[#b9f66a] shadow-[0_8px_24px_rgba(0,0,0,0.4)] backdrop-blur">
       {toast}
     </div>
   );

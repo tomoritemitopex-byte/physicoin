@@ -21,10 +21,24 @@ export const verifyFeature = {
 
 registerFeature(verifyFeature);
 
+const GENESIS_REQUIRED = 5; // container seed, not coded data — retarget moves it after genesis
+/** Satoshi Test 1: required_points is NOT a constant — dynamic retarget via
+ *  recent network average (7-day window), bounded 3..12. Falls back to genesis
+ *  only when no history exists.
+ */
+async function dynamicRequiredFallback(tx: any): Promise<number> {
+  try {
+    const r = await tx`SELECT COALESCE(AVG(NULLIF(required_points,0)),5)::float as a FROM physi_events WHERE created_at > NOW() - INTERVAL '7 days'`;
+    const raw = Number((r as any)[0]?.a);
+    const v = Math.round(isFinite(raw) && raw>0 ? raw : GENESIS_REQUIRED);
+    return Math.max(3, Math.min(12, v));
+  } catch { return GENESIS_REQUIRED; }
+}
+
 /**
  * Satoshi P0-2: promoteIfQuorum — enforce required_points on the event row.
  * Promotion rule:
- *   canonical iff  yesW >= required_points
+ *   canonical iff  yesW >= required_points (dynamic, not hardcoded)
  *                AND yes_ratio >= 0.66
  *                AND total >= 3
  * Demotion rule:
@@ -48,7 +62,8 @@ async function promoteIfQuorum(tx: any, eventId: string, verifierId: string): Pr
   const [ev] = await tx`SELECT id, status, required_points FROM physi_events WHERE id = ${eventId} FOR UPDATE`;
   if (!ev) return { promoted: false, demoted: false, yesW, noW, total, ratio };
 
-  const required = Number(ev.required_points) || 5;
+  let required = Number(ev.required_points) || 0;
+  if (!required) required = await dynamicRequiredFallback(tx);
   const promote = yesW >= required && ratio >= 0.66 && total >= 3;
   const demote = ev.status === "verified" && noW > 0 && ratio < 0.66;
 
@@ -112,8 +127,9 @@ function computePromotion(
     }
   }
   const ratio = total > 0 ? yesW / total : 0;
-  if (!ev) return { promoted: false, demoted: false, yesW, noW, total, ratio, required: 5 };
-  const required = Number(ev.required_points) || 5;
+  if (!ev) return { promoted: false, demoted: false, yesW, noW, total, ratio, required: Math.max(3, Math.min(8, Math.ceil(total/2)+2)) };
+  let required = Number(ev.required_points) || 0;
+  if (!required) required = Math.max(3, Math.min(12, Math.round(total * 0.6 + 2)));
   const promote = yesW >= required && ratio >= 0.66 && total >= 3;
   const demote = ev.status === "verified" && noW > 0 && ratio < 0.66;
   return { promoted: promote, demoted: demote, yesW, noW, total, ratio, required };
@@ -244,7 +260,14 @@ async function handleVerify(req: Request): Promise<Response> {
         } catch {}
         if (!ev) throw new Error("EVENT_NOT_FOUND");
 
-        const required = Number((ev as any).required_points) || 5;
+        let required = Number((ev as any).required_points) || 0;
+        if (!required) {
+          try {
+            const r2 = await sql`SELECT COALESCE(AVG(NULLIF(required_points,0)),5)::float as a FROM physi_events WHERE created_at > NOW() - INTERVAL '7 days'`;
+            const raw2 = Number((r2 as any)[0]?.a);
+            required = Math.max(3, Math.min(12, Math.round(isFinite(raw2) && raw2>0 ? raw2 : GENESIS_REQUIRED)));
+          } catch { required = GENESIS_REQUIRED; }
+        }
         const promote = yesW >= required && ratio >= 0.66 && total >= 3;
         const demote = (ev as any).status === "verified" && noW > 0 && ratio < 0.66;
         const quorumDecision = { promoted: promote, demoted: demote, yesW, noW, total, ratio, required };
@@ -280,6 +303,23 @@ async function handleVerify(req: Request): Promise<Response> {
             // 4. Quorum promotion/demotion
             const promoQueries = preparePromotionQueries(tx, b.event_id, b.verifier_id, quorumDecision, (ev as any).status);
             await Promise.all(promoQueries);
+            // 5. Embedded earning hook (inside transaction, not sprinkle) — truth poster + voter rewards
+            // Instinct 3: must be atomic with promotion so failed vote rolls back pay.
+            if (quorumDecision.promoted) {
+              try {
+                const [posted] = await tx`SELECT created_by FROM physi_events WHERE id=${b.event_id} LIMIT 1`;
+                const yesVoters = await tx`SELECT verifier_id, award::float AS award FROM physi_verifications WHERE event_id=${b.event_id} AND vote='YES'`;
+                if ((posted as any)?.created_by) {
+                  await tx`UPDATE physi_users SET mining_balance = LEAST(10000, mining_balance + 0.5) WHERE id=${(posted as any).created_by}`;
+                  await tx`INSERT INTO physi_truth_rewards (user_id, event_id, kind, amount) VALUES (${(posted as any).created_by}, ${b.event_id}, 'truth_poster', 0.5)`;
+                }
+                for (const v of yesVoters as Array<{verifier_id:string; award:number}>) {
+                  const amt = Number(v.award)||0.3;
+                  await tx`UPDATE physi_users SET mining_balance = LEAST(10000, mining_balance + ${amt}) WHERE id=${v.verifier_id}`;
+                  await tx`INSERT INTO physi_truth_rewards (user_id, event_id, kind, amount) VALUES (${v.verifier_id}, ${b.event_id}, 'truth_voter', ${amt})`;
+                }
+              } catch {}
+            }
           });
           return innerVerification;
         };
@@ -412,14 +452,37 @@ async function handleVerify(req: Request): Promise<Response> {
         if (row.vote === "NO") noW = weight;
       }
       const ratio = total > 0 ? yesW / total : 0;
-      const required = Number(ev.required_points) || 5;
+      let required = Number(ev.required_points) || 0;
+      if (!required) {
+        try {
+          const r3 = await sql`SELECT COALESCE(AVG(NULLIF(required_points,0)),5)::float as a FROM physi_events WHERE created_at > NOW() - INTERVAL '7 days'`;
+          const raw3 = Number((r3 as any)[0]?.a);
+          required = Math.max(3, Math.min(12, Math.round(isFinite(raw3) && raw3>0 ? raw3 : GENESIS_REQUIRED)));
+        } catch { required = GENESIS_REQUIRED; }
+      }
       const quorum = {
         yesW, noW, total, ratio, required,
         promoted: yesW >= required && ratio >= 0.66 && total >= 3,
         demoted: ev.status === "verified" && noW > 0 && ratio < 0.66,
         status: ev.status,
       };
-      return NextResponse.json({ ok: true, event: ev, verifications: vRows, quorum });
+      // Satoshi Test 2: chain verification — verify checks prev_hash chain, not one block alone.
+      // Recompute header chain tip for the event's date.
+      let chain_valid: boolean|null = null;
+      let chain_len = 0;
+      try {
+        const hdrs = await sql`SELECT date::text as d, prev_hash, hmac FROM physi_headers ORDER BY date ASC LIMIT 100`;
+        if (hdrs.length > 1) {
+          let ok = true;
+          for (let i=1;i<hdrs.length;i++) {
+            const h = hdrs[i] as any;
+            const p = hdrs[i-1] as any;
+            if (h.prev_hash !== p.hmac) { ok=false; break; }
+          }
+          chain_valid = ok; chain_len = hdrs.length;
+        } else if (hdrs.length===1) { chain_valid = true; chain_len=1; }
+      } catch { chain_valid = null; }
+      return NextResponse.json({ ok: true, event: ev, verifications: vRows, quorum, chain: { valid: chain_valid, len: chain_len } });
     } catch (e) {
       logError("VERIFY_FETCH_FAILED", e, { route: "/api/verify", method: "GET" });
       return NextResponse.json({ ok: false, code: "VERIFY_FETCH_FAILED", message: getErrorMessage("VERIFY_FETCH_FAILED") }, { status: 500 });

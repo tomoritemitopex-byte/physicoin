@@ -1,8 +1,9 @@
-import { Search, Plus } from "lucide-react";
+import { Search } from "lucide-react";
 import Link from "next/link";
 import WindingRoadStatic from "@/components/road/WindingRoadStatic";
-import WindingRoad from "@/components/road/WindingRoad";
+import RoadClient from "@/components/road/RoadClient";
 import ToastClient from "./ToastClient";
+import QuizPost from "./QuizPost";
 
 type EventRow = {
   id: string; title: string; venue: string; event_date: string; event_time: string;
@@ -70,14 +71,7 @@ export default function RoadmapShell({
             ))}
           </div>
 
-          <Link
-            href="/app/timetable"
-            className="inline-flex items-center gap-1.5 rounded-full bg-sky px-4 py-2 text-sm font-semibold text-white hover:bg-sky-2 transition"
-            aria-label="Post a new event via Timetable"
-            title="Posting is via Timetable — one tap creates advisory"
-          >
-            <Plus className="h-4 w-4" /> Post
-          </Link>
+          <QuizPost />
         </div>
       </div>
       {/* Earn UI — honest: no fake localStorage +1, points to real check-in */}
@@ -95,10 +89,10 @@ export default function RoadmapShell({
         <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-amber" /> {events.filter(e => !isVerified(e)).length} advisory</span>
       </div>
 
-      {/* Road: static SSR scene + interactive client overlay */}
+      {/* Road: static SSR scene + interactive client overlay via RoadClient (wealth-loop + billion-interface) */}
       <div className="campus-day relative min-h-screen w-full overflow-y-auto px-2 pb-28" style={{ scrollSnapType: "y mandatory" }}>
         <WindingRoadStatic />
-        <WindingRoad events={events} />
+        <RoadClient events={events} />
       </div>
 
       {/* Toast — client-only, lazy */}

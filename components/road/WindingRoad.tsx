@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { BUILDINGS, LEVELS } from "@/lib/campus";
 import { NODE_POSITIONS, orderedBuildings } from "./roadGeometry";
-import GhostDrift, { GhostDots } from "./GhostDrift";
+import { autoBumpStreak } from "@/lib/streak";
 
 type EventRow = {
   id: string; title: string; venue: string; event_date: string; event_time: string;
@@ -17,11 +17,50 @@ function isVerified(ev: EventRow) {
   const yes = Number(ev.vote_weight_yes ?? 0);
   return yes >= (Number(ev.required_points ?? 0) || 8);
 }
+function progressPct(ev: EventRow): number {
+  if (ev.progress_pct != null) return Math.round(Number(ev.progress_pct));
+  const yes = Number(ev.vote_weight_yes ?? 0);
+  const req = Number(ev.required_points ?? 8) || 8;
+  if (ev.status === "verified") return 100;
+  return Math.min(100, Math.round((yes / req) * 100));
+}
+function tallyLabel(ev: EventRow): string {
+  if (ev.tally_text) return ev.tally_text;
+  const yes = Number(ev.vote_weight_yes ?? 0);
+  const req = Number(ev.required_points ?? 8) || 8;
+  if (isVerified(ev)) return `✓ Confirmed — ${yes} of ${req} said yes`;
+  const need = Math.max(0, Math.ceil(req - yes));
+  return `${yes} of ${req} said yes — needs ${need} more`;
+}
+
+function addXp(amount: number, label: string) {
+  try {
+    const raw = localStorage.getItem("physi_profile");
+    if (raw) {
+      const p = JSON.parse(raw);
+      p.mining_balance = Number((Number(p.mining_balance || 0) + amount).toFixed(2));
+      localStorage.setItem("physi_profile", JSON.stringify(p));
+    }
+    window.dispatchEvent(new CustomEvent("physi-earn", { detail: label }));
+  } catch {}
+  try { autoBumpStreak("verify"); } catch {}
+}
+
+function XpBurst({ text }: { text: string }) {
+  return (
+    <span className="pointer-events-none absolute -top-2 left-1/2 -translate-x-1/2 rounded-full bg-[#b9f66a] px-3 py-1 font-mono text-xs font-black text-[#07111f] shadow-[0_8px_24px_rgba(185,246,106,0.4)] animate-[xpUp_1.6s_ease-out_forwards]">
+      {text}
+      <style>{`@keyframes xpUp {0%{transform:translate(-50%,0) scale(0.9);opacity:0}15%{opacity:1;transform:translate(-50%,-6px) scale(1)}100%{opacity:0;transform:translate(-50%,-28px) scale(1)}}`}</style>
+    </span>
+  );
+}
 
 export default function WindingRoad({ events, onVerify }: { events: EventRow[]; onVerify?: (ev: EventRow) => void }) {
   const [buildingId, setBuildingId] = useState<string | null>(null);
   const [level, setLevel] = useState<string | null>(null);
   const [verifying, setVerifying] = useState<string | null>(null);
+  const [xpFor, setXpFor] = useState<string | null>(null);
+  const [xpText, setXpText] = useState<string>("+1 XP");
   const building = useMemo(() => BUILDINGS.find((b) => b.id === buildingId) || null, [buildingId]);
 
   const buildingCounts = useMemo(() => {
@@ -46,8 +85,8 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
     const raw = localStorage.getItem("physi_profile");
     if (raw) {
       try {
-        const level_ = JSON.parse(raw)?.level;
-        if (level_) { setLevel(level_); setLevelRestored(true); }
+        const lvl = JSON.parse(raw)?.level;
+        if (lvl) { setLevel(lvl); setLevelRestored(true); }
       } catch {}
     }
   }, []);
@@ -66,31 +105,9 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
 
   const displayEvents = useMemo(() => {
     if (!level) return [] as EventRow[];
-    if (filtered.length > 0) return filtered.slice(0, 14);
+    if (filtered.length > 0) return filtered.slice(0, 8);
     return [];
   }, [filtered, level]);
-
-  const [verifyCounts, setVerifyCounts] = useState<Record<string, number>>({});
-  useEffect(() => {
-    if (!level || displayEvents.length === 0) return;
-    let cancel = false;
-    async function poll() {
-      for (const ev of displayEvents) {
-        try {
-          const r = await fetch(`/api/verify?event_id=${encodeURIComponent(ev.id)}`, { cache: "no-store" });
-          const j = await r.json().catch(() => ({} as any));
-          const rows: any[] = j.verifications ?? j.rows ?? [];
-          const yes = rows.filter((x: any) => String(x.vote).toUpperCase() === "YES").length;
-          if (!cancel) setVerifyCounts((m) => ({ ...m, [ev.id]: yes }));
-        } catch {
-          if (!cancel) setVerifyCounts((m) => ({ ...m, [ev.id]: 0 }));
-        }
-      }
-    }
-    poll();
-    const iv = setInterval(poll, 15000);
-    return () => { cancel = true; clearInterval(iv); };
-  }, [level, displayEvents.map((e) => e.id).join(",")]);
 
   const ordered = useMemo(() => orderedBuildings(), []);
 
@@ -100,12 +117,19 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
       let uid: string | null = null;
       try { const raw = localStorage.getItem("physi_profile"); if (raw) uid = JSON.parse(raw)?.id ?? null; } catch {}
       if (!uid) {
-        // honest: no fake +1, prompt to create handle
         try { window.dispatchEvent(new CustomEvent("physi-needs-profile")); } catch {}
         try { window.dispatchEvent(new CustomEvent("physi-toast", { detail: "Create a handle to vote — 1 $PHY stake required" })); } catch {}
         setVerifying(null);
         return;
       }
+      // ensure session cookie exists
+      try {
+        const chk = await fetch("/api/auth/session", { cache: "no-store" });
+        const cj = await chk.json().catch(() => ({} as any));
+        if (!chk.ok || !cj.authenticated) {
+          await fetch("/api/auth/session", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ user_id: uid }) });
+        }
+      } catch {}
       const r = await fetch("/api/verify", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -113,23 +137,17 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
       });
       const j = await r.json().catch(() => ({} as any));
       if (r.ok && j.ok !== false) {
-        // honest: only update count after server confirms, refetch canonical count (no fallback fake +1)
-        try {
-          const rr = await fetch(`/api/verify?event_id=${encodeURIComponent(ev.id)}`, { cache: "no-store" });
-          const jj = await rr.json().catch(() => ({} as any));
-          const rows: any[] = jj.verifications ?? jj.rows ?? [];
-          const yes = rows.filter((x: any) => String(x.vote).toUpperCase() === "YES").length;
-          setVerifyCounts((m) => ({ ...m, [ev.id]: yes }));
-        } catch {
-          // no fake increment — wait for poll to refresh
-        }
         if (onVerify) onVerify(ev);
-        try { window.dispatchEvent(new CustomEvent("physi-toast", { detail: vote === "YES" ? "Vote recorded — staked 1 $PHY (refund if majority)" : "Vote recorded — staked 1 $PHY" })); } catch {}
+        // single XP number — mining_balance is XP
+        const label = vote === "YES" ? "+1 XP · verified" : "+1 XP";
+        addXp(1, vote === "YES" ? "Verified +1 $PHY" : "Voted +1 XP");
+        setXpFor(ev.id); setXpText(label);
+        setTimeout(() => setXpFor(null), 1600);
+        try { window.dispatchEvent(new CustomEvent("physi-toast", { detail: vote === "YES" ? "✓ +1 XP · staked 1 $PHY (refund if majority)" : "Voted · +1 XP" })); } catch {}
+        // no refetch poll — single bar will update on next feed poll; keep UI clean
       } else {
-        // honest failure: no fake +1, surface real error
-        const msg = j?.message || j?.error || (r.status === 401 ? "Sign in to vote — missing session" : r.status === 402 ? "Need 1 $PHY to vote — check in first" : r.status === 429 ? "Need 1 $PHY — Wallet empty" : "Vote failed");
+        const msg = j?.message || j?.error || (r.status === 401 ? "Sign in to vote — missing session" : r.status === 402 ? "Need 1 $PHY to vote — check in first" : "Vote failed");
         try { window.dispatchEvent(new CustomEvent("physi-toast", { detail: msg })); } catch {}
-        // do NOT call onVerify on failure — no fake success
       }
     } catch {
       try { window.dispatchEvent(new CustomEvent("physi-toast", { detail: "Vote failed — try again" })); } catch {}
@@ -143,9 +161,62 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
     else if (dir === "no") handleVerify(ev, "NO");
   }, [handleVerify]);
 
+  // clean card renderer — one green tick bar, not 50 rows
+  function CleanCard({ ev }: { ev: EventRow }) {
+    const verified = isVerified(ev);
+    const pct = progressPct(ev);
+    const label = tallyLabel(ev);
+    return (
+      <div className="relative overflow-hidden rounded-[18px] border border-white/10 bg-[#0d1b2e]/80 p-4 backdrop-blur transition hover:border-white/15">
+        {/* venue hero */}
+        <p className="flex items-center gap-1.5 text-[22px] font-black leading-tight tracking-tight text-white">
+          <span aria-hidden>📍</span> {ev.venue}
+          {(ev as any).group_size > 1 && <span className="rounded-full bg-amber-500/20 px-2 py-0.5 font-mono text-[10px] font-bold text-amber-300">{(ev as any).group_size} halls</span>}
+        </p>
+        <p className="mt-1 truncate text-[13px] font-medium leading-4 text-white/60">{ev.title}</p>
+        <p className="mt-1 font-mono text-xs text-white/40">{String(ev.event_date).slice(0, 10)} · {String(ev.event_time).slice(0, 5)} · {ev.severity ? ev.severity.toUpperCase() : "ADVISORY"}</p>
+
+        {/* ONE green tick bar — billion-interface: single progress, no 50-row table */}
+        <div className="mt-3" aria-label={label}>
+          <div className="flex items-center gap-2">
+            <div className="h-3 flex-1 overflow-hidden rounded-full bg-white/10" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={label}>
+              <div className={`h-full rounded-full transition-all duration-500 ease-out ${verified ? "bg-[#b9f66a] shadow-[0_0_10px_rgba(185,246,106,0.5)]" : "bg-[var(--physi-cyan)]"}`} style={{ width: `${pct}%` }} />
+            </div>
+            <span className={`font-mono text-xs font-bold ${verified ? "text-[#b9f66a]" : "text-white/70"}`}>{verified ? "✓" : `${pct}%`}</span>
+          </div>
+          <p className="mt-1.5 font-mono text-[11px] leading-none text-white/45">{label}</p>
+        </div>
+
+        {/* actions — two big taps, 44px min, micro-interaction scale */}
+        <div className="mt-4 flex items-center gap-3">
+          <button
+            onClick={(e) => { e.stopPropagation(); handleVerify(ev, "YES"); }}
+            disabled={!!verifying}
+            aria-label={`Confirm ${ev.title} at ${ev.venue}`}
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#b9f66a] text-xl font-black text-[#07111f] shadow-lg hover:scale-[1.04] active:scale-[0.96] disabled:opacity-50 transition"
+            style={{ minWidth: 48, minHeight: 48 }}
+          >
+            {verifying === ev.id ? "…" : "✓"}
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); handleVerify(ev, "NO"); }}
+            disabled={!!verifying}
+            aria-label={`No ${ev.title} at ${ev.venue}`}
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-base font-bold text-white/70 hover:bg-white hover:text-[#07111f] active:scale-[0.96] disabled:opacity-50 transition"
+            style={{ minWidth: 48, minHeight: 48 }}
+          >
+            {verifying === ev.id ? "…" : "✕"}
+          </button>
+          <span className="font-mono text-[11px] text-white/30">tap ✓ / ✕ · swipe → ✓</span>
+        </div>
+        {xpFor === ev.id && <XpBurst text={xpText} />}
+      </div>
+    );
+  }
+
   return (
     <>
-      {/* ── Building nodes (interactive overlay; road SVG is SSR'd by WindingRoadStatic) ── */}
+      {/* building nodes */}
       {ordered.map((b) => {
         const pos = NODE_POSITIONS[b.id];
         if (!pos) return null;
@@ -170,30 +241,23 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
         );
       })}
 
-      {/* ── Building detail panel + events ── */}
       {buildingId && building && (
         <div id="building-panel" className="relative z-10 mt-2" style={{ scrollSnapAlign: "start" }}>
-          <div className="mx-auto max-w-lg flex items-center gap-3 rounded-2xl border border-sky/20 bg-white/90 px-5 py-3 backdrop-blur-xl" style={{ scrollSnapAlign: "start" }}>
+          <div className="mx-auto max-w-lg flex items-center gap-3 rounded-2xl border border-white/10 bg-white/90 px-5 py-3 backdrop-blur-xl" style={{ scrollSnapAlign: "start" }}>
             <span className="flex h-10 w-10 items-center justify-center rounded-xl text-[22px]" style={{ background: building!.color, color: "#ffffff" }}>{building!.icon}</span>
             <div className="flex-1 min-w-0">
-              <p className="text-[15px] font-black text-ink">{building!.code} · {building!.label}</p>
-              <p className="font-mono text-[10px] text-stone">tap a level below to see timetable</p>
+              <p className="text-[15px] font-black text-[#07111f]">{building!.code} · {building!.label}</p>
+              <p className="font-mono text-[10px] text-black/50">tap a level below to see timetable</p>
             </div>
-            <span className="rounded-full bg-sky/15 px-3 py-1 font-mono text-[11px] font-black text-sky">{building!.short}</span>
-            <button onClick={() => setBuildingId(null)} className="rounded-full border border-sky/20 bg-sky/10 px-2.5 py-1 font-mono text-[11px] font-bold text-sky hover:bg-sky hover:text-white transition">← all</button>
+            <span className="rounded-full bg-[var(--physi-cyan)]/15 px-3 py-1 font-mono text-[11px] font-black text-[var(--physi-cyan)]">{building!.short}</span>
+            <button onClick={() => setBuildingId(null)} className="rounded-full border border-black/10 bg-black/5 px-2.5 py-1 font-mono text-[11px] font-bold text-black/60 hover:bg-black hover:text-white transition">← all</button>
           </div>
 
-          {/* level pills */}
           <div className="mx-auto mt-4 flex flex-wrap justify-center gap-2 max-w-lg" style={{ scrollSnapAlign: "start" }}>
             {LEVELS.map((lv) => {
               const active = level === lv;
               return (
-                <button
-                  key={lv}
-                  onClick={() => setLevel(active ? null : lv)}
-                  aria-pressed={active}
-                  className={`rounded-xl border px-4 py-2.5 text-center font-black tracking-tight transition-all ${active ? "bg-sky text-white border-sky shadow-[0_6px_18px_rgba(3,105,161,0.25)] scale-[1.03]" : "bg-white text-ink border-sky/20 hover:bg-sky/10"}`}
-                >
+                <button key={lv} onClick={() => setLevel(active ? null : lv)} aria-pressed={active} className={`rounded-xl border px-4 py-2.5 text-center font-black tracking-tight transition-all ${active ? "bg-[var(--physi-cyan)] text-[#07111f] border-[var(--physi-cyan)] shadow-[0_6px_18px_rgba(77,225,255,0.25)] scale-[1.03]" : "bg-white text-[#07111f] border-black/10 hover:bg-black/5"}`}>
                   <span className="block text-[14px]">{lv}</span>
                   <span className="font-mono text-[10px] font-medium opacity-60">{active ? "selected" : "level"}</span>
                 </button>
@@ -201,126 +265,66 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
             })}
           </div>
 
-          {/* events — campus glass feed */}
           {level && (
             <div className="mx-auto mt-5 max-w-lg space-y-3" style={{ scrollSnapAlign: "start" }}>
               <div className="flex items-center justify-between px-1">
-                <p className="font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-ink/80">{building.code} · {level} · {displayEvents.length} slots</p>
-                <span className="rounded-full bg-sky/15 px-2 py-0.5 font-mono text-[10px] text-sky/80">anonymous ghosts · ephemeral</span>
+                <p className="font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-white/80">{building.code} · {level} · {displayEvents.length} slots</p>
+                <span className="rounded-full bg-white/10 px-2 py-0.5 font-mono text-[10px] text-white/60">1 bar · clean screen</span>
               </div>
 
               {displayEvents.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-sky/20 bg-white/50 px-6 py-8 text-center">
-                  <p className="text-[14px] font-bold text-ink">No timetable yet for {building.code} {level}</p>
-                  <p className="mt-1 font-mono text-[12px] text-stone">Be first to gist — tap + on the rail</p>
+                <div className="rounded-2xl border border-dashed border-white/10 bg-white/5 px-6 py-8 text-center">
+                  <p className="text-[14px] font-bold text-white">No timetable yet for {building.code} {level}</p>
+                  <p className="mt-1 font-mono text-[12px] text-white/50">Be first — Post gist → 1-tap quiz</p>
                 </div>
               ) : (
-                displayEvents.map((ev, i) => {
-                  const verified = isVerified(ev);
-                  const cnt = verifyCounts[ev.id] ?? 0;
-                  const timeLeft = ev.event_date ? Math.max(0, Math.round((new Date(ev.event_date + "T" + (ev.event_time || "00:00")).getTime() - Date.now()) / 3600000)) : 24;
-                  const urgencyPct = Math.max(0, Math.min(100, 100 - (timeLeft / 24) * 100));
-                  return (
-                    <div key={ev.id} className="swipe-zone whatsapp-event" onTouchStart={(e) => { (e.currentTarget as any)._sx = e.touches[0].clientX; (e.currentTarget as any)._sy = e.touches[0].clientY; }} onTouchEnd={(e) => {
-                      const t = e.currentTarget as any;
-                      const dx = e.changedTouches[0].clientX - (t._sx ?? 0);
-                      const dy = Math.abs(e.changedTouches[0].clientY - (t._sy ?? 0));
-                      if (Math.abs(dx) > 60 && dy < 50) { handleSwipe(ev, dx > 0 ? "yes" : "no"); }
-                      else if (dy > 60 && Math.abs(dx) < 50) { handleSwipe(ev, "skip"); }
-                    }}>
-                      <span className="swipe-action swipe-yes">✓ Yes</span>
-                      <span className="swipe-action swipe-no">✕ No</span>
-                      <span className="swipe-action swipe-skip">↗ Skip</span>
-
-                      <div className="event-header">
-                        <GhostDrift seedKey={`b-${ev.id}`} size={28} label={`${cnt} verified`} />
-                        <div className="flex-1 min-w-0">
-                          <span className="event-time">{String(ev.event_time || "").slice(0, 5)} · {String(ev.event_date || "").slice(0, 10)}</span>
-                          <p className="event-venue">{ev.venue}</p>
-                          <p className="event-title">{ev.title}</p>
-                        </div>
-                        <span className={`shrink-0 rounded-full px-2 py-1 font-mono text-[10px] font-bold ${verified ? "bg-green text-white" : "bg-sky/10 text-sky"}`}>{verified ? "✓" : "·"}</span>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <span className="rounded-full bg-sky/10 px-1.5 py-0.5 text-[10px] text-sky/80">{ev.severity ? ev.severity.toUpperCase() : "advisory"}</span>
-                        <span className="font-mono text-[10px] text-stone/60">·</span>
-                        <span className="font-mono text-[10px] text-stone/60">{ev.scope_type}{ev.scope_value ? ` · ${ev.scope_value}` : ""}</span>
-                      </div>
-
-                      <div className="urgency-bar"><div className="urgency-fill" style={{ width: `${urgencyPct}%` }} /></div>
-                      <div className="flex items-center justify-between">
-                        <span className="urgency-label">{timeLeft < 1 ? "expired" : `${timeLeft}h left · ${cnt} verified`}</span>
-                        <GhostDots baseKey={`w-${ev.id}`} count={cnt} />
-                      </div>
-
-                      <div className="mt-3 flex items-center gap-3">
-                        <button onClick={(e) => { e.stopPropagation(); handleVerify(ev, "YES"); }} disabled={verifying === ev.id} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-green text-xl font-bold text-white shadow-lg hover:bg-green/80 disabled:opacity-50" style={{ minWidth: 48, minHeight: 48 }} aria-label={`Verify ${ev.title} at ${ev.venue}`}>{verifying === ev.id ? "…" : "✓"}</button>
-                        <button onClick={(e) => { e.stopPropagation(); handleVerify(ev, "NO"); }} disabled={verifying === ev.id} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-brick/20 bg-white text-base font-bold text-brick hover:bg-brick hover:text-white disabled:opacity-50" style={{ minWidth: 48, minHeight: 48 }} aria-label={`Reject ${ev.title} at ${ev.venue}`}>✕</button>
-                        <span className="font-mono text-[10px] text-stone/60">swipe → Yes / ← No / ↑ Skip</span>
-                      </div>
-                    </div>
-                  );
-                })
+                displayEvents.map((ev) => (
+                  <div key={ev.id} className="swipe-zone" onTouchStart={(e) => { (e.currentTarget as any)._sx = e.touches[0].clientX; (e.currentTarget as any)._sy = e.touches[0].clientY; }} onTouchEnd={(e) => {
+                    const t = e.currentTarget as any;
+                    const dx = e.changedTouches[0].clientX - (t._sx ?? 0);
+                    const dy = Math.abs(e.changedTouches[0].clientY - (t._sy ?? 0));
+                    if (Math.abs(dx) > 60 && dy < 50) { handleSwipe(ev, dx > 0 ? "yes" : "no"); }
+                  }}>
+                    <span className="swipe-action swipe-yes">✓ Yes</span>
+                    <span className="swipe-action swipe-no">✕ No</span>
+                    <CleanCard ev={ev} />
+                  </div>
+                ))
               )}
             </div>
           )}
         </div>
       )}
 
-      {/* ── No building selected — all events feed ── */}
       {!buildingId && (
         <div className="relative z-10 mt-4 mx-auto max-w-lg space-y-3">
           <div className="flex items-center justify-between px-2">
-            <p className="font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-ink/80">All buildings · live feed</p>
-            <span className="rounded-full bg-sky/15 px-2 py-0.5 font-mono text-[10px] text-sky/80">{events.length} events</span>
+            <p className="font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-white/80">All buildings · live feed · clean</p>
+            <span className="rounded-full bg-white/10 px-2 py-0.5 font-mono text-[10px] text-white/60">{events.length} events</span>
           </div>
-          {events.slice(0, 12).map((ev) => {
-            const verified = isVerified(ev);
-            const cnt = verifyCounts[ev.id] ?? 0;
-            return (
-              <div key={ev.id} className="swipe-zone whatsapp-event" onTouchStart={(e) => { (e.currentTarget as any)._sx = e.touches[0].clientX; (e.currentTarget as any)._sy = e.touches[0].clientY; }} onTouchEnd={(e) => {
+          {events.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-white/10 bg-white/5 px-6 py-8 text-center">
+              <p className="text-[14px] font-bold text-white">No events yet</p>
+              <p className="mt-1 font-mono text-xs text-white/50">Post gist → 1-tap quiz starts the loop</p>
+            </div>
+          ) : (
+            events.slice(0, 8).map((ev) => (
+              <div key={ev.id} className="swipe-zone" onTouchStart={(e) => { (e.currentTarget as any)._sx = e.touches[0].clientX; (e.currentTarget as any)._sy = e.touches[0].clientY; }} onTouchEnd={(e) => {
                 const t = e.currentTarget as any;
                 const dx = e.changedTouches[0].clientX - (t._sx ?? 0);
                 const dy = Math.abs(e.changedTouches[0].clientY - (t._sy ?? 0));
                 if (Math.abs(dx) > 60 && dy < 50) { handleSwipe(ev, dx > 0 ? "yes" : "no"); }
-                else if (dy > 60 && Math.abs(dx) < 50) { handleSwipe(ev, "skip"); }
               }}>
                 <span className="swipe-action swipe-yes">✓ Yes</span>
                 <span className="swipe-action swipe-no">✕ No</span>
-                <span className="swipe-action swipe-skip">↗ Skip</span>
-                <div className="event-header">
-                  <GhostDrift seedKey={`f-${ev.id}`} size={28} label={`${cnt} verified`} />
-                  <div className="flex-1 min-w-0">
-                    <span className="event-time">{String(ev.event_time || "").slice(0, 5)} · {String(ev.event_date || "").slice(0, 10)}</span>
-                    <p className="event-venue">{ev.venue}</p>
-                    <p className="event-title">{ev.title}</p>
-                  </div>
-                  <span className={`shrink-0 rounded-full px-2 py-1 font-mono text-[10px] font-bold ${verified ? "bg-green text-white" : "bg-sky/10 text-sky"}`}>{verified ? "✓" : "·"}</span>
-                </div>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="rounded-full bg-sky/10 px-1.5 py-0.5 text-[10px] text-sky/80">{ev.severity ? ev.severity.toUpperCase() : "advisory"}</span>
-                  <span className="font-mono text-[10px] text-stone/60">·</span>
-                  <span className="font-mono text-[10px] text-stone/60">{ev.scope_type}{ev.scope_value ? ` · ${ev.scope_value}` : ""}</span>
-                </div>
-                <div className="urgency-bar"><div className="urgency-fill" style={{ width: `${Math.max(0, Math.min(100, 100 - (Number(ev.vote_weight_yes ?? 0) / Math.max(1, Number(ev.required_points ?? 1))) * 100))}%` }} /></div>
-                <div className="flex items-center justify-between mt-1">
-                  <span className="urgency-label">{cnt} verified</span>
-                  <GhostDots baseKey={`f-${ev.id}`} count={cnt} size={14} />
-                </div>
-                <div className="mt-3 flex items-center gap-3">
-                  <button onClick={(e) => { e.stopPropagation(); handleVerify(ev, "YES"); }} disabled={verifying === ev.id} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-green text-xl font-bold text-white shadow-lg hover:bg-green/80 disabled:opacity-50" style={{ minWidth: 48, minHeight: 48 }} aria-label={`Confirm ${ev.title} at ${ev.venue}`}>{verifying === ev.id ? "…" : "✓"}</button>
-                  <button onClick={(e) => { e.stopPropagation(); handleVerify(ev, "NO"); }} disabled={verifying === ev.id} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-brick/20 bg-white text-base font-bold text-brick hover:bg-brick hover:text-white disabled:opacity-50" style={{ minWidth: 48, minHeight: 48 }} aria-label={`No ${ev.title} at ${ev.venue}`}>✕</button>
-                  <span className="font-mono text-[10px] text-stone/60">swipe → ✓ / ← ✕</span>
-                </div>
+                <CleanCard ev={ev} />
               </div>
-            );
-          })}
+            ))
+          )}
         </div>
       )}
 
-      {/* swipe hint */}
-      <div className="swipe-hint px-4">
+      <div className="swipe-hint px-4 mt-6">
         <span className="hint-yes">✓ Yes</span>
         <span className="hint-skip">↑ Skip</span>
         <span className="hint-no">✕ No</span>
