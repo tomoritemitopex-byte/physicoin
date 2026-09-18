@@ -469,6 +469,108 @@ export async function ensureSchoolEventCounts(): Promise<void> {
     )`;
 }
 
+// ── Vine autopilot: school/dept aggregation + vote + auto-archive ──
+export async function ensureSchoolVotes(): Promise<void> {
+  const c = getSql() ?? sql;
+  if (!c) return;
+  await ensureSchools();
+  await ensureSchoolDepartments();
+  await c`
+    CREATE TABLE IF NOT EXISTS physi_school_votes (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      voter_id UUID REFERENCES physi_users(id) ON DELETE CASCADE,
+      normalized TEXT NOT NULL,
+      school_id UUID REFERENCES physi_schools(id) ON DELETE CASCADE,
+      vote_value SMALLINT NOT NULL CHECK (vote_value IN (-1, 1)),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`;
+  await c`CREATE UNIQUE INDEX IF NOT EXISTS physi_school_votes_voter_norm_uidx ON physi_school_votes (voter_id, lower(normalized))`;
+  await c`CREATE INDEX IF NOT EXISTS physi_school_votes_norm_idx ON physi_school_votes (lower(normalized))`;
+  await c`CREATE INDEX IF NOT EXISTS physi_school_votes_school_idx ON physi_school_votes (school_id)`;
+  await c`
+    CREATE TABLE IF NOT EXISTS physi_dept_votes (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      voter_id UUID REFERENCES physi_users(id) ON DELETE CASCADE,
+      dept_id UUID REFERENCES physi_school_departments(id) ON DELETE CASCADE,
+      normalized TEXT NOT NULL,
+      school_id UUID REFERENCES physi_schools(id) ON DELETE CASCADE,
+      vote_value SMALLINT NOT NULL CHECK (vote_value IN (-1, 1)),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`;
+  await c`CREATE UNIQUE INDEX IF NOT EXISTS physi_dept_votes_voter_norm_uidx ON physi_dept_votes (voter_id, lower(normalized), COALESCE(school_id::text,''))`;
+  await c`CREATE INDEX IF NOT EXISTS physi_dept_votes_norm_idx ON physi_dept_votes (lower(normalized))`;
+  await c`CREATE INDEX IF NOT EXISTS physi_dept_votes_dept_idx ON physi_dept_votes (dept_id)`;
+}
+
+export async function ensureSchoolArchiveColumns(): Promise<void> {
+  const c = getSql() ?? sql;
+  if (!c) return;
+  await ensureSchools();
+  await ensureSchoolDepartments();
+  try { await c`ALTER TABLE physi_schools ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ`; } catch {}
+  try { await c`ALTER TABLE physi_schools ADD COLUMN IF NOT EXISTS last_event_at TIMESTAMPTZ`; } catch {}
+  try { await c`ALTER TABLE physi_schools ADD COLUMN IF NOT EXISTS canonical_name TEXT`; } catch {}
+  try { await c`ALTER TABLE physi_school_departments ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ`; } catch {}
+  try { await c`ALTER TABLE physi_school_departments ADD COLUMN IF NOT EXISTS last_event_at TIMESTAMPTZ`; } catch {}
+  try { await c`ALTER TABLE physi_school_departments ADD COLUMN IF NOT EXISTS canonical_name TEXT`; } catch {}
+  await c`
+    CREATE TABLE IF NOT EXISTS physi_school_historical_map (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      school_id UUID REFERENCES physi_schools(id) ON DELETE SET NULL,
+      dept_id UUID REFERENCES physi_school_departments(id) ON DELETE SET NULL,
+      name TEXT NOT NULL,
+      kind TEXT NOT NULL CHECK (kind IN ('school','department')),
+      archived_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      reason TEXT NOT NULL DEFAULT 'extinct_90d',
+      snapshot JSONB
+    )`;
+  await c`CREATE INDEX IF NOT EXISTS physi_hist_map_kind_idx ON physi_school_historical_map (kind)`;
+  await c`CREATE INDEX IF NOT EXISTS physi_hist_map_archived_idx ON physi_school_historical_map (archived_at DESC)`;
+}
+
+// Auto-archive extinct departments (0 events for 90 days) — called lazily from adapters
+export async function archiveExtinctDepartments(): Promise<{ archivedSchools: number; archivedDepts: number }> {
+  const c = getSql() ?? sql;
+  if (!c) return { archivedSchools: 0, archivedDepts: 0 };
+  try { await ensureSchoolArchiveColumns(); } catch {}
+  let archivedDepts = 0;
+  let archivedSchools = 0;
+  try {
+    // Departments: 0 events for 90 days since creation or last_event_at
+    const res = await c`
+      UPDATE physi_school_departments
+      SET archived_at = NOW(), updated_at = NOW()
+      WHERE archived_at IS NULL
+        AND event_count = 0
+        AND COALESCE(last_event_at, created_at) < NOW() - INTERVAL '90 days'
+      RETURNING id, name, school_id`;
+    archivedDepts = Array.isArray(res) ? res.length : 0;
+    for (const r of (res as any[])) {
+      try {
+        await c`INSERT INTO physi_school_historical_map (school_id, dept_id, name, kind, reason, snapshot)
+                VALUES (${r.school_id}, ${r.id}, ${r.name}, 'department', 'extinct_90d', ${JSON.stringify(r)}::jsonb)`;
+      } catch {}
+    }
+  } catch {}
+  try {
+    const res2 = await c`
+      UPDATE physi_schools
+      SET archived_at = NOW(), updated_at = NOW()
+      WHERE archived_at IS NULL
+        AND event_count = 0
+        AND COALESCE(last_event_at, created_at) < NOW() - INTERVAL '90 days'
+      RETURNING id, name`;
+    archivedSchools = Array.isArray(res2) ? res2.length : 0;
+    for (const r of (res2 as any[])) {
+      try {
+        await c`INSERT INTO physi_school_historical_map (school_id, name, kind, reason, snapshot)
+                VALUES (${r.id}, ${r.name}, 'school', 'extinct_90d', ${JSON.stringify(r)}::jsonb)`;
+      } catch {}
+    }
+  } catch {}
+  return { archivedSchools, archivedDepts };
+}
+
 // ── Student intuitions: Find My People (squad locator), Bunk Radar, Notes Drop ──
 export async function ensureSquadTables(): Promise<void> {
   const c = getSql() ?? sql;

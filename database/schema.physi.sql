@@ -449,4 +449,55 @@ CREATE TABLE IF NOT EXISTS physi_faucet_drips (
   PRIMARY KEY (user_id, week)
 );
 
+-- ── Vine: Schools autopilot — free-text → aggregation → vote → dropdown → auto-archive ──
+-- Additive only: no DROP, uses existing physi_schools + physi_school_departments as proposal store.
+-- Aggregation is case-insensitive lower() grouping; votes tip winners into permanent dropdown.
+-- Extinct departments (0 events for 90 days) auto-archive; historical map updated.
+ALTER TABLE physi_schools ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;
+ALTER TABLE physi_schools ADD COLUMN IF NOT EXISTS last_event_at TIMESTAMPTZ;
+ALTER TABLE physi_schools ADD COLUMN IF NOT EXISTS canonical_name TEXT;
+ALTER TABLE physi_school_departments ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;
+ALTER TABLE physi_school_departments ADD COLUMN IF NOT EXISTS last_event_at TIMESTAMPTZ;
+ALTER TABLE physi_school_departments ADD COLUMN IF NOT EXISTS canonical_name TEXT;
+
+CREATE TABLE IF NOT EXISTS physi_school_votes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  voter_id UUID REFERENCES physi_users(id) ON DELETE CASCADE,
+  normalized TEXT NOT NULL,
+  school_id UUID REFERENCES physi_schools(id) ON DELETE CASCADE,
+  vote_value SMALLINT NOT NULL CHECK (vote_value IN (-1, 1)),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS physi_school_votes_voter_norm_uidx ON physi_school_votes (voter_id, lower(normalized));
+CREATE INDEX IF NOT EXISTS physi_school_votes_norm_idx ON physi_school_votes (lower(normalized));
+CREATE INDEX IF NOT EXISTS physi_school_votes_school_idx ON physi_school_votes (school_id);
+CREATE INDEX IF NOT EXISTS physi_school_votes_created_idx ON physi_school_votes (created_at DESC);
+
+CREATE TABLE IF NOT EXISTS physi_dept_votes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  voter_id UUID REFERENCES physi_users(id) ON DELETE CASCADE,
+  dept_id UUID REFERENCES physi_school_departments(id) ON DELETE CASCADE,
+  normalized TEXT NOT NULL,
+  school_id UUID REFERENCES physi_schools(id) ON DELETE CASCADE,
+  vote_value SMALLINT NOT NULL CHECK (vote_value IN (-1, 1)),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS physi_dept_votes_voter_norm_uidx ON physi_dept_votes (voter_id, lower(normalized), COALESCE(school_id::text,''));
+CREATE INDEX IF NOT EXISTS physi_dept_votes_norm_idx ON physi_dept_votes (lower(normalized));
+CREATE INDEX IF NOT EXISTS physi_dept_votes_dept_idx ON physi_dept_votes (dept_id);
+CREATE INDEX IF NOT EXISTS physi_dept_votes_school_idx ON physi_dept_votes (school_id);
+
+CREATE TABLE IF NOT EXISTS physi_school_historical_map (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  school_id UUID REFERENCES physi_schools(id) ON DELETE SET NULL,
+  dept_id UUID REFERENCES physi_school_departments(id) ON DELETE SET NULL,
+  name TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('school','department')),
+  archived_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  reason TEXT NOT NULL DEFAULT 'extinct_90d',
+  snapshot JSONB
+);
+CREATE INDEX IF NOT EXISTS physi_hist_map_kind_idx ON physi_school_historical_map (kind);
+CREATE INDEX IF NOT EXISTS physi_hist_map_archived_idx ON physi_school_historical_map (archived_at DESC);
+
 

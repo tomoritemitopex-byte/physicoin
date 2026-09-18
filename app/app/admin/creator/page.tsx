@@ -9,6 +9,17 @@ export default function CreatorDashboard() {
   const [at, setAt] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [paused, setPaused] = useState(false);
+  // Vine autopilot state
+  const [choices, setChoices] = useState<any[]>([]);
+  const [dropdownOptions, setDropdownOptions] = useState<any[]>([]);
+  const [archived, setArchived] = useState<any[]>([]);
+  const [historicalMap, setHistoricalMap] = useState<any[]>([]);
+  const [proposal, setProposal] = useState("");
+  const [deptProposal, setDeptProposal] = useState("");
+  const [selectedSchoolForDept, setSelectedSchoolForDept] = useState<string>("");
+  const [deptChoices, setDeptChoices] = useState<any[]>([]);
+  const [deptDropdown, setDeptDropdown] = useState<any[]>([]);
+  const [deptArchived, setDeptArchived] = useState<any[]>([]);
 
   const fetchSchools = useCallback(async () => {
     if (paused) return;
@@ -19,11 +30,29 @@ export default function CreatorDashboard() {
       setSchools(Array.isArray(data.schools) ? data.schools : []);
       const pending = data.schools?.filter((s: any) => s.status === "pending") ?? [];
       setPendingSchools(pending);
+      // Vine: aggregated choices + dropdown that updates live as votes come in
+      if (Array.isArray(data.choices)) setChoices(data.choices);
+      if (Array.isArray(data.dropdown_options)) setDropdownOptions(data.dropdown_options);
+      else if (Array.isArray(data.choices)) setDropdownOptions(data.choices.filter((c:any)=>c.is_winner).map((c:any)=>({value:c.normalized,label:c.display_name,votes:c.total_votes})));
+      if (Array.isArray(data.archived)) setArchived(data.archived);
+      if (Array.isArray(data.historical_map)) setHistoricalMap(data.historical_map);
+      if (!selectedSchoolForDept && data.schools?.[0]?.id) setSelectedSchoolForDept(data.schools[0].id);
       setAt(new Date().toLocaleTimeString());
       setError(null);
     } catch (e) {
       setError((e as Error).message);
     }
+  }, [paused, selectedSchoolForDept]);
+
+  const fetchDeptChoices = useCallback(async (schoolId: string) => {
+    if (!schoolId || paused) return;
+    try {
+      const res = await fetch(`/api/schools/departments?school_id=${encodeURIComponent(schoolId)}`, { cache: "no-store" });
+      const data = await res.json();
+      if (Array.isArray(data.choices)) setDeptChoices(data.choices);
+      if (Array.isArray(data.dropdown_options)) setDeptDropdown(data.dropdown_options);
+      if (Array.isArray(data.archived)) setDeptArchived(data.archived);
+    } catch {}
   }, [paused]);
 
   const fetchDisputes = useCallback(async () => {
@@ -47,6 +76,17 @@ export default function CreatorDashboard() {
     return () => clearInterval(id);
   }, [fetchSchools, fetchDisputes, page, paused]);
 
+  useEffect(() => {
+    if (page === "schools" && selectedSchoolForDept) fetchDeptChoices(selectedSchoolForDept);
+  }, [selectedSchoolForDept, page, fetchDeptChoices]);
+
+  // live poll dept choices alongside schools
+  useEffect(() => {
+    if (page !== "schools" || !selectedSchoolForDept) return;
+    const iv = setInterval(() => fetchDeptChoices(selectedSchoolForDept), 3000);
+    return () => clearInterval(iv);
+  }, [selectedSchoolForDept, page, fetchDeptChoices]);
+
   async function verifySchool(id: string, status: "verified" | "rejected") {
     try {
       const res = await fetch("/api/schools", {
@@ -57,7 +97,6 @@ export default function CreatorDashboard() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       if (data.ok) {
-        // Refresh to show updated status
         await fetchSchools();
       } else {
         setError(data.message ?? "Failed to verify");
@@ -86,6 +125,74 @@ export default function CreatorDashboard() {
     }
   }
 
+  // Vine: free-text → lower() grouping → vote → dropdown
+  async function proposeSchool() {
+    const name = proposal.trim();
+    if (!name) return;
+    try {
+      const res = await fetch("/api/schools", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.ok === false) throw new Error(data.message || `HTTP ${res.status}`);
+      setProposal("");
+      await fetchSchools();
+    } catch (e) { setError((e as Error).message); }
+  }
+
+  async function voteSchool(normalized: string, v: 1 | -1 = 1) {
+    try {
+      let voter_id: string | null = null;
+      try { const raw = localStorage.getItem("physi_profile"); if (raw) voter_id = JSON.parse(raw)?.id ?? null; } catch {}
+      const res = await fetch("/api/schools", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "vote", normalized, vote: v, voter_id }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        if (Array.isArray(data.choices)) setChoices(data.choices);
+        await fetchSchools();
+      }
+    } catch (e) { setError((e as Error).message); }
+  }
+
+  async function proposeDept() {
+    const name = deptProposal.trim();
+    if (!name || !selectedSchoolForDept) return;
+    try {
+      const res = await fetch("/api/schools/departments", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ school_id: selectedSchoolForDept, name }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.ok === false) throw new Error(data.message || `HTTP ${res.status}`);
+      setDeptProposal("");
+      await fetchDeptChoices(selectedSchoolForDept);
+      await fetchSchools();
+    } catch (e) { setError((e as Error).message); }
+  }
+
+  async function voteDept(normalized: string, v: 1 | -1 = 1) {
+    try {
+      let voter_id: string | null = null;
+      try { const raw = localStorage.getItem("physi_profile"); if (raw) voter_id = JSON.parse(raw)?.id ?? null; } catch {}
+      const res = await fetch("/api/schools/departments", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "vote", normalized, school_id: selectedSchoolForDept, vote: v, voter_id }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        if (Array.isArray(data.choices)) setDeptChoices(data.choices);
+        await fetchDeptChoices(selectedSchoolForDept);
+      }
+    } catch (e) { setError((e as Error).message); }
+  }
+
   const pendingCount = pendingSchools.length;
   const disputeCount = disputes.filter((d: any) => d.status === "active").length;
 
@@ -102,6 +209,7 @@ export default function CreatorDashboard() {
           <p className="mt-1 font-mono text-[11px] text-slate-500">
             Pending schools: <span className="text-amber-300 font-semibold">{pendingCount}</span>
             {" · "}Active disputes: <span className="text-red-300 font-semibold">{disputeCount}</span>
+            {" · "}Vine choices: <span className="text-cyan-300 font-semibold">{choices.length}</span> (lower() grouped)
             {" · "}{paused ? "paused" : `last ${at || "—"}`}
           </p>
         </div>
@@ -113,7 +221,7 @@ export default function CreatorDashboard() {
             {paused ? "Resume" : "Pause"}
           </button>
           <button
-            onClick={() => { fetchSchools(); fetchDisputes(); }}
+            onClick={() => { fetchSchools(); fetchDisputes(); if (selectedSchoolForDept) fetchDeptChoices(selectedSchoolForDept); }}
             className="rounded-full border border-white/10 bg-white px-3 py-1 text-xs font-semibold text-black hover:bg-slate-100"
           >
             Refresh
@@ -125,13 +233,131 @@ export default function CreatorDashboard() {
         </div>
       </div>
 
+      {/* Vine autopilot — free-text → lower() aggregation → vote → dropdown → 90d archive */}
+      <div className="mb-6 rounded-xl border border-cyan-400/20 bg-gradient-to-br from-cyan-500/[0.06] to-emerald-500/[0.06] p-4 backdrop-blur">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-white">Vine autopilot — Nigeria → Ghana</h2>
+          <span className="font-mono text-[11px] text-cyan-300/80">free-text → lower() grouping → vote → dropdown + 90d auto-archive</span>
+        </div>
+        <p className="mt-1 font-mono text-[11px] text-slate-400">Students type school/dept names free-text. System aggregates duplicates case-insensitive (lower() grouping) → presents as choices → vote → winners become permanent dropdown options. Extinct depts (0 events 90d) auto-archive + historical map.</p>
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          {/* School vine */}
+          <div className="rounded-lg border border-white/[0.07] bg-[#022c1e] p-3">
+            <h3 className="font-mono text-xs font-semibold text-cyan-300">School vine</h3>
+            <div className="mt-2 flex gap-2">
+              <input
+                value={proposal}
+                onChange={e=>setProposal(e.target.value)}
+                placeholder="Type school name free-text e.g. Unilag"
+                className="flex-1 rounded-full border border-white/10 bg-[#0b1020] px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none"
+                onKeyDown={e=>{ if(e.key==='Enter') proposeSchool(); }}
+              />
+              <button onClick={proposeSchool} className="rounded-full bg-cyan-500 px-4 py-2 text-xs font-bold text-black hover:bg-cyan-400">Propose</button>
+            </div>
+            {/* Aggregated choices with vote counts */}
+            <div className="mt-3">
+              <p className="font-mono text-[11px] text-slate-400">Aggregated choices (lower() grouped) — vote to tip winner:</p>
+              <div className="mt-1 max-h-[160px] overflow-auto rounded-lg border border-white/10 bg-black/20 p-2 space-y-1">
+                {choices.length===0 ? <p className="font-mono text-xs text-slate-500">No proposals yet — be first to type a school.</p> : choices.slice(0,12).map((c:any)=>(
+                  <div key={c.normalized} className="flex items-center justify-between gap-2 rounded bg-white/[0.04] px-2 py-1.5">
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-medium text-white">{c.display_name} <span className="font-mono text-[11px] text-slate-400">({c.normalized})</span> {c.is_winner && <span className="ml-1 rounded bg-emerald-500/20 px-1 py-0.5 text-[10px] text-emerald-300">✓ dropdown</span>}</p>
+                      <p className="font-mono text-[11px] text-slate-400">{c.proposal_count} proposals + {c.vote_total} votes = {c.total_votes} total · yes {c.votes_yes}/no {c.votes_no}</p>
+                    </div>
+                    <button onClick={()=>voteSchool(c.normalized,1)} className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-semibold text-black hover:bg-slate-100">Vote +1</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* Live dropdown that updates as votes come in */}
+            <div className="mt-3">
+              <label className="font-mono text-[11px] text-slate-400">Live dropdown — permanent options (winners ≥3 votes, auto-promoted):</label>
+              <select className="mt-1 w-full rounded-xl border border-cyan-400/30 bg-[#0b1020] px-3 py-2 text-sm text-white focus:outline-none">
+                <option value="">— select verified school —</option>
+                {dropdownOptions.map((o:any)=>(
+                  <option key={o.value} value={o.value}>{o.label} — {o.votes} votes</option>
+                ))}
+              </select>
+              <p className="mt-1 font-mono text-[11px] text-slate-500">Updates live every 3s as votes arrive. Nigeria → Ghana vine grows without manual seeding.</p>
+            </div>
+            {archived.length>0 && (
+              <div className="mt-3 rounded border border-amber-500/20 bg-amber-500/10 px-2 py-1.5">
+                <p className="font-mono text-[11px] text-amber-300">Auto-archived schools (historical map):</p>
+                <p className="font-mono text-[11px] text-amber-200/80">{archived.slice(0,5).map((a:any)=> a.name).join(" · ")}{archived.length>5?` +${archived.length-5} more`:""}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Dept vine */}
+          <div className="rounded-lg border border-white/[0.07] bg-[#022c1e] p-3">
+            <h3 className="font-mono text-xs font-semibold text-emerald-300">Department vine (per school)</h3>
+            <select
+              value={selectedSchoolForDept}
+              onChange={e=>setSelectedSchoolForDept(e.target.value)}
+              className="mt-2 w-full rounded-xl border border-white/10 bg-[#0b1020] px-3 py-2 text-sm text-white focus:outline-none"
+            >
+              <option value="">— pick school for dept —</option>
+              {schools.slice(0,50).map((s:any)=> <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+            <div className="mt-2 flex gap-2">
+              <input
+                value={deptProposal}
+                onChange={e=>setDeptProposal(e.target.value)}
+                placeholder="Type dept free-text e.g. Physiology"
+                className="flex-1 rounded-full border border-white/10 bg-[#0b1020] px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none"
+                onKeyDown={e=>{ if(e.key==='Enter') proposeDept(); }}
+              />
+              <button onClick={proposeDept} disabled={!selectedSchoolForDept} className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-bold text-black hover:bg-emerald-400 disabled:opacity-40">Add</button>
+            </div>
+            <div className="mt-3">
+              <p className="font-mono text-[11px] text-slate-400">Aggregated dept choices for school — lower() grouped:</p>
+              <div className="mt-1 max-h-[160px] overflow-auto rounded-lg border border-white/10 bg-black/20 p-2 space-y-1">
+                {deptChoices.length===0 ? <p className="font-mono text-xs text-slate-500">No dept proposals for this school yet.</p> : deptChoices.slice(0,10).map((c:any)=>(
+                  <div key={c.normalized} className="flex items-center justify-between gap-2 rounded bg-white/[0.04] px-2 py-1.5">
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-medium text-white">{c.display_name} {c.is_winner && <span className="ml-1 rounded bg-emerald-500/20 px-1 py-0.5 text-[10px] text-emerald-300">✓ dropdown</span>}</p>
+                      <p className="font-mono text-[11px] text-slate-400">{c.proposal_count}+{c.vote_total}={c.total_votes} votes</p>
+                    </div>
+                    <button onClick={()=>voteDept(c.normalized,1)} className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-semibold text-black hover:bg-slate-100">Vote</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="mt-3">
+              <label className="font-mono text-[11px] text-slate-400">Live dept dropdown (winners):</label>
+              <select className="mt-1 w-full rounded-xl border border-emerald-400/30 bg-[#0b1020] px-3 py-2 text-sm text-white focus:outline-none">
+                <option value="">— select verified dept —</option>
+                {deptDropdown.map((o:any)=>(
+                  <option key={o.value} value={o.value}>{o.label} — {o.votes} votes</option>
+                ))}
+              </select>
+              <p className="mt-1 font-mono text-[11px] text-slate-500">Extinct depts (0 events 90d) auto-archive; historical map updated. Live every 3s.</p>
+            </div>
+            {deptArchived.length>0 && (
+              <div className="mt-2 rounded border border-amber-500/20 bg-amber-500/10 px-2 py-1.5">
+                <p className="font-mono text-[11px] text-amber-300">Archived depts (90d extinct): {deptArchived.slice(0,5).map((a:any)=>a.name).join(" · ")}</p>
+              </div>
+            )}
+            {historicalMap.length>0 && (
+              <details className="mt-2">
+                <summary className="cursor-pointer font-mono text-[11px] text-slate-400">Historical map ({historicalMap.length} archived)</summary>
+                <div className="mt-1 max-h-[80px] overflow-auto font-mono text-[11px] text-slate-500">
+                  {historicalMap.slice(0,10).map((h:any,i:number)=> <div key={h.id||i}>{h.kind}: {h.name} · {h.reason} · {h.archived_at?new Date(h.archived_at).toLocaleDateString():""}</div>)}
+                </div>
+              </details>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Tab switcher */}
       <div className="mb-4 flex gap-2 border-b border-white/[0.07]">
         <button
           onClick={() => setPage("schools")}
           className={`rounded-t-lg px-4 py-2 text-sm font-medium transition ${page === "schools" ? "bg-white/[0.06] text-white border-b-2 border-cyan-400" : "text-slate-400 hover:text-slate-200"}`}
         >
-          Schools ({schools.length})
+          Schools ({schools.length}) · vine {choices.length}
         </button>
         <button
           onClick={() => setPage("disputes")}
@@ -145,12 +371,12 @@ export default function CreatorDashboard() {
       {page === "schools" && (
         <div className="overflow-hidden rounded-xl border border-white/[0.07] bg-white/[0.03]">
           <div className="flex items-center justify-between border-b border-white/[0.06] bg-white/[0.02] px-3 py-2">
-            <span className="font-mono text-[11px] tracking-wide text-slate-400">All schools — newest first</span>
-            <span className="font-mono text-[11px] text-slate-500">{schools.length} schools</span>
+            <span className="font-mono text-[11px] tracking-wide text-slate-400">All schools — newest first (excludes archived)</span>
+            <span className="font-mono text-[11px] text-slate-500">{schools.length} schools · {dropdownOptions.length} in dropdown</span>
           </div>
           <div className="max-h-[60vh] overflow-auto overscroll-contain bg-[#022c1e]">
             {schools.length === 0 ? (
-              <div className="px-4 py-10 text-center font-mono text-xs text-slate-500">No schools yet. Students create schools via the student app.</div>
+              <div className="px-4 py-10 text-center font-mono text-xs text-slate-500">No schools yet. Students create schools via vine free-text above — aggregates on lower() and votes tip winners.</div>
             ) : (
               <table className="w-full text-left font-mono text-[11.5px] leading-[1.35]">
                 <thead className="sticky top-0 bg-[#0e1320] text-[10px] uppercase tracking-widest text-slate-500">
@@ -301,8 +527,7 @@ export default function CreatorDashboard() {
       </div>
 
       <p className="mt-3 font-mono text-[11px] leading-relaxed text-slate-500">
-        Creator dashboard — verify schools and resolve disputes. Every coin burn earns you a 5% arbiter fee.
-        GPI coins are tracked in <code>physi_coins_burned</code>.
+        Creator dashboard — vine autopilot adds aggregation on lower(name) so Nigeria → Ghana grows without seeding. Archived depts reappear in historical map after 90d extinct.
       </p>
     </div>
   );
