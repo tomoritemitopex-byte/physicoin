@@ -39,7 +39,7 @@ export async function stakeForVoteTx(tx: any, userId: string, eventId: string, c
   } catch {
     return { ok: false, code: "DB_ERROR", message: "Failed to check balance" };
   }
-  if (bal < cost) return { ok: false, code: "INSUFFICIENT_STAKE", message: `Need ${cost} Rep to vote (you have ${bal.toFixed(2)}). Earn Rep via daily check-in.` };
+  if (bal < cost) return { ok: false, code: "INSUFFICIENT_STAKE", message: `Need 1 PHY to vote — check in first.` };
 
   // Deduct — inside tx, rolls back automatically if later vote insert fails
   try {

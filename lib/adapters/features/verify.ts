@@ -172,8 +172,8 @@ async function handleVerify(req: Request): Promise<Response> {
       const b = await req.json().catch(() => null);
       // Auth: extract verifier_id from HMAC session (not body)
       const { getAuthUserId } = await import("@/lib/auth");
-      const authUid = getAuthUserId(req as Request);
-      if (!authUid) return NextResponse.json({ ok:false, code:"UNAUTHORIZED", message:"Missing session token. POST /api/auth/session to obtain one." }, { status:401 });
+       const authUid = getAuthUserId(req as Request);
+       if (!authUid) return NextResponse.json({ ok:false, code:"UNAUTHORIZED", message:getErrorMessage("UNAUTHORIZED") }, { status:401 });
       // override body verifier_id with authenticated id
       if (b) b.verifier_id = authUid;
       if (!b?.verifier_id || !b?.event_id || !b?.vote) {
@@ -198,12 +198,14 @@ async function handleVerify(req: Request): Promise<Response> {
         // tick; voting costs 1 PHY (except CANCEL/unvote). Lets future
         // PHY attach mean something while keeping play on pocket change.
         const bal = Number((u as any).mining_balance ?? 1);
+        // one-glance error copy: 429 with code INSUFFICIENT_COINS, not 500 — direct POST can't bypass
         if (bal < 1 && b.vote !== "CANCEL") {
-          return NextResponse.json({ ok:false, code:"INSUFFICIENT_COINS", message:"Need 1 PHY to vote." }, { status:429 });
+          return NextResponse.json({ ok:false, code:"INSUFFICIENT_COINS", message:getErrorMessage("INSUFFICIENT_COINS") }, { status:429 });
         }
         const [posted] = await sql`SELECT created_by FROM physi_events WHERE id=${b.event_id} LIMIT 1`;
+        // self-vouch guard: poster can't count toward own green tick — direct POST with forged body verifier_id is overridden by HMAC authUid above
         if (posted && posted.created_by === b.verifier_id) {
-          return NextResponse.json({ ok:false, code:"SELF_VOUCH", message:"Can't vote on your own post." }, { status:403 });
+          return NextResponse.json({ ok:false, code:"SELF_VOUCH", message:getErrorMessage("SELF_VOUCH") }, { status:403 });
         }
 
         let w = Number((u as any).authority_final) || 1.0;

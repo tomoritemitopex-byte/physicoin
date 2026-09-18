@@ -36,6 +36,13 @@ const ERROR_MESSAGES: Record<string, string> = {
   NICKNAME_TAKEN: "That handle is taken. Try another one.",
   VERIFY_FAILED: "Could not record your vote. Please try again.",
   STATS_ERROR: "Could not load stats. Please try again.",
+  // verify — one-glance copy (billion-interface: no jargon, thumb-readable)
+  UNAUTHORIZED: "Sign in to vote — create a handle first.",
+  SELF_VOUCH: "Can't vote on your own post.",
+  INSUFFICIENT_COINS: "Need 1 PHY to vote — check in first.",
+  INSUFFICIENT_STAKE: "Need 1 PHY to vote — check in first.",
+  RATE_LIMITED: "Too many votes — wait a moment.",
+  TOO_MANY_REQUESTS: "Too many votes — wait a moment.",
   // feature-scoped
   TIMETABLE_FETCH_FAILED: "Could not load timetable. Please try again.",
   TIMETABLE_CREATE_FAILED: "Could not create event. Please try again.",
