@@ -41,3 +41,58 @@ export function buildingForProgramme(programme: string): Building | undefined {
   if (p.includes("lab") || p.includes("bmls")) return BUILDINGS.find(b=>b.id==="lab");
   return BUILDINGS[0];
 }
+
+// ── Heat Hall: pending slip heat per building ──
+export type HallHeat = {
+  heat: Record<string, number>;
+  counts: Record<string, number>;
+  maxCount: number;
+  hottest: string | null;
+  totalPending: number;
+};
+
+export function emptyHallHeat(): HallHeat {
+  const heat: Record<string, number> = {};
+  for (const b of BUILDINGS) heat[b.id] = 0;
+  return { heat, counts: { ...heat }, maxCount: 0, hottest: null, totalPending: 0 };
+}
+
+export function heatFromEvents(events: Array<{ venue?: string; title?: string; status?: string }>): HallHeat {
+  const heat: Record<string, number> = {};
+  for (const b of BUILDINGS) heat[b.id] = 0;
+  let totalPending = 0;
+  for (const ev of events) {
+    if (ev.status && ev.status !== "pending") continue;
+    totalPending++;
+    const hay = `${ev.venue || ""} ${ev.title || ""}`.toLowerCase();
+    for (const b of BUILDINGS) {
+      if (hay.includes(b.code.toLowerCase())) {
+        heat[b.id]++;
+        break;
+      }
+    }
+  }
+  let maxCount = 0;
+  let hottest: string | null = null;
+  for (const b of BUILDINGS) {
+    if (heat[b.id] > maxCount) {
+      maxCount = heat[b.id];
+      hottest = b.id;
+    }
+  }
+  if (maxCount === 0) hottest = null;
+  return { heat, counts: { ...heat }, maxCount, hottest, totalPending };
+}
+
+export async function getHallHeat(): Promise<HallHeat> {
+  try {
+    const { getSql, isDbConfigured } = await import("@/lib/db");
+    if (!isDbConfigured()) return emptyHallHeat();
+    const sql: any = getSql();
+    if (!sql) return emptyHallHeat();
+    const rows: Array<{ venue: string; title: string }> = await sql`SELECT venue, title FROM physi_events WHERE status='pending' LIMIT 500`;
+    return heatFromEvents(rows as any);
+  } catch {
+    return emptyHallHeat();
+  }
+}

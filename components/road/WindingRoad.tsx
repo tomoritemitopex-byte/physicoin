@@ -14,6 +14,9 @@ type EventRow = {
   authority_points?: number | string;
 };
 
+const HEAT_BOOST_KEY = "physi_heat_boost";
+const HEAT_CACHE_KEY = "physi_heat_cache_physicoin";
+
 function isVerified(ev: EventRow) {
   if (ev.status === "verified") return true;
   const yes = Number(ev.vote_weight_yes ?? ev.authority_points ?? 0);
@@ -72,12 +75,30 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
   // offline-first: cached events + online flag
   const [offlineEvents, setOfflineEvents] = useState<EventRow[] | null>(null);
   const [isOffline, setIsOffline] = useState(false);
+  // Heat Hall
+  const [serverHeat, setServerHeat] = useState<Record<string, number> | null>(null);
+  const [boostHall, setBoostHall] = useState<string | null>(null);
+  const [heatToast, setHeatToast] = useState("");
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     const upd = () => setIsOffline(!navigator.onLine);
     upd();
     window.addEventListener("online", upd);
     window.addEventListener("offline", upd);
+    try {
+      const b = localStorage.getItem(HEAT_BOOST_KEY);
+      if (b) {
+        const p = JSON.parse(b);
+        if (p?.buildingId && Date.now() - (p.ts || 0) < 10 * 60 * 1000) setBoostHall(p.buildingId);
+        else localStorage.removeItem(HEAT_BOOST_KEY);
+      }
+      const ch = localStorage.getItem(HEAT_CACHE_KEY);
+      if (ch) {
+        const p = JSON.parse(ch);
+        if (p?.heat) setServerHeat(p.heat);
+      }
+    } catch {}
     return () => { window.removeEventListener("online", upd); window.removeEventListener("offline", upd); };
   }, []);
   // cache last verified events whenever fresh feed arrives
@@ -105,6 +126,25 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
   const effectiveEvents: EventRow[] = events.length > 0 ? events : (offlineEvents ?? []);
   const usingCache = events.length === 0 && !!offlineEvents?.length;
 
+  // fetch heat (lightweight, offline-first fallback to local)
+  const fetchHeat = useCallback(async () => {
+    try {
+      const r = await fetch("/api/halls/heat", { cache: "no-store" });
+      const j = await r.json();
+      if (j.ok && j.heat) {
+        setServerHeat(j.heat);
+        try { localStorage.setItem(HEAT_CACHE_KEY, JSON.stringify({ heat: j.heat, ts: Date.now() })); } catch {}
+      }
+    } catch {}
+  }, []);
+  useEffect(() => {
+    if (typeof navigator !== "undefined" && navigator.onLine) fetchHeat();
+    const iv = setInterval(() => { if (typeof navigator !== "undefined" && navigator.onLine) fetchHeat(); }, 30000);
+    const onOnline = () => fetchHeat();
+    window.addEventListener("online", onOnline);
+    return () => { clearInterval(iv); window.removeEventListener("online", onOnline); };
+  }, [fetchHeat]);
+
   const buildingCounts = useMemo(() => {
     const m: Record<string, number> = {};
     for (const b of BUILDINGS) m[b.id] = 0;
@@ -117,6 +157,27 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
     }
     return m;
   }, [effectiveEvents]);
+
+  // pending heat (offline-first)
+  const localHeat = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const b of BUILDINGS) m[b.id] = 0;
+    for (const ev of effectiveEvents) {
+      if (ev.status !== "pending") continue;
+      const hay = `${ev.title} ${ev.venue}`.toLowerCase();
+      for (const b of BUILDINGS) {
+        if (hay.includes(b.code.toLowerCase())) { m[b.id]++; break; }
+      }
+    }
+    return m;
+  }, [effectiveEvents]);
+  const heatCounts: Record<string, number> = serverHeat || localHeat;
+  const hottest = useMemo(() => {
+    let max = 0; let h: string | null = null;
+    for (const b of BUILDINGS) { const c = heatCounts[b.id] || 0; if (c > max) { max = c; h = b.id; } }
+    return max > 0 ? h : null;
+  }, [heatCounts]);
+  const maxHeat = hottest ? (heatCounts[hottest] || 0) : 0;
 
   const [levelRestored, setLevelRestored] = useState(false);
   useEffect(() => {
@@ -164,7 +225,6 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
         setVerifying(null);
         return;
       }
-      // ensure session cookie exists
       try {
         const chk = await fetch("/api/auth/session", { cache: "no-store" });
         const cj = await chk.json().catch(() => ({} as any));
@@ -186,7 +246,6 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
         setTimeout(() => setXpFor(null), 1600);
         try { window.dispatchEvent(new CustomEvent("physi-toast", { detail: vote === "YES" ? "✓ +1 XP · staked 1 $PHY (refund if majority)" : "Voted · +1 XP" })); } catch {}
       } else {
-        // one-glance error copy — map code/status to thumb-readable, not jargon
         const code = String(j?.code || "");
         let msg = String(j?.message || j?.error || "");
         if (code === "UNAUTHORIZED" || r.status === 401) msg = "Sign in to vote — create a handle first.";
@@ -208,9 +267,21 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
     else if (dir === "no") handleVerify(ev, "NO");
   }, [handleVerify]);
 
-  // BILLION-DOLLAR CLEAN SCREEN — ONE pending event = ONE screen
-  // Large venue change type (LT1 → ETF Hall), ONE progress bar (7/8), two big buttons. No 50-row table, no jargon.
-  // Shows required_points, yesW, ratio from verify.ts promotion logic (yesW >= required && ratio >=0.66 && total>=3)
+  const onTapBuilding = useCallback((bId: string) => {
+    const isHottest = bId === hottest && (heatCounts[bId] || 0) > 0;
+    if (isHottest) {
+      try {
+        localStorage.setItem(HEAT_BOOST_KEY, JSON.stringify({ buildingId: bId, ts: Date.now() }));
+        setBoostHall(bId);
+        const label = BUILDINGS.find((x) => x.id === bId)?.code || bId;
+        setHeatToast(`Next ticket ×1.5 for ${label}`);
+        setTimeout(() => setHeatToast(""), 2600);
+        try { window.dispatchEvent(new CustomEvent("physi-toast", { detail: `Next ticket ×1.5 for ${label} hall — tap Mine` })); } catch {}
+      } catch {}
+    }
+    setBuildingId((prev) => (prev === bId ? null : bId));
+  }, [hottest, heatCounts]);
+
   function CleanCard({ ev }: { ev: EventRow }) {
     const verified = isVerified(ev);
     const pct = progressPct(ev);
@@ -226,9 +297,7 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
     const isMove = !!((ev as any).prev_venue && String((ev as any).prev_venue).trim().toLowerCase() !== String(ev.venue).trim().toLowerCase());
     return (
       <div className="relative overflow-hidden rounded-[20px] border border-white/10 bg-[#0d1b2e]/85 p-5 backdrop-blur transition hover:border-white/15">
-        {/* offline hint badge */}
         {usingCache && <span className="absolute right-3 top-3 rounded-full bg-amber-500/20 px-2 py-0.5 font-mono text-[10px] font-bold text-amber-300">offline · last ticks</span>}
-        {/* VENUE CHANGE — large type, billion-interface hero */}
         <p className="flex flex-wrap items-center gap-2 text-[26px] font-black leading-[0.95] tracking-tight text-white" style={{ wordBreak: "break-word" }}>
           <span aria-hidden className="shrink-0 text-[20px]">📍</span>
           <span className={isMove ? "bg-gradient-to-r from-white to-white/70 bg-clip-text text-transparent" : ""} style={isMove ? {} : {}}>{venueChange}</span>
@@ -238,7 +307,6 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
         <p className="mt-1.5 truncate text-[13px] font-semibold leading-4 text-white/65">{ev.title}</p>
         <p className="mt-1 font-mono text-xs text-white/40">{String(ev.event_date).slice(0, 10)} · {String(ev.event_time).slice(0, 5)} · {ev.severity ? String(ev.severity).toUpperCase() : "ADVISORY"}{isMove && (ev as any).prev_venue ? ` · was ${(ev as any).prev_venue}` : ""}</p>
 
-        {/* ONE PROGRESS BAR — 7/8, not 50-row table — shows required_points, yesW, ratio */}
         <div className="mt-4" aria-label={label}>
           <div className="flex items-end justify-between gap-2">
             <span className="font-mono text-[11px] font-bold tracking-wide text-white/60">QUORUM</span>
@@ -253,7 +321,6 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
           <p className="mt-1.5 font-mono text-[11px] leading-none text-white/45">{label} · {total >= 3 ? (ratio >= 0.66 && yesW >= required ? "quorum reached" : `${Math.max(0, Math.ceil(required - yesW))} more to green tick`) : "needs 3 votes min"}</p>
         </div>
 
-        {/* ACTIONS — two big buttons, 44px min, micro-interaction scale */}
         <div className="mt-5 flex items-center gap-3">
           <button
             onClick={(e) => { e.stopPropagation(); handleVerify(ev, "YES"); }}
@@ -280,32 +347,82 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
 
   return (
     <>
+      <style>{`@keyframes hallPulse{0%{box-shadow:0 0 0 0 rgba(220,38,38,0.55)}70%{box-shadow:0 0 0 14px rgba(220,38,38,0)}100%{box-shadow:0 0 0 0 rgba(220,38,38,0)}} @keyframes heatBadgePop{0%{transform:scale(0.85)}50%{transform:scale(1.06)}100%{transform:scale(1)}}`}</style>
+      {/* Heat Hall — one-glance */}
+      <div className="relative z-10 mx-auto mb-3 flex max-w-lg items-center justify-between gap-2 rounded-full border border-white/10 bg-white/90 px-3 py-2 shadow-sm">
+        <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-black/50">Heat Hall</span>
+        {hottest ? (
+          <span className="flex items-center gap-2 font-mono text-[11px]">
+            <span className="inline-block h-2 w-2 rounded-full bg-brick animate-pulse" aria-hidden />
+            <span className="font-bold text-brick">{BUILDINGS.find((b)=>b.id===hottest)?.code} hottest · {maxHeat} pending</span>
+            <span className="hidden sm:inline text-black/40">tap red hall → next ticket ×1.5</span>
+          </span>
+        ) : (
+          <span className="font-mono text-[11px] text-black/40">no pending heat</span>
+        )}
+        {boostHall && (
+          <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 font-mono text-[10px] font-bold text-amber-800">
+            Next ×1.5 {BUILDINGS.find((b)=>b.id===boostHall)?.code}
+          </span>
+        )}
+      </div>
+      {boostHall && (
+        <div className="relative z-10 mx-auto mb-2 flex max-w-lg sm:hidden">
+          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 font-mono text-[10px] font-bold text-amber-800">
+            Next ticket ×1.5 for {BUILDINGS.find((b)=>b.id===boostHall)?.code}
+          </span>
+        </div>
+      )}
+      {heatToast && (
+        <div role="status" aria-live="polite" className="relative z-10 mx-auto mb-2 max-w-lg rounded-full bg-[#0c1e3a] px-3 py-1.5 text-center font-mono text-xs font-bold text-white">
+          {heatToast} — lightweight hint stored
+        </div>
+      )}
       {/* building nodes */}
       {ordered.map((b) => {
         const pos = NODE_POSITIONS[b.id];
         if (!pos) return null;
         const active = buildingId === b.id;
         const cnt = buildingCounts[b.id] ?? 0;
+        const heat = heatCounts[b.id] || 0;
+        const isHottest = b.id === hottest && heat > 0;
+        const isWarm = heat > 0 && !isHottest;
         return (
           <button
             key={b.id}
             className={`building-node ${active ? "active" : ""}`}
             style={{ left: `${pos.x}%`, top: `${pos.y}%`, position: "absolute", zIndex: active ? 20 : 10 }}
-            onClick={() => setBuildingId(active ? null : b.id)}
-            aria-label={`${b.label} — ${cnt} events. Tap to enter`}
+            onClick={() => onTapBuilding(b.id)}
+            aria-label={`${b.label} — ${cnt} events, ${heat} pending heat${isHottest ? " — hottest" : ""}`}
             aria-pressed={active}
             aria-controls={active ? "building-panel" : undefined}
           >
-            <div className="node-icon" style={{ background: active ? "rgba(255,255,255,0.96)" : `${b.color}`, color: active ? "#0c1e3a" : "#ffffff" }}>
+            <div
+              className="node-icon relative"
+              style={{
+                background: active ? "rgba(255,255,255,0.96)" : b.color,
+                color: active ? "#0c1e3a" : "#ffffff",
+                outline: active ? "3px solid #0c1e3a" : isHottest ? "3px solid #dc2626" : isWarm ? "2px solid #38bdf8" : "none",
+                transform: isHottest ? "scale(1.10)" : isWarm ? "scale(1.03)" : "scale(1)",
+                animation: isHottest ? "hallPulse 1.6s ease-out infinite" : "none",
+                transition: "transform 0.22s ease, outline 0.22s ease",
+              }}
+            >
               <span style={{ fontSize: 26 }}>{b.icon}</span>
+              {heat > 0 && (
+                <span
+                  className={`absolute -right-1 -top-1 grid h-5 min-w-[20px] place-items-center rounded-full px-1 font-mono text-[10px] font-black text-white shadow ${isHottest ? "bg-[#dc2626]" : "bg-sky-500"}`}
+                  style={{ animation: isHottest ? "heatBadgePop 1.2s ease-in-out infinite" : "none" }}
+                >
+                  {heat}
+                </span>
+              )}
             </div>
-            {cnt > 0 && <span className="node-count">{cnt}</span>}
-            <span className="node-label">{b.code} · {b.label}</span>
+            <span className={`node-label ${isHottest ? "!bg-[#dc2626] !text-white" : isWarm ? "!bg-sky-500 !text-white" : ""}`}>{b.code} · {b.label}{isHottest ? " 🔥" : ""}</span>
           </button>
         );
       })}
 
-      {/* offline banner — still shows last green ticks when offline */}
       {(isOffline || usingCache) && (
         <div className="relative z-10 mx-auto mt-2 max-w-lg rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-center font-mono text-[11px] font-bold text-amber-200">
           {isOffline ? "Offline — showing last green ticks" : "Cached — last verified still visible offline"}
@@ -319,6 +436,8 @@ export default function WindingRoad({ events, onVerify }: { events: EventRow[]; 
             <div className="flex-1 min-w-0">
               <p className="text-[15px] font-black text-[#07111f]">{building!.code} · {building!.label}</p>
               <p className="font-mono text-[10px] text-black/50">tap a level below to see timetable</p>
+              {buildingId === boostHall && <p className="font-mono text-[11px] font-bold text-amber-700">Next ticket ×1.5 for this hall</p>}
+              {buildingId === hottest && hottest && <p className="font-mono text-[11px] text-brick">🔥 Hottest hall — tap again to lock ×1.5</p>}
             </div>
             <span className="rounded-full bg-[var(--physi-cyan)]/15 px-3 py-1 font-mono text-[11px] font-black text-[var(--physi-cyan)]">{building!.short}</span>
             <button onClick={() => setBuildingId(null)} className="rounded-full border border-black/10 bg-black/5 px-2.5 py-1 font-mono text-[11px] font-bold text-black/60 hover:bg-black hover:text-white transition">← all</button>
