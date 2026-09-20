@@ -79,8 +79,6 @@ export async function GET(req: NextRequest) {
     const sql = getSql();
     if (isDbConfigured() && sql) {
       try {
-      } catch {}
-      try {
         const rows: any[] = await sql`SELECT id, password_hash FROM physi_users WHERE id=${checkUserId} LIMIT 1` as any;
         if (!rows.length) return NextResponse.json({ ok: false, code: "USER_NOT_FOUND", message: "user not found" }, { status: 404 });
         const hasHash = !!rows[0]?.password_hash;

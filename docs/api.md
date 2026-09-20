@@ -13,7 +13,7 @@ Do not standardize error shapes until that work lands.
 | Route | Callers | Purpose |
 |---|---|---|
 | `/api/timetable` | 11 | Venue-change feed — the core read surface |
-| `/api/auth/session` | 9 | Session create/check (handle auth) |
+| `/api/auth/session` | 9 | Session create/check (handle auth; fresh tokens device-bound, see lib/auth.ts `dev`) |
 | `/api/verify` | 6 | Yes/No vote ingest, quorum promotion |
 | `/api/mining` | 5 | Daily check-in faucet, streak logs |
 | `/api/stats` | 5 | Aggregated counts across `physi_*` |
