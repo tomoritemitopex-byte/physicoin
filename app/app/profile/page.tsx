@@ -9,7 +9,7 @@ type StoredProfile = {
   statuses: string[]; authority_base: number | string; authority_final: number | string;
   mining_balance: number | string; created_at?: string;
 };
-const PROGRAMMES = ["Physiology","Anatomy","Biochemistry","Medicine & Surgery","Nursing","Pharmacy","Medical Lab","Other"];
+const PROGRAMMES = ["Sciences","Health Sciences","Engineering","Arts & Humanities","Social Sciences","Other"];
 const LEVELS = ["100L","200L","300L","400L","500L","600L"];
 const LEVEL_NAMES: Record<number,string> = {1:"Explorer",2:"Scout",3:"Guide",4:"Sage",5:"Legend"};
 function getLevelInfo(rep:number){
@@ -150,7 +150,7 @@ export default function ProfilePage(){
         </div>
         {err && <p className="mt-3 rounded-xl border border-red-500/15 bg-red-500/10 px-3 py-2 text-sm text-red-300">{err}</p>}
         <button disabled={busy} className="mt-5 w-full rounded-full bg-white py-3 text-sm font-semibold text-[#022c1e] hover:bg-slate-100 disabled:opacity-50 transition">{busy ? "Creating…" : "Create handle →"}</button>
-        <p className="mt-3 text-center font-mono text-xs text-slate-500">Stored locally + on server · no password needed</p>
+        <p className="mt-3 text-center font-mono text-xs text-slate-500">Saved on this browser + server · password optional for other browsers</p>
       </form>
       {toast && <div className={`fixed bottom-20 left-1/2 z-50 -translate-x-1/2 rounded-full border px-4 py-2 text-sm shadow-xl ${toastKind==="earn"?"bg-emerald-600 border-emerald-500 text-white":"bg-[#0c1222] border-white/10 text-white"}`}>{toast}</div>}
     </div>
@@ -187,7 +187,7 @@ export default function ProfilePage(){
           <p className="mt-1 text-lg font-bold text-white">{lvl.lvl} · {lvl.name}</p>
           <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-emerald-400" style={{ width:`${lvl.pct}%`}} /></div>
           <p className="mt-1 font-mono text-xs text-slate-500">{lvl.next ? `${lvl.pct}% to ${lvl.next} $PHY` : "Max level"}</p>
-          <p className="mt-2 font-mono text-[11px] text-slate-500">Level = Wallet balance</p>
+          <p className="mt-2 font-mono text-[11px] text-slate-500">Tier grows with your $PHY balance</p>
         </div>
         <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] px-4 py-4">
           <p className="font-mono text-xs uppercase tracking-wide text-slate-500">Handle</p>
@@ -205,7 +205,7 @@ export default function ProfilePage(){
         <div className="rounded-2xl border border-emerald-500/15 bg-emerald-500/[0.06] p-4">
           <p className="flex items-center gap-1.5 text-sm font-semibold text-white"><TrendingUp className="h-4 w-4 text-emerald-400" /> Earn $PHY</p>
           <ul className="mt-2 space-y-1 font-mono text-xs leading-5 text-slate-400">
-            <li>• Daily check-in → +{(1*Number(profile.authority_final||1)+0.5).toFixed(1)} $PHY <span className="text-emerald-300">(halves every 50k campus)</span></li>
+            <li>• Daily check-in → +{(1*Number(profile.authority_final||1)+0.5).toFixed(1)} $PHY <span className="text-emerald-300">(shrinks as campus grows)</span></li>
             <li>• First gist → Earned +5 $PHY</li>
             <li>• Verify on road → Verified +1 $PHY (quorum bonus)</li>
           </ul>
@@ -309,7 +309,7 @@ export default function ProfilePage(){
         )}
       </div>
 
-      <p className="text-center font-mono text-xs text-slate-600">Wallet lives as physi_profile in this browser · <a href="/terms" className="underline decoration-white/15 hover:text-slate-400">Terms →</a></p>
+      <p className="text-center font-mono text-xs text-slate-600">Wallet saved on this browser · <a href="/terms" className="underline decoration-white/15 hover:text-slate-400">Terms →</a></p>
       {toast && <div className={`fixed bottom-20 left-1/2 z-50 -translate-x-1/2 rounded-full border px-4 py-2 text-sm shadow-xl ${toastKind==="earn"?"bg-emerald-600 border-emerald-400 text-white":toastKind==="spend"?"bg-amber-600 border-amber-500 text-white":"bg-[#0c1222] border-white/10 text-white"}`}>{toast}</div>}
     </div>
   );

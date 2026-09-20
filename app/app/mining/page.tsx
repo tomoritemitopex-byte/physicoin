@@ -86,8 +86,8 @@ export default function MiningPage(){
   return (
     <div className="mx-auto max-w-[720px] px-4 py-8 sm:px-6 space-y-5">
       <div>
-        <p className="font-mono text-xs uppercase tracking-[0.12em] text-slate-500">Wallet · $PHY · daily streak · WAT</p>
-        <h1 className="mt-1 text-2xl font-bold tracking-tight text-white">Good morning, @{profile.nickname}</h1>
+        <p className="font-mono text-xs uppercase tracking-[0.12em] text-slate-500">Wallet · $PHY · daily streak</p>
+        <h1 className="mt-1 text-2xl font-bold tracking-tight text-white">Hey, @{profile.nickname}</h1>
         <p className="mt-1 text-sm text-slate-400">One tap per 24h → earn $PHY. Keep streak → your votes weigh more.</p>
       </div>
 
@@ -121,13 +121,13 @@ export default function MiningPage(){
           </div>
         )}
         {err && <p className="mt-3 rounded-xl border border-red-500/15 bg-red-500/10 px-3 py-2 text-sm text-red-300">{err}</p>}
-        <p className="mt-3 text-center font-mono text-xs text-slate-500">24h cooldown · 1 base $PHY halves every 50k campus · cap 10k $PHY</p>
+        <p className="mt-3 text-center font-mono text-xs text-slate-500">One check-in every 24h · rewards shrink as campus grows · cap 10,000 $PHY</p>
       </div>
 
       <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-5">
         <div className="flex items-center justify-between"><h3 className="flex items-center gap-1.5 text-sm font-semibold text-white"><Wallet className="h-3.5 w-3.5 text-emerald-400"/>Recent $PHY</h3><span className="font-mono text-xs text-slate-500">{logs.length} total</span></div>
         {loading ? <div className="mt-3 space-y-2">{[0,1,2].map(i=> <div key={i} className="h-12 animate-pulse rounded-xl bg-white/[0.04]" />)}</div>
-        : logs.length===0 ? <p className="mt-3 text-center text-sm text-slate-500">No Rep yet — tap check-in above.</p>
+        : logs.length===0 ? <p className="mt-3 text-center text-sm text-slate-500">No $PHY yet — tap check-in above.</p>
         : <ul className="mt-3 space-y-2">{logs.slice(0,5).map(l=> (
             <li key={l.id} className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-[#0b1020] px-3 py-2.5">
               <span className="font-mono text-sm font-semibold text-emerald-300">+{Number(l.earned_amount).toFixed(2)} $PHY</span>
@@ -136,7 +136,7 @@ export default function MiningPage(){
           ))}</ul>}
       </div>
 
-      <p className="text-center font-mono text-xs text-slate-600">PHYSI · $PHY is campus currency · spend to vote & unlock · advisory feed only</p>
+      <p className="text-center font-mono text-xs text-slate-600">PhysiCoin · $PHY is campus currency — earn on campus, spend on campus, no cash value</p>
       {toast && <div className={`fixed bottom-20 left-1/2 z-50 -translate-x-1/2 rounded-full border px-4 py-2 text-sm shadow-xl ${toast.startsWith("Earned")||toast.includes("$PHY")?"bg-emerald-600 border-emerald-500 text-white":"bg-[#0c1222] border-white/10 text-white"}`}>{toast}</div>}
     </div>
   );

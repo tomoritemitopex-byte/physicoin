@@ -70,7 +70,7 @@ export default function TimetablePage(){
       }catch{}
       const r=await fetch("/api/verify",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({verifier_id:uid, event_id:ev.id, vote:v})});
       const j=await r.json().catch(()=>({} as any));
-      if(r.ok && j.ok!==false){ setMsg(v==="YES"?"✓ +1 XP · staked 1 $PHY (refund if majority)":"Voted · +1 XP"); }
+      if(r.ok && j.ok!==false){ setMsg(v==="YES"?"✓ +1 $PHY · staked 1 $PHY (refund if majority)":"Voted · +1 $PHY"); }
       else{
         const code=String(j?.code||"");
         let m=String(j?.message||"");
@@ -106,19 +106,19 @@ export default function TimetablePage(){
         <p className="mt-2 text-[14px] font-semibold text-white/70">{ev.title}</p>
         <p className="mt-1 font-mono text-xs text-white/40">{String(ev.event_date).slice(0,10)} · {String(ev.event_time).slice(0,5)} · {ev.severity?String(ev.severity).toUpperCase():"ADVISORY"}</p>
 
-        {/* ONE progress bar (7/8) — shows required_points, yesW, ratio from verify.ts promotion logic */}
+        {/* ONE progress bar — how many classmates agreed */}
         <div className="mt-6">
           <div className="flex items-end justify-between">
-            <span className="font-mono text-[11px] font-bold tracking-wide text-white/60">QUORUM</span>
-            <span className="font-mono text-[13px] font-black text-white">{q.yesW.toFixed(0)}/{q.required.toFixed(0)} <span className="font-normal text-white/50">· ratio {q.ratio.toFixed(2)} · need 0.66</span></span>
+            <span className="font-mono text-[11px] font-bold tracking-wide text-white/60">AGREED</span>
+            <span className="font-mono text-[13px] font-black text-white">{q.yesW.toFixed(0)}/{q.required.toFixed(0)} <span className="font-normal text-white/50">classmates</span></span>
           </div>
           <div className="mt-2 flex items-center gap-3">
-            <div className="h-4 flex-1 overflow-hidden rounded-full bg-white/10" role="progressbar" aria-valuenow={q.pct} aria-valuemin={0} aria-valuemax={100} aria-label={`${q.yesW} of ${q.required} — ratio ${q.ratio.toFixed(2)}`}>
+            <div className="h-4 flex-1 overflow-hidden rounded-full bg-white/10" role="progressbar" aria-valuenow={q.pct} aria-valuemin={0} aria-valuemax={100} aria-label={`${q.yesW} of ${q.required} classmates agreed`}>
               <div className={`h-full rounded-full transition-all duration-500 ${q.verified ? "bg-[#b9f66a] shadow-[0_0_12px_rgba(185,246,106,0.5)]":"bg-[var(--physi-cyan)]"}`} style={{width:`${q.pct}%`}}/>
             </div>
             <span className={`font-mono text-sm font-black ${q.verified?"text-[#b9f66a]":"text-white"}`}>{q.verified?"✓":`${q.pct}%`}</span>
           </div>
-          <p className="mt-2 font-mono text-[11px] text-white/45">{q.verified?`✓ Confirmed — ${q.yesW} of ${q.required} said yes`:`${q.yesW} of ${q.required} said yes — needs ${Math.max(0,Math.ceil(q.required-q.yesW))} more`} · {q.total>=3?(q.ratio>=0.66 && q.yesW>=q.required?"quorum reached":`${Math.max(0,Math.ceil(q.required-q.yesW))} more to green tick`):"needs 3 votes min"}</p>
+          <p className="mt-2 font-mono text-[11px] text-white/45">{q.verified?`✓ Confirmed — ${q.yesW} classmates agreed`:`${q.yesW} agreed — needs ${Math.max(0,Math.ceil(q.required-q.yesW))} more for the green tick`}</p>
         </div>
 
         {/* two big buttons Yes/No — 44px min */}

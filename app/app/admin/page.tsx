@@ -45,10 +45,10 @@ export default function AdminPage() {
         <div>
           <h1 className="text-[18px] font-semibold tracking-tight text-white">Admin — Realtime Logs</h1>
           <p className="mt-1 font-mono text-[11px] text-slate-400">
-            Polling <span className="text-slate-200">/api/logs</span> every 3s • adapter-driven • {paused ? "paused" : `last ${at || "—"}`}
+            Polling <span className="text-slate-200">/api/logs</span> every 3s • {paused ? "paused" : `last ${at || "—"}`}
             {error ? <span className="ml-2 text-red-400">error: {error}</span> : null}
           </p>
-          <p className="mt-1 font-mono text-[11px] text-slate-500">Also persisted to <code className="text-slate-300">logs/realtime.log</code> + <code className="text-slate-300">logs/errors.log</code> (git-visible)</p>
+          <p className="mt-1 font-mono text-[11px] text-slate-500">Also saved to the server logs</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -78,7 +78,7 @@ export default function AdminPage() {
 
         <div className="max-h-[64vh] overflow-auto overscroll-contain bg-[#022c1e]">
           {logs.length === 0 ? (
-            <div className="px-4 py-10 text-center font-mono text-xs text-slate-500">No logs yet — hit any /api/* route to generate events. Check <code>logs/realtime.log</code> in repo.</div>
+            <div className="px-4 py-10 text-center font-mono text-xs text-slate-500">No logs yet — hit any /api/* route to generate events.</div>
           ) : (
             <table className="w-full text-left font-mono text-[11.5px] leading-[1.35]">
               <thead className="sticky top-0 bg-[#0e1320] text-[10px] uppercase tracking-widest text-slate-500">
@@ -117,7 +117,7 @@ export default function AdminPage() {
       </div>
 
       <p className="mt-3 font-mono text-[11px] leading-relaxed text-slate-500">
-        Dev-only observability. Ring buffer 200 (shows 100). Git-visible via <code className="text-slate-400">logs/realtime.log</code> (JSON lines). Errors also in <code className="text-slate-400">logs/errors.log</code> + <code className="text-slate-400">.github/error-log.md</code>.
+        Dev-only observability. Recent 100 events, newest first.
       </p>
     </div>
   );
