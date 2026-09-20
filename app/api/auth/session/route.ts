@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSql, isDbConfigured, dbNotConfigured, } from "@/lib/db";
-import { signSession, decodeSession } from "@/lib/auth";
+import { signSession, decodeSession, deviceHash } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +8,8 @@ export const dynamic = "force-dynamic";
  * POST /api/auth/session { user_id, password?, otp? } -> { token }
  * If user has password_hash, require correct password via pgcrypto crypt.
  * If no password_hash and password provided, set it (first-time enrollment).
- * OTP/device binding placeholder: if otp provided and matches last 4 of user_id, allow (demo).
+ * Device binding: freshly minted tokens carry dev=sha256(User-Agent)[:16];
+ * verifySessionDevice enforces it (pre-binding tokens stay valid).
  */
 export async function POST(req: NextRequest) {
   try {
@@ -39,14 +40,18 @@ export async function POST(req: NextRequest) {
           } else if (!otp && password !== null && password.length < 4 && password.length > 0) {
             return NextResponse.json({ ok:false, code:"BAD_PASSWORD", message:"Password must be >=4 chars" }, { status:400 });
           }
-          // if neither password nor otp and no hash, allow for grace (device binding TODO) but warn
+          // No hash + no credential: passwordless grace path (default for handles).
+          // Sessions here are device-bound at mint (see dev below): the token
+          // only verifies from the same browser, so a leaked token fails closed
+          // elsewhere. Setting a password upgrades the account instead.
         }
       } catch (e: any) {
         if (String(e?.message||"").includes("USER_NOT_FOUND") || String(e?.code||"")==="USER_NOT_FOUND") throw e;
         // DB error but user exists check already — continue to issue token
       }
     }
-    const token = signSession(uid);
+    const dev = deviceHash(req.headers.get("user-agent"));
+    const token = signSession(uid, dev);
     const isProd = process.env.NODE_ENV === "production";
     const resp = NextResponse.json({ ok:true, token, user_id: uid });
     const cookieOpts: any = { httpOnly: true, sameSite: "lax", path: "/", maxAge: 60*60*24*30, secure: isProd };
@@ -65,7 +70,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  const { verifySession } = await import("@/lib/auth");
+  const { verifySessionDevice } = await import("@/lib/auth");
   const url = new URL(req.url);
   const checkUserId = url.searchParams.get("user_id");
   
@@ -98,7 +103,8 @@ export async function GET(req: NextRequest) {
       if (k.trim()==="session" || k.trim()==="physi_session") token = rest.join("=").trim().replace(/^"|"$/g,"");
     }
   }
-  const uid = token ? verifySession(token) : null;
+  const ua = req.headers.get("user-agent");
+  const uid = token ? verifySessionDevice(token, ua) : null;
   if (token && uid) {
     // check revocation
     try {

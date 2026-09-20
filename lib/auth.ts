@@ -7,7 +7,7 @@
  * Tokens include exp (30d) + jti (uuid) + iat; verifySession rejects expired.
  * Revocation is checked via physi_revoked_tokens (async); sync verifySession only checks exp.
  */
-import { createHmac, randomUUID } from "crypto";
+import { createHmac, createHash, randomUUID } from "crypto";
 
 const DEV_FALLBACK = "dev-fallback-hmac-secret-do-not-use-in-prod";
 const TOKEN_TTL_MS = 30 * 24 * 3600 * 1000; // 30 days
@@ -30,9 +30,22 @@ function b64uDecode(b64u: string): string {
   return Buffer.from(b64u, "base64url").toString("utf8");
 }
 
-type SessionPayload = { uid: string; iat: number; exp: number; jti: string };
+type SessionPayload = { uid: string; iat: number; exp: number; jti: string; dev?: string };
 
-export function signSession(userId: string): string {
+/**
+ * Device fingerprint for binding passwordless grace sessions.
+ * sha256(User-Agent), first 16 hex chars. Null when no UA header is present
+ * (curl/API clients) — such tokens are minted unbound (can't bind the unseen).
+ * Tradeoff, stated plainly: a browser update changes the UA and invalidates
+ * bound sessions; the password flow re-issues. Pre-binding tokens (no `dev`
+ * field) keep working — binding only constrains tokens minted after this change.
+ */
+export function deviceHash(userAgent: string | null | undefined): string | null {
+  if (!userAgent || typeof userAgent !== "string" || !userAgent.trim()) return null;
+  return createHash("sha256").update(userAgent.trim()).digest("hex").slice(0, 16);
+}
+
+export function signSession(userId: string, dev?: string | null): string {
   const now = Date.now();
   const payload: SessionPayload = {
     uid: String(userId),
@@ -40,6 +53,7 @@ export function signSession(userId: string): string {
     exp: now + TOKEN_TTL_MS,
     jti: randomUUID(),
   };
+  if (dev) payload.dev = dev;
   const b64 = b64uEncode(JSON.stringify(payload));
   const sig = createHmac("sha256", getSecret()).update(b64).digest("base64url");
   return `${b64}.${sig}`;
@@ -132,10 +146,34 @@ function readTokenFromRequest(req: Request): string | null {
   return null;
 }
 
+/**
+ * verifySession + device check. Tokens minted without a `dev` field (pre-binding
+ * era, or no-UA clients) verify as before — backward compatible. Tokens carrying
+ * `dev` only verify when the request UA hashes to the same fingerprint, so a
+ * token replayed from another browser/device fails closed.
+ */
+export function verifySessionDevice(token: string, userAgent: string | null | undefined): string | null {
+  const uid = verifySession(token);
+  if (!uid) return null;
+  const dec = decodeSession(token) as (SessionPayload & { legacy?: boolean }) | null;
+  const bound = dec && typeof dec === "object" && !(dec as any).legacy ? (dec as SessionPayload).dev : undefined;
+  if (!bound) return uid;
+  const now = deviceHash(userAgent);
+  if (!now || now !== bound) return null;
+  return uid;
+}
+
+function readUserAgent(req: Request): string | null {
+  try {
+    const h = (req.headers as any)?.get?.("user-agent") || (req.headers as any)?.get?.("User-Agent") || "";
+    return typeof h === "string" && h ? h : null;
+  } catch { return null; }
+}
+
 export function getSessionUserId(req: Request): string | null {
   const tok = readTokenFromRequest(req);
   if (!tok) return null;
-  return verifySession(tok);
+  return verifySessionDevice(tok, readUserAgent(req));
 }
 
 export function getSessionToken(req: Request): string | null {
