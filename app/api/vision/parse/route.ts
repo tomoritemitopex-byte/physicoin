@@ -12,15 +12,15 @@ export const maxDuration = 30;
  */
 type ParsedEvent = { title: string; venue: string; date: string; time: string; scope_type: string };
 
-const PHYSI_PIPE_FORMAT = "PHYSI | COURSE | VENUE | YYYY-MM-DD | HH:MM | SCOPE | STATUS";
-const SYSTEM_PROMPT = `You are a timetable extraction assistant for PHYSI.
+const PIPE_FORMAT = "PhysiCoin | COURSE | VENUE | YYYY-MM-DD | HH:MM | SCOPE | STATUS";
+const SYSTEM_PROMPT = `You are a timetable extraction assistant for PhysiCoin.
 
 PRIMARY FORMAT (distinct, pipe-delimited, scannable):
-Each event is one line: PHYSI | COURSE | VENUE | YYYY-MM-DD | HH:MM | SCOPE | STATUS
+Each event is one line: PhysiCoin | COURSE | VENUE | YYYY-MM-DD | HH:MM | SCOPE | STATUS
 Example:
-PHYSI | BIO 101 | LT2 | 2026-09-01 | 08:00 | 100L | Advisory
-PHYSI | ANA 201 | Hall B | 2026-09-02 | 10:00 | 200L | Advisory
-PHYSI | CHM 112 | New Lab | 2026-09-03 | 14:00 | general | Advisory
+PhysiCoin | BIO 101 | LT2 | 2026-09-01 | 08:00 | 100L | Advisory
+PhysiCoin | ANA 201 | Hall B | 2026-09-02 | 10:00 | 200L | Advisory
+PhysiCoin | CHM 112 | New Lab | 2026-09-03 | 14:00 | general | Advisory
 
 Return ONLY a JSON array: [{title, venue, date, time, scope_type}]
 - title: COURSE code like ANA 201, BIO 101 (uppercase)
@@ -150,7 +150,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, parsed, created: [], warning: dbNotConfigured().error });
     }
 
-    // Idempotent Snap Receipt: pipe PHYSI|BIO|LT2|2026-09-01|08:00 try INSERT lower(title,venue,date) uid dup->fused x2 else venue_time_collision guard time<5m
+    // Idempotent Snap Receipt: pipe PhysiCoin|BIO|LT2|2026-09-01|08:00 try INSERT lower(title,venue,date) uid dup->fused x2 else venue_time_collision guard time<5m
     const created: unknown[] = [];
     const errors: unknown[] = [];
     const timeToMin2=(t:string):number=>{ const pp=String(t).slice(0,5).split(":"); return (parseInt(pp[0]||"0")||0)*60+(parseInt(pp[1]||"0")||0); };

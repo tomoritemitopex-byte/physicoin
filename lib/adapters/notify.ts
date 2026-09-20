@@ -31,7 +31,7 @@ function getWhatsAppConfig() {
 }
 
 function formatText(event: CanonicalEvent): string {
-  const title = String(event.title ?? event.id ?? "PHYSI event");
+  const title = String(event.title ?? event.id ?? "PhysiCoin event");
   const venue = String(event.venue ?? "");
   const date = String(event.event_date ?? "");
   const time = String(event.event_time ?? "");
@@ -39,7 +39,7 @@ function formatText(event: CanonicalEvent): string {
   const yes = event.yes_weight != null ? String(event.yes_weight) : "";
   const total = event.total_weight != null ? String(event.total_weight) : "";
   const quorum = yes && total ? ` · quorum ${yes}/${total}` : ratio ? ` · yes=${ratio}` : "";
-  return `✅ PHYSI canonical: ${title}${venue ? ` @ ${venue}` : ""}${date ? ` · ${date}` : ""}${time ? ` ${time}` : ""}${quorum}`;
+  return `✅ PhysiCoin canonical: ${title}${venue ? ` @ ${venue}` : ""}${date ? ` · ${date}` : ""}${time ? ` ${time}` : ""}${quorum}`;
 }
 
 export async function notifyTelegram(event: CanonicalEvent): Promise<{ ok: boolean; skipped?: boolean; reason?: string }> {

@@ -29,7 +29,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <BottomNavClient />
 
       <footer className="mx-auto max-w-[1280px] border-t border-sky/20 px-4 py-6 text-center font-mono text-xs text-ink/60 sm:px-6 lg:px-8">
-        PHYSI · built by students · <Link href="/terms" className="underline decoration-sky/30 hover:text-ink/70">Terms →</Link>
+        PhysiCoin · built by students · <Link href="/terms" className="underline decoration-sky/30 hover:text-ink/70">Terms →</Link>
       </footer>
     </div>
   );

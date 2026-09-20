@@ -1,6 +1,6 @@
 {
-  "name": "PHYSI — Live Timetable",
-  "short_name": "PHYSI",
+  "name": "PhysiCoin — Live Timetable",
+  "short_name": "PhysiCoin",
   "description": "Student-powered real-time timetable. Share what you hear, confirm what you see. Never trek to a wrong hall.",
   "start_url": "/?source=pwa",
   "display": "standalone",

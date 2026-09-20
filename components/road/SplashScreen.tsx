@@ -31,7 +31,7 @@ export default function SplashScreen({
         {/* Gold medallion with parchment vignette */}
         <div className="relative flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-[#f7f5ef] to-[#c5a059] border-[3px] border-[#8a6d2b] shadow-[0_0_0_1px_#fbbf24,0_12px_32px_rgba(0,0,0,0.45)]">
           <span className="font-display text-2xl font-bold text-[#1a1208]" style={{ fontFamily: "'Instrument Serif', system-serif" }}>
-            PHYSI
+            P
           </span>
           <div className="absolute -inset-1 rounded-full bg-[#c5a059] opacity-20 blur-xl" />
         </div>

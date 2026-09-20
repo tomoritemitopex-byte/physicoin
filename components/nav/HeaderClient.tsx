@@ -55,8 +55,8 @@ export default function HeaderClient() {
             >
               {mobileOpen ? "✕" : "☰"}
             </button>
-            <a href="/" className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky text-white font-black tracking-tight text-[10px]">PHYSI</a>
-            <span className="hidden sm:inline text-sm font-semibold tracking-tight text-ink">PHYSI</span>
+            <a href="/" className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky text-white font-black tracking-tight text-[10px]">P</a>
+            <span className="hidden sm:inline text-sm font-semibold tracking-tight text-ink">PhysiCoin</span>
             <span className="hidden sm:inline-flex rounded-full border border-sky/30 bg-white px-2.5 py-1 font-mono text-[11px] text-ink/70">advisory · not official</span>
           </div>
 

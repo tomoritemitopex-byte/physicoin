@@ -17,13 +17,13 @@ const instrumentSerif = Instrument_Serif({
 });
 
 export const metadata: Metadata = {
-  title: 'PHYSI — Live Timetable, Built by Students',
+  title: 'PhysiCoin — Live Timetable, Built by Students',
   description: 'Student-powered real-time timetable. Share what you hear, confirm what you see. Advisory, not official.',
   keywords: 'timetable, student, events, live, verify, campus',
   openGraph: {
-    title: 'PHYSI — Live Timetable',
+    title: 'PhysiCoin — Live Timetable',
     description: 'Student-powered real-time timetable. Share what you hear, confirm what you see.',
-    images: [{ url: '/icon-512.png', width: 512, height: 512, alt: 'PHYSI' }],
+    images: [{ url: '/icon-512.png', width: 512, height: 512, alt: 'PhysiCoin' }],
   },
 };
 
@@ -49,7 +49,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#ff6b6b" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-title" content="PHYSI" />
+        <meta name="apple-mobile-web-app-title" content="PhysiCoin" />
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
       <body
@@ -70,7 +70,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               fontFamily: 'monospace',
             }}
           >
-            PHYSI needs JavaScript to verify events. The timetable HTML still loads — enable JS for full
+            PhysiCoin needs JavaScript to verify events. The timetable HTML still loads — enable JS for full
             interactivity.
           </div>
         </noscript>

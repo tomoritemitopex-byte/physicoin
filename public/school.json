@@ -1,12 +1,12 @@
 {
-  "name": "PHYSI — University Example",
-  "short_name": "PHYSI",
+  "name": "PhysiCoin — University Example",
+  "short_name": "PhysiCoin",
   "school": "University of Port Harcourt (example)",
   "campus": "Choba",
   "default_scope_type": "general",
   "theme": "forest",
   "colors": { "forest_from": "#0d3b2a", "forest_to": "#1a5c3a", "road": "#8b5cf6" },
-  "deploy_hint": "Deploy PHYSI for my school — set DATABASE_URL then import your timetable via 📸 Snap or /api/timetable",
+  "deploy_hint": "Deploy PhysiCoin for my school — set DATABASE_URL then import your timetable via 📸 Snap or /api/timetable",
   "links": {
     "vercel_clone": "https://vercel.com/new/clone?repository-url=https://github.com/tomoritemitopex-byte/physicoin&env=DATABASE_URL",
     "docs": "https://github.com/tomoritemitopex-byte/physicoin#readme"
