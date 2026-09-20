@@ -60,7 +60,7 @@ authority_final  = min(1.10, 1.0 + 0.05 * COUNT(valid_attestations))
 ```
 
 Each **cryptographically verified** attestation adds +0.05:
-- `sig issuer=FUHSI_REGISTRAR signed "SUG President: alice 2026"` → +0.05
+- `sig issuer=CAMPUS_REGISTRAR signed "alice_01 2026"` → +0.05
 - `sig issuer=SUG signed "Class Rep: alice 2026"` → +0.05
 - Max 2 attestations = +0.10 → authority_final = 1.10 (the cap)
 

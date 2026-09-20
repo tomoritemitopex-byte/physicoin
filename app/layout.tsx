@@ -19,7 +19,7 @@ const instrumentSerif = Instrument_Serif({
 export const metadata: Metadata = {
   title: 'PHYSI — Live Timetable, Built by Students',
   description: 'Student-powered real-time timetable. Share what you hear, confirm what you see. Advisory, not official.',
-  keywords: 'timetable, student, events, live, verify, campus, medical',
+  keywords: 'timetable, student, events, live, verify, campus',
   openGraph: {
     title: 'PHYSI — Live Timetable',
     description: 'Student-powered real-time timetable. Share what you hear, confirm what you see.',
