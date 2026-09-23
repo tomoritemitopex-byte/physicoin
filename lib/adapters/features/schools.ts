@@ -47,9 +47,11 @@ function displayFromNormalized(norm: string, fallback: string): string {
   return norm;
 }
 
-// Lazy vine DDL + archive — no-op when DB unset, safe for build (no DB)
-async function ensureVine(sql: any): Promise<void> {
-  try { const { ensureSchoolVotes, ensureSchoolArchiveColumns } = await import("@/lib/db"); await ensureSchoolVotes(); await ensureSchoolArchiveColumns(); } catch {}
+// Vine maintenance — archive only, NO DDL.
+// Inverted-audit P0 (K-A3): runtime DDL is forbidden on hot paths; vine
+// tables/columns are created by build-time migrate (database/schema.physi.sql).
+// This keeps only the DML maintenance write (90d extinct-dept archive).
+async function runVineMaintenance(sql: any): Promise<void> {
   try { const { archiveExtinctDepartments } = await import("@/lib/db"); await archiveExtinctDepartments(); } catch {}
 }
 
@@ -295,7 +297,7 @@ async function handleSchools(req: Request): Promise<Response> {
     if (!isDbConfigured() || !sql) return NextResponse.json(dbNotConfigured(), { status: 503 });
 
     if (req.method === "POST") {
-      try { await ensureVine(sql); } catch (e) { logError("SCHOOLS_CREATE_FAILED", e, { route: "/api/schools", phase: "ensure" }); }
+      try { await runVineMaintenance(sql); } catch (e) { logError("SCHOOLS_CREATE_FAILED", e, { route: "/api/schools", phase: "ensure" }); }
       const b = await req.json().catch(() => null);
       // Vine vote path: { action:"vote", normalized, vote:1|-1, voter_id } — increments vote table without duplicate school row
       if (b?.action === "vote" || b?.vote_for || b?.normalized) {
@@ -351,7 +353,7 @@ async function handleSchools(req: Request): Promise<Response> {
     }
 
     if (req.method === "GET") {
-      try { await ensureVine(sql); } catch (e) { logError("SCHOOLS_FETCH_FAILED", e, { route: "/api/schools", phase: "ensure" }); }
+      try { await runVineMaintenance(sql); } catch (e) { logError("SCHOOLS_FETCH_FAILED", e, { route: "/api/schools", phase: "ensure" }); }
       const url = new URL(req.url);
       const id = url.searchParams.get("id");
       const name = url.searchParams.get("name");
@@ -425,7 +427,7 @@ async function handleSchools(req: Request): Promise<Response> {
     }
 
     if (req.method === "PATCH") {
-      try { await ensureVine(sql); } catch (e) { logError("SCHOOLS_UPDATE_FAILED", e, { route: "/api/schools", phase: "ensure" }); }
+      try { await runVineMaintenance(sql); } catch (e) { logError("SCHOOLS_UPDATE_FAILED", e, { route: "/api/schools", phase: "ensure" }); }
       const b = await req.json().catch(() => null);
       const schoolId = String(b?.id ?? b?.school_id ?? "").trim();
       if (!schoolId) return NextResponse.json({ ok: false, code: "BAD_INPUT" }, { status: 400 });
@@ -443,37 +445,23 @@ async function handleSchools(req: Request): Promise<Response> {
       }
 
       try {
-        const updates: string[] = [];
-        const vals: any[] = [];
-
-        if (newStatus) {
-          updates.push("status = $" + (updates.length + 1));
-          vals.push(newStatus);
-          if (newStatus === "verified") {
-            updates.push("verified_by = $" + (updates.length + 1));
-            vals.push(creatorUid);
-            updates.push("verified_at = NOW()");
-          }
-          if (newStatus === "rejected") {
-            updates.push("verified_by = $" + (updates.length + 1));
-            vals.push(creatorUid);
-            updates.push("verified_at = NOW()");
-            if (b?.rejection_reason) {
-              updates.push("rejection_reason = $" + (updates.length + 1));
-              vals.push(String(b.rejection_reason).slice(0, 500));
-            }
-          }
-        }
-
-        if (updates.length === 0) {
+        if (!newStatus) {
           return NextResponse.json({ ok: true, school: existing });
         }
-
-        updates.push("updated_at = NOW()");
-        const setClause = updates.join(", ");
-        const r = await sql`
-          UPDATE physi_schools SET ${sql[setClause]} WHERE id = ${schoolId}
-          RETURNING *`;
+        // Inverted-audit P0 (K-A6-ish): the old code built a dynamic
+        // SET clause and interpolated it as sql[setClause] — a string the
+        // driver never substitutes (vals[] was never even used), so every
+        // PATCH threw. Explicit whitelisted UPDATEs per case instead.
+        let r: any[];
+        if (newStatus === "verified") {
+          r = await sql`UPDATE physi_schools SET status=${newStatus}, verified_by=${creatorUid}, verified_at=NOW(), updated_at=NOW() WHERE id=${schoolId} RETURNING *` as any;
+        } else if (newStatus === "rejected" && b?.rejection_reason) {
+          r = await sql`UPDATE physi_schools SET status=${newStatus}, verified_by=${creatorUid}, verified_at=NOW(), rejection_reason=${String(b.rejection_reason).slice(0, 500)}, updated_at=NOW() WHERE id=${schoolId} RETURNING *` as any;
+        } else if (newStatus === "rejected") {
+          r = await sql`UPDATE physi_schools SET status=${newStatus}, verified_by=${creatorUid}, verified_at=NOW(), updated_at=NOW() WHERE id=${schoolId} RETURNING *` as any;
+        } else {
+          r = await sql`UPDATE physi_schools SET status=${newStatus}, updated_at=NOW() WHERE id=${schoolId} RETURNING *` as any;
+        }
 
         const evtCount = await sql`SELECT COUNT(*)::int AS c FROM physi_events WHERE scope_value = ${existing.name} OR title ILIKE ${'%' + existing.name + '%'}`;
         const newCount = Number(evtCount[0]?.c ?? 0);
@@ -508,7 +496,7 @@ async function handleDepartments(req: Request): Promise<Response> {
     if (!isDbConfigured() || !sql) return NextResponse.json(dbNotConfigured(), { status: 503 });
 
     if (req.method === "POST") {
-      try { await ensureVine(sql); } catch (e) { logError("DEPTS_CREATE_FAILED", e, { route: "/api/schools/departments", phase: "ensure" }); }
+      try { await runVineMaintenance(sql); } catch (e) { logError("DEPTS_CREATE_FAILED", e, { route: "/api/schools/departments", phase: "ensure" }); }
       const b = await req.json().catch(() => null);
       // Dept vote path: free-text → vote on normalized dept name
       if (b?.action === "vote" || b?.vote_for || (b?.normalized && b?.vote_value !== undefined)) {
@@ -552,6 +540,10 @@ async function handleDepartments(req: Request): Promise<Response> {
           VALUES (${schoolId}, ${rawDept}, ${years}, ${createdBy}, 'pending')
           RETURNING *`;
 
+        // School-level bootstrap row (PK is school_id — per-dept breakdown is
+        // NOT tracked here; counts roll up per school in the PATCH upsert).
+        // Inverted-audit P0 (K-A7): the arbiter matches the PK, so this is a
+        // true no-op when the row exists — never a silent drop.
         try {
           await sql`
             INSERT INTO physi_school_event_counts (school_id, dept_id, event_count)
@@ -569,7 +561,7 @@ async function handleDepartments(req: Request): Promise<Response> {
     }
 
     if (req.method === "GET") {
-      try { await ensureVine(sql); } catch (e) { logError("DEPTS_FETCH_FAILED", e, { route: "/api/schools/departments", phase: "ensure" }); }
+      try { await runVineMaintenance(sql); } catch (e) { logError("DEPTS_FETCH_FAILED", e, { route: "/api/schools/departments", phase: "ensure" }); }
       const url = new URL(req.url);
       const schoolId = url.searchParams.get("school_id");
       const id = url.searchParams.get("id");
@@ -603,7 +595,7 @@ async function handleDepartments(req: Request): Promise<Response> {
     }
 
     if (req.method === "PATCH") {
-      try { await ensureVine(sql); } catch (e) { logError("DEPTS_UPDATE_FAILED", e, { route: "/api/schools/departments", phase: "ensure" }); }
+      try { await runVineMaintenance(sql); } catch (e) { logError("DEPTS_UPDATE_FAILED", e, { route: "/api/schools/departments", phase: "ensure" }); }
       const b = await req.json().catch(() => null);
       const deptId = String(b?.id ?? b?.department_id ?? "").trim();
       if (!deptId) return NextResponse.json({ ok: false, code: "BAD_INPUT" }, { status: 400 });
@@ -621,43 +613,31 @@ async function handleDepartments(req: Request): Promise<Response> {
       }
 
       try {
-        const updates: string[] = [];
-        const vals: any[] = [];
-
-        if (newStatus) {
-          updates.push("status = $" + (updates.length + 1));
-          vals.push(newStatus);
-          if (newStatus === "verified") {
-            updates.push("verified_by = $" + (updates.length + 1));
-            vals.push(creatorUid);
-            updates.push("verified_at = NOW()");
-          }
-          if (newStatus === "rejected") {
-            updates.push("verified_by = $" + (updates.length + 1));
-            vals.push(creatorUid);
-            updates.push("verified_at = NOW()");
-            if (b?.rejection_reason) {
-              updates.push("rejection_reason = $" + (updates.length + 1));
-              vals.push(String(b.rejection_reason).slice(0, 500));
-            }
-          }
-        }
-
-        if (b?.years && !isNaN(Number(b.years))) {
-          const y = Math.max(1, Math.min(10, Number(b.years)));
-          updates.push("years = $" + (updates.length + 1));
-          vals.push(y);
-        }
-
-        if (updates.length === 0) {
+        const years = b?.years && !isNaN(Number(b.years)) ? Math.max(1, Math.min(10, Number(b.years))) : null;
+        if (!newStatus && years === null) {
           return NextResponse.json({ ok: true, department: existing });
         }
-
-        updates.push("updated_at = NOW()");
-        const setClause = updates.join(", ");
-        const r = await sql`
-          UPDATE physi_school_departments SET ${sql[setClause]} WHERE id = ${deptId}
-          RETURNING *`;
+        // Inverted-audit P0: explicit whitelisted UPDATEs (see schools PATCH).
+        let r: any[];
+        if (newStatus === "verified") {
+          r = years === null
+            ? await sql`UPDATE physi_school_departments SET status=${newStatus}, verified_by=${creatorUid}, verified_at=NOW(), updated_at=NOW() WHERE id=${deptId} RETURNING *` as any
+            : await sql`UPDATE physi_school_departments SET status=${newStatus}, verified_by=${creatorUid}, verified_at=NOW(), years=${years}, updated_at=NOW() WHERE id=${deptId} RETURNING *` as any;
+        } else if (newStatus === "rejected" && b?.rejection_reason) {
+          r = years === null
+            ? await sql`UPDATE physi_school_departments SET status=${newStatus}, verified_by=${creatorUid}, verified_at=NOW(), rejection_reason=${String(b.rejection_reason).slice(0, 500)}, updated_at=NOW() WHERE id=${deptId} RETURNING *` as any
+            : await sql`UPDATE physi_school_departments SET status=${newStatus}, verified_by=${creatorUid}, verified_at=NOW(), rejection_reason=${String(b.rejection_reason).slice(0, 500)}, years=${years}, updated_at=NOW() WHERE id=${deptId} RETURNING *` as any;
+        } else if (newStatus === "rejected") {
+          r = years === null
+            ? await sql`UPDATE physi_school_departments SET status=${newStatus}, verified_by=${creatorUid}, verified_at=NOW(), updated_at=NOW() WHERE id=${deptId} RETURNING *` as any
+            : await sql`UPDATE physi_school_departments SET status=${newStatus}, verified_by=${creatorUid}, verified_at=NOW(), years=${years}, updated_at=NOW() WHERE id=${deptId} RETURNING *` as any;
+        } else if (newStatus) {
+          r = years === null
+            ? await sql`UPDATE physi_school_departments SET status=${newStatus}, updated_at=NOW() WHERE id=${deptId} RETURNING *` as any
+            : await sql`UPDATE physi_school_departments SET status=${newStatus}, years=${years}, updated_at=NOW() WHERE id=${deptId} RETURNING *` as any;
+        } else {
+          r = await sql`UPDATE physi_school_departments SET years=${years}, updated_at=NOW() WHERE id=${deptId} RETURNING *` as any;
+        }
 
         return NextResponse.json({ ok: true, department: r[0] });
       } catch (e) {
@@ -681,7 +661,7 @@ async function handleDisputes(req: Request): Promise<Response> {
     if (!isDbConfigured() || !sql) return NextResponse.json(dbNotConfigured(), { status: 503 });
 
     if (req.method === "POST") {
-      try { await ensureVine(sql); } catch (e) { logError("DISPUTES_CREATE_FAILED", e, { route: "/api/schools/disputes", phase: "ensure" }); }
+      try { await runVineMaintenance(sql); } catch (e) { logError("DISPUTES_CREATE_FAILED", e, { route: "/api/schools/disputes", phase: "ensure" }); }
       const b = await req.json().catch(() => null);
       const schoolA = String(b?.school_id_a ?? b?.schoolA ?? "").trim();
       const schoolB = String(b?.school_id_b ?? b?.schoolB ?? "").trim();
@@ -730,7 +710,7 @@ async function handleDisputes(req: Request): Promise<Response> {
     }
 
     if (req.method === "GET") {
-      try { await ensureVine(sql); } catch (e) { logError("DISPUTES_FETCH_FAILED", e, { route: "/api/schools/disputes", phase: "ensure" }); }
+      try { await runVineMaintenance(sql); } catch (e) { logError("DISPUTES_FETCH_FAILED", e, { route: "/api/schools/disputes", phase: "ensure" }); }
       const url = new URL(req.url);
       const status = url.searchParams.get("status");
       const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "50", 10) || 50, 200);
@@ -760,7 +740,7 @@ async function handleDisputes(req: Request): Promise<Response> {
     }
 
     if (req.method === "PATCH") {
-      try { await ensureVine(sql); } catch (e) { logError("DISPUTES_RESOLVE_FAILED", e, { route: "/api/schools/disputes", phase: "ensure" }); }
+      try { await runVineMaintenance(sql); } catch (e) { logError("DISPUTES_RESOLVE_FAILED", e, { route: "/api/schools/disputes", phase: "ensure" }); }
       const b = await req.json().catch(() => null);
       const disputeId = String(b?.id ?? b?.dispute_id ?? "").trim();
       if (!disputeId) return NextResponse.json({ ok: false, code: "BAD_INPUT" }, { status: 400 });
@@ -786,22 +766,13 @@ async function handleDisputes(req: Request): Promise<Response> {
       const sB = await sql`SELECT id, name FROM physi_schools WHERE id = ${existing.school_id_b} LIMIT 1`;
 
       try {
-        const updates: string[] = [];
-        const vals: any[] = [];
-        updates.push("status = $" + (updates.length + 1));
-        vals.push(newStatus);
-        updates.push("resolved_at = NOW()");
-        updates.push("resolved_by = $" + (updates.length + 1));
-        vals.push(creatorUid);
+        // Inverted-audit P0: explicit whitelisted UPDATE (see schools PATCH).
+        let r: any[];
         if (b?.resolution_notes) {
-          updates.push("resolution_notes = $" + (updates.length + 1));
-          vals.push(String(b.resolution_notes).slice(0, 1000));
+          r = await sql`UPDATE physi_school_disputes SET status=${newStatus}, resolved_at=NOW(), resolved_by=${creatorUid}, resolution_notes=${String(b.resolution_notes).slice(0, 1000)} WHERE id=${disputeId} RETURNING *` as any;
+        } else {
+          r = await sql`UPDATE physi_school_disputes SET status=${newStatus}, resolved_at=NOW(), resolved_by=${creatorUid} WHERE id=${disputeId} RETURNING *` as any;
         }
-
-        const setClause = updates.join(", ");
-        const r = await sql`
-          UPDATE physi_school_disputes SET ${sql[setClause]} WHERE id = ${disputeId}
-          RETURNING *`;
 
         // Burn loser's coins
         let totalBurn = 0;
@@ -848,7 +819,7 @@ async function handleSchoolVotes(req: Request): Promise<Response> {
   try {
     const sql = getSql();
     if (!isDbConfigured() || !sql) return NextResponse.json(dbNotConfigured(), { status: 503 });
-    try { await ensureVine(sql); } catch {}
+    try { await runVineMaintenance(sql); } catch {}
     const url = new URL(req.url);
     if (req.method === "GET") {
       const normalized = url.searchParams.get("normalized") ?? url.searchParams.get("name");
@@ -886,7 +857,7 @@ async function handleDeptVotes(req: Request): Promise<Response> {
   try {
     const sql = getSql();
     if (!isDbConfigured() || !sql) return NextResponse.json(dbNotConfigured(), { status: 503 });
-    try { await ensureVine(sql); } catch {}
+    try { await runVineMaintenance(sql); } catch {}
     const url = new URL(req.url);
     if (req.method === "GET") {
       const schoolId = url.searchParams.get("school_id");

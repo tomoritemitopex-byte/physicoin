@@ -7,14 +7,17 @@ import { NextResponse } from "next/server";
 import { getSql, isDbConfigured, dbNotConfigured, } from "@/lib/db";
 import { registerApiAdapter } from "../api";
 import { registerFeature } from "../features";
-import { logError, getErrorMessage } from "../error";
+import { logError, getErrorMessage, isMissingTable } from "../error";
 import { GHOST_ACTIONS, prepareGhostChainQueries, buildGhostChainSigs } from "@/lib/ghostWitness";
-import { zkThresholdCheck } from "@/lib/zkAuthority";
+// NOTE (inverted-audit P1 K-P3): no ZK import on purpose — see timetable.ts note.
 
 export const verifyFeature = {
   id: "verify",
   label: "Verify",
-  nav: { href: "/app/verify", label: "Verify", short: "✓" },
+  // Inverted-audit P1 (K-C5): voting happens on /app/timetable (Yes/No on the
+  // card) — there is no /app/verify page, so the nav points at the real
+  // surface instead of a 404. See docs/spot-check.md §6.
+  nav: { href: "/app/timetable", label: "Verify", short: "✓" },
   apiRoute: "/api/verify",
   description: "Vote YES/NO/CANCEL with authority weight + proof receipts",
 };
@@ -26,81 +29,22 @@ const GENESIS_REQUIRED = 5; // container seed, not coded data — retarget moves
  *  recent network average (7-day window), bounded 3..12. Falls back to genesis
  *  only when no history exists.
  */
-async function dynamicRequiredFallback(tx: any): Promise<number> {
-  try {
-    const r = await tx`SELECT COALESCE(AVG(NULLIF(required_points,0)),5)::float as a FROM physi_events WHERE created_at > NOW() - INTERVAL '7 days'`;
-    const raw = Number((r as any)[0]?.a);
-    const v = Math.round(isFinite(raw) && raw>0 ? raw : GENESIS_REQUIRED);
-    return Math.max(3, Math.min(12, v));
-  } catch { return GENESIS_REQUIRED; }
-}
 
 /**
- * Satoshi P0-2: promoteIfQuorum — enforce required_points on the event row.
- * Promotion rule:
+ * Promotion rule (LIVE — enforced via computePromotion + preparePromotionQueries
+ * inside the vote transaction):
  *   canonical iff  yesW >= required_points (dynamic, not hardcoded)
  *                AND yes_ratio >= 0.66
- *                AND total >= 3
+ *                AND total >= 3 (anti-triviality floor, NOT the quorum)
  * Demotion rule:
  *   if NO votes break ratio < 0.66, flip back to 'pending'
- * Refactored: prepares query promises then returns them as array (no sequential awaits).
+ * Inverted-audit P0 (K-C2) reconciliation: the student-facing "8 classmates"
+ * promise refers to the scope-merge protocol (QUORUM_MIN=8 in /api/scopes);
+ * the per-event green tick uses required_points (dynamic 3..12, seeded 3/5 on
+ * create). Both numbers are exposed in every quorum response ({required,
+ * yesW, total, ratio}) and the UI binds "needs N more" to `required`
+ * (see app/app/timetable/page.tsx quorum(), WindingRoad tally text).
  */
-async function promoteIfQuorum(tx: any, eventId: string, verifierId: string): Promise<{ promoted: boolean; demoted: boolean; yesW: number; noW: number; total: number; ratio: number }> {
-  // aggregate weighted votes (consistent snapshot — caller should have fetched before tx in batch mode)
-  // For backwards compat, still supports sequential mode but prepares queries
-  const agg = await tx`SELECT vote, SUM(authority_weight)::float as w FROM physi_verifications WHERE event_id=${eventId} GROUP BY vote`;
-  let yesW = 0, noW = 0, total = 0;
-  for (const row of agg as Array<{vote:string; w:number}>) {
-    const weight = Number(row.w) || 0;
-    total += weight;
-    if (row.vote === "YES") yesW = weight;
-    if (row.vote === "NO") noW = weight;
-  }
-  const ratio = total > 0 ? yesW / total : 0;
-
-  // lock event row to prevent concurrent promotion races
-  const [ev] = await tx`SELECT id, status, required_points FROM physi_events WHERE id = ${eventId} FOR UPDATE`;
-  if (!ev) return { promoted: false, demoted: false, yesW, noW, total, ratio };
-
-  let required = Number(ev.required_points) || 0;
-  if (!required) required = await dynamicRequiredFallback(tx);
-  const promote = yesW >= required && ratio >= 0.66 && total >= 3;
-  const demote = ev.status === "verified" && noW > 0 && ratio < 0.66;
-
-  // Prepare query promises (no sequential awaits — batch via Promise.all)
-  const queries: any[] = [];
-  if (promote && ev.status !== "verified") {
-    const q1 = tx`UPDATE physi_events SET status='verified', authority_points=${yesW}, required_points=${total}, updated_at=NOW() WHERE id=${eventId}`;
-    const q2 = tx`INSERT INTO physi_canonical_log (event_id, yes_weight, total_weight, yes_ratio, promoted_by) VALUES (${eventId}, ${yesW}, ${total}, ${ratio}, ${verifierId})`;
-    queries.push(q1, q2);
-    // Earn-for-truth (proof-of-useful-work, separate ledger from the mint):
-    // poster bounty 0.5, each YES voter their row award (0.3 default).
-    try {
-      const [posted] = await tx`SELECT created_by FROM physi_events WHERE id=${eventId} LIMIT 1`;
-      const yesVoters = await tx`SELECT verifier_id, award::float AS award FROM physi_verifications WHERE event_id=${eventId} AND vote='YES'`;
-      if (posted?.created_by) {
-        queries.push(tx`UPDATE physi_users SET mining_balance = LEAST(10000, mining_balance + 0.5) WHERE id=${posted.created_by}`);
-        queries.push(tx`INSERT INTO physi_truth_rewards (user_id, event_id, kind, amount) VALUES (${posted.created_by}, ${eventId}, 'truth_poster', 0.5)`);
-      }
-      for (const v of yesVoters as Array<{verifier_id:string; award:number}>) {
-        const amt = Number(v.award) || 0.3;
-        queries.push(tx`UPDATE physi_users SET mining_balance = LEAST(10000, mining_balance + ${amt}) WHERE id=${v.verifier_id}`);
-        queries.push(tx`INSERT INTO physi_truth_rewards (user_id, event_id, kind, amount) VALUES (${v.verifier_id}, ${eventId}, 'truth_voter', ${amt})`);
-      }
-    } catch (e) {
-      logError("TRUTH_PAYOUT_FAILED", e, { route: "/api/verify", eventId });
-    }
-  } else if (demote) {
-    const q1 = tx`UPDATE physi_events SET status='pending', authority_points=${yesW}, required_points=${required}, updated_at=NOW() WHERE id=${eventId}`;
-    queries.push(q1);
-  } else {
-    const q1 = tx`UPDATE physi_events SET authority_points=${yesW}, required_points=${required}, updated_at=NOW() WHERE id=${eventId}`;
-    queries.push(q1);
-  }
-  try { await Promise.all(queries.map((q: any) => q.catch(() => null))); } catch {}
-
-  return { promoted: promote, demoted: demote, yesW, noW, total, ratio };
-}
 
 /**
  * Pure helper: compute promotion decision from pre-fetched aggregates and event row.
@@ -182,13 +126,9 @@ async function handleVerify(req: Request): Promise<Response> {
       if (!["YES", "NO", "CANCEL"].includes(b.vote)) {
         return NextResponse.json({ ok: false, code: "BAD_VOTE", message: getErrorMessage("BAD_VOTE") }, { status: 400 });
       }
-      // Ensure vote bonds table exists before transaction (for stake inside tx)
-      if (b.vote !== "CANCEL") {
-        try {
-          const { ensureVoteBonds } = await import("@/lib/db");
-          await ensureVoteBonds();
-        } catch {}
-      }
+      // Inverted-audit P0 (K-A3): NO lazy ensureVoteBonds() on the hot path —
+      // build-time migrate owns DDL. If physi_vote_bonds is missing,
+      // stakeForVoteTx returns TABLE_NOT_READY and we fail closed (503).
       try {
         // --- Pre-transaction reads & pure computation ---
         const [u] = await sql`SELECT authority_final, rep_ghost_sig, mining_balance FROM physi_users WHERE id = ${b.verifier_id} LIMIT 1`;
@@ -282,6 +222,17 @@ async function handleVerify(req: Request): Promise<Response> {
         const runTx = async () => {
           let innerVerification: any = null;
           await sql.transaction(async (tx: any) => {
+            // Inverted-audit P0 (K-P1): serialize ghost-chain extension. prev
+            // was read pre-tx for projection; re-read it here under
+            // FOR UPDATE so two concurrent votes can't fork the chain (same
+            // prev → two children). Timestamp stays fixed so created_at
+            // matches the hashed payload.
+            let lockedPrev: string | null = ghostBuild.prev;
+            try {
+              const locked: any[] = await tx`SELECT rep_ghost_sig FROM physi_users WHERE id=${b.verifier_id} FOR UPDATE` as any;
+              if (locked.length) lockedPrev = (locked[0] as any).rep_ghost_sig ?? null;
+            } catch {}
+            const lockedBuild = buildGhostChainSigs(lockedPrev, act, String(b.verifier_id), ghostBuild.timestamp);
             // 1. Stake deduction + bond insert/update atomically (free re-vote fix: released/burned re-charged)
             if (b.vote !== "CANCEL") {
               const { stakeForVoteTx, VOTE_STAKE } = await import("@/lib/voteBond");
@@ -299,8 +250,8 @@ async function handleVerify(req: Request): Promise<Response> {
               ON CONFLICT (verifier_id, event_id) DO UPDATE SET vote = EXCLUDED.vote, authority_weight = EXCLUDED.authority_weight, is_witness = EXCLUDED.is_witness, squad_boost = EXCLUDED.squad_boost, award = EXCLUDED.award
               RETURNING *`;
             innerVerification = verifRows?.[0] ?? (Array.isArray(verifRows) ? verifRows[0] : null);
-            // 3. Ghost Witness: extend chain
-            const ghostQueries = prepareGhostChainQueries(tx, String(b.verifier_id), act, ghostBuild.prev, ghostBuild.newSig, ghostBuild.timestamp);
+            // 3. Ghost Witness: extend chain from the LOCKED prev
+            const ghostQueries = prepareGhostChainQueries(tx, String(b.verifier_id), act, lockedBuild.prev, lockedBuild.newSig, lockedBuild.timestamp);
             await Promise.all(ghostQueries);
             // 4. Quorum promotion/demotion
             const promoQueries = preparePromotionQueries(tx, b.event_id, b.verifier_id, quorumDecision, (ev as any).status);
@@ -332,6 +283,8 @@ async function handleVerify(req: Request): Promise<Response> {
           if (e?.stakeRes) {
             const sr = e.stakeRes;
             if (sr.code === "INSUFFICIENT_STAKE") return NextResponse.json({ ok:false, code:"INSUFFICIENT_STAKE", message: sr.message }, { status:402 });
+            // Inverted-audit P0 (K-A3): fail closed when DDL is missing.
+            if (sr.code === "TABLE_NOT_READY") return NextResponse.json({ ok:false, code:"TABLE_NOT_READY", message: getErrorMessage("TABLE_NOT_READY") }, { status:503 });
             return NextResponse.json({ ok:false, code: sr.code, message: sr.message }, { status:500 });
           }
           throw e;
@@ -410,6 +363,12 @@ async function handleVerify(req: Request): Promise<Response> {
         }
         if (String((e as Error).message).includes("EVENT_NOT_FOUND")) {
           return NextResponse.json({ ok: false, code: "NOT_FOUND", message: getErrorMessage("NOT_FOUND") }, { status: 404 });
+        }
+        // Inverted-audit P0 (K-A3): fail closed when build-time migrate hasn't
+        // run — never confuse missing DDL with a vote bug.
+        if (isMissingTable(e)) {
+          logError("TABLE_NOT_READY", e, { route: "/api/verify", method: "POST" });
+          return NextResponse.json({ ok: false, code: "TABLE_NOT_READY", message: getErrorMessage("TABLE_NOT_READY") }, { status: 503 });
         }
         logError("VERIFY_FAILED", e, { route: "/api/verify", method: "POST" });
         return NextResponse.json({ ok: false, code: "VERIFY_FAILED", message: getErrorMessage("VERIFY_FAILED") }, { status: 500 });

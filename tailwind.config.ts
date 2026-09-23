@@ -21,6 +21,9 @@ const config: Config = {
       fontFamily: {
         mono: ['JetBrains Mono', 'monospace'],
         sans: ['Inter', 'system-ui', 'sans-serif'],
+        // Inverted-audit P1 (K-D3): `font-inter` was used in layouts but never
+        // defined here — only worked via inline style. Now a real utility.
+        inter: ['var(--font-inter)', 'Inter', 'system-ui', 'sans-serif'],
         fredoka: ['var(--font-fredoka)', 'Fredoka', 'system-ui', 'sans-serif'],
       },
       spacing: {

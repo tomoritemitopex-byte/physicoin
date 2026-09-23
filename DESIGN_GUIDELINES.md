@@ -1,5 +1,12 @@
 # PHYSI Design Refresh — 2026-09-06
 
+> Status note (inverted-audit P1 K-D1/K-D2, 2026-09-23): the Dawn tokens and
+> `NEXT_PUBLIC_THEME` switching described below never landed in code.
+> Runtime truth is dark navy (`app/globals.css :root`: `--physi-bg #07111f`),
+> `lib/adapters/theme.ts` only registers `campus`+`forest` (no `dawn`), and
+> `themeCssVars`/`themeRootCss` have zero call sites — the env var cannot
+> affect the DOM. Treat this doc as a proposal, not the implemented system.
+
 ## User Preference (Samuel Tomori / DREAM)
 - **Design complaint**: "the design looks like a 1980 design old"
 - **Solution**: White-paper aesthetic with coral accent instead of dark forest glass everywhere

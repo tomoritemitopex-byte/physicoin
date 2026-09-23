@@ -63,9 +63,11 @@ async function handleMining(req: Request): Promise<Response> {
           }
         } catch {}
         const mult = Number((u[0] as { authority_final?: number }).authority_final ?? 1.0);
+        // Inverted-audit P0 (K-E1): single reward read per request — the old
+        // code called getHalvedBase() three times plus a dead `bonus` line
+        // whose Math.pow always evaluated to a constant.
         const halvedBase = await getHalvedBase(sql);
         const earnedBase = +(halvedBase * mult).toFixed(2);
-        const bonus = MANUAL_BONUS * Math.pow(0.5, Math.floor((await getHalvedBase(sql)) !== BASE_REWARD_RAW ? 0 : 0)); // keep bonus constant for now
         // bonus not halved separately; halvedBase already accounts
         const earned = +(earnedBase + MANUAL_BONUS).toFixed(2);
         const cappedEarned = Math.min(earned, BALANCE_CAP - Number(u[0].mining_balance));

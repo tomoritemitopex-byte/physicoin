@@ -700,6 +700,8 @@ export async function ensureSlotClaims(): Promise<void> {
     )`;
   await c`CREATE INDEX IF NOT EXISTS physi_slot_claims_slot_idx ON physi_slot_claims (slot_key)`;
   await c`CREATE INDEX IF NOT EXISTS physi_slot_claims_event_idx ON physi_slot_claims (event_id)`;
+  // Inverted-audit P0 (K-A7): dedupe key — mirrors schema.physi.sql
+  await c`CREATE UNIQUE INDEX IF NOT EXISTS physi_slot_claims_slot_event_venue_uidx ON physi_slot_claims (slot_key, event_id, lower(venue))`;
   try { await c`ALTER TABLE physi_events ADD COLUMN IF NOT EXISTS slot_key TEXT`; } catch {}
   try { await c`CREATE INDEX IF NOT EXISTS physi_events_slot_idx ON physi_events (slot_key) WHERE status='pending'`; } catch {}
 }
@@ -755,9 +757,24 @@ export async function ensureAuthColumns(): Promise<void> {
   if (!c) return;
   await ensureUsers();
   try { await c`ALTER TABLE physi_users ADD COLUMN IF NOT EXISTS password_hash TEXT`; } catch {}
-  // mining_balance cap — app-level LEAST() but also add check constraint if missing
-  try { await c`ALTER TABLE physi_users ADD CONSTRAINT physi_users_balance_cap CHECK (mining_balance <= 10000)`; } catch {}
-  try { await c`ALTER TABLE physi_users ADD CONSTRAINT physi_users_balance_nonneg CHECK (mining_balance >= 0)`; } catch {}
+  // Inverted-audit P0 (K-A2): ADD CONSTRAINT has no IF NOT EXISTS — guard via
+  // pg_constraint so repeated runs never throw. (Neon serverless client has no
+  // .unsafe(), so guard with a SELECT + plain ALTER instead of a DO block.)
+  const hasUnsafe = typeof (c as any).unsafe === "function";
+  try {
+    const cap = await c`SELECT 1 FROM pg_constraint WHERE conname = 'physi_users_balance_cap' LIMIT 1` as any[];
+    if (!cap.length) {
+      if (hasUnsafe) await (c as any).unsafe(`ALTER TABLE physi_users ADD CONSTRAINT physi_users_balance_cap CHECK (mining_balance <= 10000)`);
+      else await c`ALTER TABLE physi_users ADD CONSTRAINT physi_users_balance_cap CHECK (mining_balance <= 10000)`;
+    }
+  } catch {}
+  try {
+    const nonneg = await c`SELECT 1 FROM pg_constraint WHERE conname = 'physi_users_balance_nonneg' LIMIT 1` as any[];
+    if (!nonneg.length) {
+      if (hasUnsafe) await (c as any).unsafe(`ALTER TABLE physi_users ADD CONSTRAINT physi_users_balance_nonneg CHECK (mining_balance >= 0)`);
+      else await c`ALTER TABLE physi_users ADD CONSTRAINT physi_users_balance_nonneg CHECK (mining_balance >= 0)`;
+    }
+  } catch {}
 }
 
 export async function ensureTruthRewards(): Promise<void> {
@@ -786,6 +803,26 @@ export async function ensureFaucetDrips(): Promise<void> {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY (user_id, week)
     )`;
+}
+
+/**
+ * Inverted-audit P1 (K-E4): server-authoritative streak-rescue ledger.
+ * Mirrors database/schema.physi.sql. 1 rescue / 14d / pair is a policy
+ * constant enforced by query in POST /api/streak/rescue, not by constraint.
+ */
+export async function ensureStreakRescues(): Promise<void> {
+  const c = getSql() ?? sql;
+  if (!c) return;
+  await c`
+    CREATE TABLE IF NOT EXISTS physi_streak_rescues (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      rescuer_id UUID NOT NULL REFERENCES physi_users(id) ON DELETE CASCADE,
+      rescued_id UUID NOT NULL REFERENCES physi_users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CHECK (rescuer_id <> rescued_id)
+    )`;
+  await c`CREATE INDEX IF NOT EXISTS physi_streak_rescues_pair_idx ON physi_streak_rescues (rescuer_id, rescued_id, created_at DESC)`;
+  await c`CREATE INDEX IF NOT EXISTS physi_streak_rescues_rescued_idx ON physi_streak_rescues (rescued_id, created_at DESC)`;
 }
 
 /**

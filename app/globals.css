@@ -13,7 +13,29 @@
   --physi-lime: #b9f66a;
   --physi-amber: #f7bd62;
   --physi-red: #ff7c86;
+  /* Inverted-audit P1 (K-D3): --font-mono was referenced (~15 sites) but never
+     defined — fell back to generic monospace silently. Now explicit. */
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
+
+/* Inverted-audit P1 (K-D4): ghost keyframes — GhostAvatar sets .ghost-drift +
+   --ghost-drift/--ghost-wobble vars but no keyframes existed, so drift was a
+   no-op. Uses the `translate` property (not `transform`) so the inline
+   scale() transform on the same node is preserved. */
+@keyframes ghost-drift {
+  0%, 100% { translate: 0 0; }
+  50% { translate: var(--ghost-drift, 4px) -6px; }
+}
+.ghost-drift { animation: ghost-drift var(--ghost-wobble, 1200ms) ease-in-out infinite; }
+@keyframes ghost-enter {
+  from { opacity: 0; transform: scale(.6); }
+  to { opacity: 1; transform: scale(1); }
+}
+.ghost-enter { animation: ghost-enter 300ms ease-out both; }
+.ghost-row { display: flex; align-items: center; gap: 4px; }
+/* RoadmapShell daylight wrapper — positioning context for sticky/scroll-snap children. */
+.campus-day { position: relative; }
+@media (prefers-reduced-motion: reduce) { .ghost-drift, .ghost-enter { animation: none; } }
 
 html { scroll-behavior: smooth; -webkit-font-smoothing: antialiased; }
 html, body { background: var(--physi-bg); color: var(--physi-text); font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif; line-height: 1.5; }

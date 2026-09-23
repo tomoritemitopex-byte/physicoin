@@ -386,6 +386,11 @@ CREATE TABLE IF NOT EXISTS physi_slot_claims (
 );
 CREATE INDEX IF NOT EXISTS physi_slot_claims_slot_idx ON physi_slot_claims (slot_key);
 CREATE INDEX IF NOT EXISTS physi_slot_claims_event_idx ON physi_slot_claims (event_id);
+-- Inverted-audit P0 (K-A7): dedupe key for slot claims — (slot, event, venue).
+-- Backfill + claim inserts use ON CONFLICT DO NOTHING; without this unique
+-- index duplicates accumulated silently on every POST. NULL event_id rows
+-- (contender fallback inserts) never conflict, which is intended.
+CREATE UNIQUE INDEX IF NOT EXISTS physi_slot_claims_slot_event_venue_uidx ON physi_slot_claims (slot_key, event_id, lower(venue));
 ALTER TABLE physi_events ADD COLUMN IF NOT EXISTS slot_key TEXT;
 CREATE INDEX IF NOT EXISTS physi_events_slot_idx ON physi_events (slot_key) WHERE status='pending';
 
@@ -424,9 +429,19 @@ CREATE TABLE IF NOT EXISTS physi_revoked_tokens (
 CREATE INDEX IF NOT EXISTS physi_revoked_tokens_expires_idx ON physi_revoked_tokens (expires_at);
 
 -- Auth + scope-mining additive columns
+-- Inverted-audit P0 (K-A2): ADD CONSTRAINT has no IF NOT EXISTS in Postgres —
+-- expressed as idempotent DO blocks so re-running migrate never aborts.
 ALTER TABLE physi_users ADD COLUMN IF NOT EXISTS password_hash TEXT;
-ALTER TABLE physi_users ADD CONSTRAINT physi_users_balance_cap CHECK (mining_balance <= 10000);
-ALTER TABLE physi_users ADD CONSTRAINT physi_users_balance_nonneg CHECK (mining_balance >= 0);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'physi_users_balance_cap') THEN
+    ALTER TABLE physi_users ADD CONSTRAINT physi_users_balance_cap CHECK (mining_balance <= 10000);
+  END IF;
+END $$;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'physi_users_balance_nonneg') THEN
+    ALTER TABLE physi_users ADD CONSTRAINT physi_users_balance_nonneg CHECK (mining_balance >= 0);
+  END IF;
+END $$;
 ALTER TABLE physi_scope_votes ADD COLUMN IF NOT EXISTS rep_earned NUMERIC(5,2) NOT NULL DEFAULT 0;
 
 -- Truth rewards (proof-of-useful-work) + weekly faucet.
@@ -499,5 +514,21 @@ CREATE TABLE IF NOT EXISTS physi_school_historical_map (
 );
 CREATE INDEX IF NOT EXISTS physi_hist_map_kind_idx ON physi_school_historical_map (kind);
 CREATE INDEX IF NOT EXISTS physi_hist_map_archived_idx ON physi_school_historical_map (archived_at DESC);
+
+-- Streak rescues (server-authoritative ledger for Keep-The-Fire rescues).
+-- Inverted-audit P1 (K-E4): client localStorage rescue was unfarmable-proof
+-- only by obscurity. Rules enforced in POST /api/streak/rescue:
+-- rescuer != rescued, rescued missed >=1 day (no check-in in 24h),
+-- 1 rescue per 14d per pair (checked by query, not constraint, so the
+-- window stays a policy constant in code).
+CREATE TABLE IF NOT EXISTS physi_streak_rescues (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  rescuer_id UUID NOT NULL REFERENCES physi_users(id) ON DELETE CASCADE,
+  rescued_id UUID NOT NULL REFERENCES physi_users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK (rescuer_id <> rescued_id)
+);
+CREATE INDEX IF NOT EXISTS physi_streak_rescues_pair_idx ON physi_streak_rescues (rescuer_id, rescued_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS physi_streak_rescues_rescued_idx ON physi_streak_rescues (rescued_id, created_at DESC);
 
 

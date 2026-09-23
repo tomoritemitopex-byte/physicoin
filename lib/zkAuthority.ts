@@ -48,7 +48,11 @@ export function zkVerifyAuthority(
   return { verified: r.passed, proof: r.proof };
 }
 
-/** Check if event requires ZK attestation (helper for API) */
+/** Check if event requires ZK attestation (helper for API)
+ * Inverted-audit P1 (K-P3): DECLARED FUTURE GATE — no caller enforces this
+ * yet. Recording is_zk_attested without gating is intentional (advisory
+ * signal); do not present ZK as an enforced control until a caller gates
+ * global/university/faculty writes on it. */
 export function requiresZkAttestation(scopeType: string): boolean {
   const t = String(scopeType).toLowerCase();
   return ["global","university","faculty"].includes(t);

@@ -11,8 +11,7 @@ import { NextResponse } from "next/server";
 import { getSql, isDbConfigured, dbNotConfigured } from "@/lib/db";
 import { registerApiAdapter } from "../api";
 import { registerFeature } from "../features";
-import { logError, getErrorMessage } from "../error";
-import { ensureFaucetDrips, ensureTruthRewards } from "@/lib/db";
+import { logError, getErrorMessage, isMissingTable } from "../error";
 
 registerFeature({
   id: "faucet",
@@ -33,8 +32,8 @@ function isoWeek(d = new Date()): string {
 async function drip(): Promise<Response> {
   try {
     if (!isDbConfigured()) return NextResponse.json(dbNotConfigured(), { status: 503 });
-    try { await ensureTruthRewards(); } catch {}
-    try { await ensureFaucetDrips(); } catch {}
+    // Inverted-audit P0 (K-A3): no lazy ensure*() on the cron path —
+    // build-time migrate owns DDL; missing tables fail closed below.
     const sql = getSql();
     if (!sql) return NextResponse.json(dbNotConfigured(), { status: 503 });
     const week = isoWeek();
@@ -46,16 +45,29 @@ async function drip(): Promise<Response> {
     let dripped = 0;
     for (const w of wallets as Array<{ id: string }>) {
       try {
+        // Inverted-audit P1 (K-E3): claim the (user, week) row FIRST with
+        // ON CONFLICT DO NOTHING. A concurrent/retried cron fire loses the
+        // race here and skips — balance + rewards are only credited by the
+        // winner, so double-pay is structurally impossible.
+        const claimed: any[] = await sql`INSERT INTO physi_faucet_drips (user_id, week, amount) VALUES (${w.id}, ${week}, 1) ON CONFLICT (user_id, week) DO NOTHING RETURNING *` as any;
+        if (!claimed.length) continue;
         await sql`UPDATE physi_users SET mining_balance = LEAST(10000, mining_balance + 1) WHERE id = ${w.id}`;
         await sql`INSERT INTO physi_truth_rewards (user_id, kind, amount) VALUES (${w.id}, 'faucet', 1)`;
-        await sql`INSERT INTO physi_faucet_drips (user_id, week, amount) VALUES (${w.id}, ${week}, 1)`;
         dripped++;
       } catch (e) {
+        if (isMissingTable(e)) {
+          logError("TABLE_NOT_READY", e, { route: "/api/faucet" });
+          return NextResponse.json({ ok: false, code: "TABLE_NOT_READY", message: "Faucet tables not ready — redeploy to run migration." }, { status: 503 });
+        }
         logError("FAUCET_USER_FAILED", e, { route: "/api/faucet", user: w.id });
       }
     }
     return NextResponse.json({ ok: true, dripped, week });
   } catch (e) {
+    if (isMissingTable(e)) {
+      logError("TABLE_NOT_READY", e, { route: "/api/faucet" });
+      return NextResponse.json({ ok: false, code: "TABLE_NOT_READY", message: "Faucet tables not ready — redeploy to run migration." }, { status: 503 });
+    }
     logError("FAUCET_FAILED", e, { route: "/api/faucet" });
     return NextResponse.json({ ok: false, code: "INTERNAL", message: getErrorMessage("INTERNAL") }, { status: 500 });
   }

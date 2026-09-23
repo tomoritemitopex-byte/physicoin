@@ -7,6 +7,13 @@ export const dynamic = "force-dynamic";
 /**
  * GET /api/ghost-chain?user_id=UUID&verify=1
  * Returns user's ghost chain + current sig, optionally verifies chain integrity.
+ *
+ * Inverted-audit P1 (K-P2) — reviewed, INTENTIONALLY PUBLIC: peer verification
+ * requires any coursemate to fetch + verify a chain (docs: "post as ghost,
+ * fetch as peer"). Anonymity holds because the user row selects ONLY
+ * id/rep_ghost_sig/ghost_sig_updated_at — never nickname, handle, programme,
+ * or level — and Ghost Mode renders nickname='ghost' in GET surfaces.
+ * Do NOT add handle/PII columns to these SELECTs.
  */
 export async function GET(req: NextRequest) {
   const sql = getSql();

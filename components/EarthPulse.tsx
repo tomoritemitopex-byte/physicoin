@@ -88,7 +88,6 @@ export default function EarthPulse() {
         ))}
         {shards > 6 && <span>+{shards - 6}</span>}
         <span className="ml-2 hidden sm:inline-flex items-center gap-1 rounded-full border border-white/10 bg-black/30 px-2 py-0.5 text-white/60">?school=ANY · school.json shard · glass forest #0d3b2a/70 blur16</span>
-        <span className="ml-auto hidden sm:inline text-emerald-100/40">WAT · live · 30s poll · Fredoka · violet 1.2s</span>
       </div>
     </div>
   );

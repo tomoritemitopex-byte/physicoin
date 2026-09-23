@@ -3,6 +3,7 @@
  * stakeForVoteTx: SELECT ... FOR UPDATE inside tx, assert balance, deduct, INSERT/UPDATE bond held.
  * P0 fix: stake is now atomic with vote — no lost Rep, no double-spend, no free re-vote.
  */
+import { isMissingTable } from "./adapters/error";
 
 export const VOTE_STAKE = 1.0;
 export const MINING_BALANCE_CAP = 10000;
@@ -55,7 +56,9 @@ export async function stakeForVoteTx(tx: any, userId: string, eventId: string, c
     } else {
       await tx`INSERT INTO physi_vote_bonds (verifier_id, event_id, stake, status) VALUES (${userId}, ${eventId}, ${cost}, 'held') ON CONFLICT (verifier_id, event_id) DO UPDATE SET stake=${cost}, status='held'`;
     }
-  } catch {
+  } catch (e) {
+    // Inverted-audit P0 (K-A3): missing DDL fails closed, never as a vote bug.
+    if (isMissingTable(e)) return { ok: false, code: "TABLE_NOT_READY", message: "Vote bonds table not ready — redeploy to run migration." };
     // tx will rollback deduct on outer failure; no manual refund needed inside tx
     return { ok: false, code: "DB_ERROR", message: "Failed to hold bond" };
   }

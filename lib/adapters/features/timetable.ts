@@ -7,8 +7,25 @@ import { NextResponse } from "next/server";
 import { getSql, isDbConfigured, dbNotConfigured, } from "@/lib/db";
 import { registerApiAdapter } from "../api";
 import { registerFeature } from "../features";
-import { logError, getErrorMessage } from "../error";
-import { zkThresholdCheck } from "@/lib/zkAuthority";
+import { logError, getErrorMessage, getErrorHint } from "../error";
+// NOTE (inverted-audit P1 K-P3): no ZK import on purpose — is_zk_attested is
+// recorded, but requiresZkAttestation() gating is declared future work
+// (see lib/zkAuthority.ts), not an enforced check. Importing the checker
+// without calling it would imply false confidence.
+
+// Zero-style JSON error — every error returns {ok:false, code, message, hint, retryAfter?}
+// hint tells agent exactly what token/field to fix; 429 includes retryAfter
+function jsonError(code: string, status: number, opts?: { message?: string; hint?: string; retryAfter?: number; detail?: string; extra?: Record<string, unknown> }) {
+  const message = opts?.message ?? getErrorMessage(code);
+  const hint = opts?.hint ?? getErrorHint(code, opts?.detail);
+  const body: Record<string, unknown> = { ok: false, code, message, hint };
+  if (opts?.retryAfter !== undefined) body.retryAfter = opts.retryAfter;
+  if (opts?.detail) body.detail = opts.detail;
+  if (opts?.extra) Object.assign(body, opts.extra);
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (opts?.retryAfter !== undefined) headers["Retry-After"] = String(opts.retryAfter);
+  return NextResponse.json(body, { status, headers });
+}
 
 export const timetableFeature = {
   id: "timetable",
@@ -27,7 +44,10 @@ function isSeverity(v:any): v is Severity { return SEVERITIES.includes(String(v)
 async function handleTimetable(req: Request): Promise<Response> {
   try {
     const sql = getSql();
-    if (!isDbConfigured() || !sql) return NextResponse.json(dbNotConfigured(), { status: 503 });
+    if (!isDbConfigured() || !sql) {
+      const hint = (dbNotConfigured() as any).hint ?? getErrorHint("DB_NOT_CONFIGURED");
+      return jsonError("DB_NOT_CONFIGURED", 503, { hint });
+    }
 
     // PATCH / PUT — update venue/time and log history diff LT2->LT5
     if (req.method === "PATCH" || req.method === "PUT") {
@@ -35,11 +55,11 @@ async function handleTimetable(req: Request): Promise<Response> {
       // auth required for mutation
       const { getAuthUserId } = await import("@/lib/auth");
       const patchAuth = getAuthUserId(req as Request);
-      if (!patchAuth) return NextResponse.json({ ok:false, code:"UNAUTHORIZED", message:"Missing session token" }, { status:401 });
+      if (!patchAuth) return jsonError("UNAUTHORIZED", 401, { hint: getErrorHint("UNAUTHORIZED"), detail: "Missing session token for PATCH" });
       let body: any;
-      try { body = await req.json(); } catch(e){ return NextResponse.json({ ok:false, code:"BAD_INPUT", message:getErrorMessage("BAD_INPUT")},{status:400}); }
+      try { body = await req.json(); } catch(e){ return jsonError("BAD_INPUT", 400, { hint: "Fix field 'body': invalid JSON. Send {\"id\":\"<uuid>\",\"venue\":\"...\",\"event_date\":\"YYYY-MM-DD\",\"event_time\":\"HH:MM\",\"severity\":\"move|shift|cancelled\"}.", detail: "JSON parse failed" }); }
       const id = String(body?.id || body?.event_id || "").trim();
-      if (!id) return NextResponse.json({ ok:false, code:"BAD_INPUT", message:"id required"},{status:400});
+      if (!id) return jsonError("BAD_INPUT", 400, { hint: "Fix field 'id' (or 'event_id'): required non-empty string for PATCH. Include the event's id in the JSON body.", detail: "id required" });
       const rows = await sql`SELECT * FROM physi_events WHERE id=${id} LIMIT 1`;
       if (!rows.length) return NextResponse.json({ ok:false, code:"NOT_FOUND", message:getErrorMessage("NOT_FOUND")},{status:404});
       const prev = rows[0] as any;
@@ -129,18 +149,30 @@ async function handleTimetable(req: Request): Promise<Response> {
           if (competing.length) {
             const existing = competing[0];
             const sk = slotKey(slot);
-            try { const { ensureSlotClaims } = await import("@/lib/db"); await ensureSlotClaims(); } catch {}
+            // Inverted-audit P0 (K-A3): no lazy ensureSlotClaims() on the hot
+            // path — build-time migrate owns DDL. If physi_slot_claims is
+            // missing the inserts below throw 42P01 and are caught; the
+            // request still returns the competing event honestly.
             // backfill existing pending events into slot_claims if not present
             try {
               for (const c of competing) {
                 await sql`INSERT INTO physi_slot_claims (slot_key, event_id, claimer_id, venue, event_time, title) VALUES (${sk}, ${c.id}, ${c.created_by}, ${String(c.venue)}, ${String(c.event_time).slice(0,5)}, ${String(c.title)}) ON CONFLICT DO NOTHING`;
               }
             } catch {}
-            // insert your competing claim
+            // insert your competing claim (idempotent: unique index on
+            // (slot_key, event_id, lower(venue)) turns retries into no-ops)
             let yourClaim: any = null;
             try {
-              const cr: any = await sql`INSERT INTO physi_slot_claims (slot_key, event_id, claimer_id, venue, event_time, title) VALUES (${sk}, ${existing.id}, ${(b.created_by as string) ?? null}, ${String(b.venue)}, ${String(b.event_time).slice(0,5)}, ${String(b.title)}) RETURNING *`;
+              const cr: any = await sql`INSERT INTO physi_slot_claims (slot_key, event_id, claimer_id, venue, event_time, title) VALUES (${sk}, ${existing.id}, ${(b.created_by as string) ?? null}, ${String(b.venue)}, ${String(b.event_time).slice(0,5)}, ${String(b.title)}) ON CONFLICT DO NOTHING RETURNING *`;
               yourClaim = cr[0] ?? null;
+              if (!yourClaim) {
+                // idempotent retry: the row already exists — fetch it so the
+                // client still gets a stable your_claim_id
+                try {
+                  const prev: any = await sql`SELECT * FROM physi_slot_claims WHERE slot_key=${sk} AND event_id=${existing.id} AND lower(venue)=lower(${String(b.venue)}) LIMIT 1`;
+                  yourClaim = prev[0] ?? null;
+                } catch {}
+              }
             } catch {
               // if insert fails due to duplicate venue, still fetch claims
               try {

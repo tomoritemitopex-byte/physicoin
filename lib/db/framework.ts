@@ -13,6 +13,15 @@
  *                                shard by scope_type/scope_value via shardKey()
  * Phase 3  (cache)              withCache(key, ttl, fn) — Redis/Upstash
  * ```
+ *
+ * Inverted-audit P0 (K-A5) — SHARDING DECISION (settled): writes and quorum
+ * reads (timetable/verify/mining) are PRIMARY-SCOPED via getSql(). Only
+ * stats aggregates across shards via fanOutShards(). Rationale: per-scope
+ * write routing (getShardSql) without per-scope quorum reads would compute
+ * green ticks on shard subsets — wrong ticks are worse than a hot primary.
+ * scripts/migrate.mjs migrates EVERY shard so a future promotion never lands
+ * on a half-migrated database. Do not route votes to getShardSql() unless
+ * the read path shards identically in the same transaction.
  */
 
 import { neon } from "@neondatabase/serverless";

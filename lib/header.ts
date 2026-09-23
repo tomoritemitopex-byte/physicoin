@@ -70,6 +70,10 @@ export async function rebuildHeader(date: string): Promise<DailyHeader> {
   const hdr = await buildHeader(date);
   const sql = getSql();
   if (sql) {
+    // Inverted-audit P2 (K-P4) — reviewed: the persist is a SINGLE upsert
+    // statement (atomic at row level), so /api/proof can never observe a
+    // half-written header. buildHeader() reads are best-effort snapshots;
+    // a concurrent vote triggers its own rebuild, converging on the next read.
     try {
       await sql`INSERT INTO physi_headers (date, merkle_root, ghost_tip_root, prev_hash, hmac, count) VALUES (${hdr.date}::date, ${hdr.merkleRoot}, ${hdr.ghostTipRoot}, ${hdr.prevHash}, ${hdr.hmac}, ${hdr.count}) ON CONFLICT (date) DO UPDATE SET merkle_root=EXCLUDED.merkle_root, ghost_tip_root=EXCLUDED.ghost_tip_root, prev_hash=EXCLUDED.prev_hash, hmac=EXCLUDED.hmac, count=EXCLUDED.count`;
     } catch {}
