@@ -208,3 +208,19 @@ no DB.
 1. Neon cold-start + `force-dynamic`-everywhere cost/latency under real cohort load — needs production numbers, not reasoning.
 2. HMAC session + vote-stake economics vs determined Sybil with many real devices — social-layer attack, code can't fully close.
 3. WindingRoad 525-line client overlay (`WindingRoad.tsx`) swipe/offline/XP paths — needs device testing, not static audit.
+
+## BEDROCK Phase 1 (shipped)
+
+- Rosters: `physi_rosters` + `physi_roster_members` (schema + `ensureRosters()`),
+  `POST /api/roster` create/rotate/join, `GET` roster + members / member's
+  rosters, registered as `roster` ApiAdapter. Events carry nullable
+  `roster_id`; posting/voting on roster-linked events requires membership
+  (`ROSTER_ONLY` 403). Legacy open events unaffected.
+- Blind-until-locked: `GET /api/verify?event_id=` strips `verifier_id` while
+  pending, reveals on lock (`locked` flag in quorum payload). Receipts
+  (`?verifier_id=`) now require a matching session (was world-readable).
+- Founding marks: `physi_users.founding_mark` backfilled 1:1 from
+  `mining_balance`; profile GET returns explicit columns (no more
+  `SELECT *` — was leaking `password_hash`).
+- Void skin (step 1): true-black tokens, black physi-card, unified PWA chrome.
+  Font/component purge is follow-up, not this phase.

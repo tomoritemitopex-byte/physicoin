@@ -7,7 +7,7 @@ import { NextResponse } from "next/server";
 import { getSql, isDbConfigured, dbNotConfigured, } from "@/lib/db";
 import { registerApiAdapter } from "../api";
 import { registerFeature } from "../features";
-import { logError, getErrorMessage, getErrorHint } from "../error";
+import { logError, getErrorMessage, getErrorHint, isMissingTable } from "../error";
 // NOTE (inverted-audit P1 K-P3): no ZK import on purpose — is_zk_attested is
 // recorded, but requiresZkAttestation() gating is declared future work
 // (see lib/zkAuthority.ts), not an enforced check. Importing the checker
@@ -119,6 +119,22 @@ async function handleTimetable(req: Request): Promise<Response> {
       const prevVenue = (b.prev_venue as string) ?? (b.from_venue as string) ?? null;
       const prevTime = (b.prev_event_time as string) ?? (b.from_time as string) ?? null;
       const prevDate = (b.prev_event_date as string) ?? null;
+      // BEDROCK roster bonding: optional roster_id links the event to a class
+      // roster; posting to a roster requires membership. NULL = legacy open.
+      const rosterId: string | null = String((b as any).roster_id ?? "").trim() || null;
+      if (rosterId) {
+        try {
+          const { isRosterMember } = await import("./roster");
+          const rr: any[] = await sql`SELECT id FROM physi_rosters WHERE id=${rosterId} LIMIT 1` as any;
+          if (!rr.length) return NextResponse.json({ ok:false, code:"BAD_INPUT", message:"roster not found" }, { status:400 });
+          if (!(await isRosterMember(sql, rosterId, String((b.created_by as string) ?? "")))) {
+            return NextResponse.json({ ok:false, code:"ROSTER_ONLY", message:getErrorMessage("ROSTER_ONLY") }, { status:403 });
+          }
+        } catch (e) {
+          if (isMissingTable(e)) return NextResponse.json({ ok:false, code:"TABLE_NOT_READY", message:"Roster tables not ready — redeploy to run migration." }, { status:503 });
+          throw e;
+        }
+      }
       // Satoshi P0-2: KILL auto-canonical — events ALWAYS start as 'pending'.
       // status, authority_points, required_points are server-controlled.
       // No client can create a 'verified' event directly.
@@ -222,8 +238,8 @@ async function handleTimetable(req: Request): Promise<Response> {
         const { slotKey } = await import("@/lib/mempool");
         const sk2 = slotKey({ scope_value: (b.scope_value as string) ?? null, event_date: String(b.event_date), event_time: String(b.event_time), title: String(b.title) });
         const r = await sql`\
-        INSERT INTO physi_events (title, venue, event_date, event_time, scope_type, scope_value, status, authority_points, required_points, created_by, severity, prev_venue, prev_event_time, prev_event_date, is_zk_attested, prof_name, expires_at, slot_key)
-        VALUES (${String(b.title)}, ${String(b.venue)}, ${String(b.event_date)}, ${String(b.event_time)}, ${String(b.scope_type)}, ${(b.scope_value as string) ?? null}, ${status}, ${authority_points}, ${required_points}, ${(b.created_by as string) ?? null}, ${sev}, ${prevVenue}, ${prevTime}, ${prevDate}, ${isZkAttested}, ${profName}, NOW() + INTERVAL '24 hours', ${sk2})
+        INSERT INTO physi_events (title, venue, event_date, event_time, scope_type, scope_value, status, authority_points, required_points, created_by, severity, prev_venue, prev_event_time, prev_event_date, is_zk_attested, prof_name, expires_at, slot_key, roster_id)
+        VALUES (${String(b.title)}, ${String(b.venue)}, ${String(b.event_date)}, ${String(b.event_time)}, ${String(b.scope_type)}, ${(b.scope_value as string) ?? null}, ${status}, ${authority_points}, ${required_points}, ${(b.created_by as string) ?? null}, ${sev}, ${prevVenue}, ${prevTime}, ${prevDate}, ${isZkAttested}, ${profName}, NOW() + INTERVAL '24 hours', ${sk2}, ${rosterId})
         RETURNING *`;
         // also create initial slot claim for this event
         try { await sql`INSERT INTO physi_slot_claims (slot_key, event_id, claimer_id, venue, event_time, title) VALUES (${sk2}, ${r[0].id}, ${(b.created_by as string) ?? null}, ${String(b.venue)}, ${String(b.event_time).slice(0,5)}, ${String(b.title)}) ON CONFLICT DO NOTHING`; } catch {}

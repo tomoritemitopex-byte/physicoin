@@ -826,6 +826,36 @@ export async function ensureStreakRescues(): Promise<void> {
 }
 
 /**
+ * BEDROCK Phase 1: class rosters + Founding marks. Mirrors
+ * database/schema.physi.sql. Runtime safety net only — build-time migrate
+ * is primary; never call on hot paths.
+ */
+export async function ensureRosters(): Promise<void> {
+  const c = getSql() ?? sql;
+  if (!c) return;
+  await c`
+    CREATE TABLE IF NOT EXISTS physi_rosters (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      class_code TEXT NOT NULL,
+      term TEXT NOT NULL DEFAULT '',
+      invite_code TEXT NOT NULL UNIQUE,
+      created_by UUID REFERENCES physi_users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`;
+  await c`
+    CREATE TABLE IF NOT EXISTS physi_roster_members (
+      roster_id UUID NOT NULL REFERENCES physi_rosters(id) ON DELETE CASCADE,
+      user_id UUID NOT NULL REFERENCES physi_users(id) ON DELETE CASCADE,
+      enrolled_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (roster_id, user_id)
+    )`;
+  await c`CREATE INDEX IF NOT EXISTS physi_roster_members_user_idx ON physi_roster_members (user_id)`;
+  try { await c`ALTER TABLE physi_events ADD COLUMN IF NOT EXISTS roster_id UUID REFERENCES physi_rosters(id) ON DELETE SET NULL`; } catch {}
+  try { await c`ALTER TABLE physi_users ADD COLUMN IF NOT EXISTS founding_mark NUMERIC(14,2)`; } catch {}
+  try { await c`UPDATE physi_users SET founding_mark = mining_balance WHERE founding_mark IS NULL`; } catch {}
+}
+
+/**
  * DEPRECATED — DDL moved to build-time migration.
  * Runtime DDL is forbidden on hot path (Vercel Edge timeout / Neon DDL locks).
  * Run `node scripts/migrate.mjs` locally or at build.

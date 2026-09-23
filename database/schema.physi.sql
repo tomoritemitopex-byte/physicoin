@@ -531,4 +531,30 @@ CREATE TABLE IF NOT EXISTS physi_streak_rescues (
 CREATE INDEX IF NOT EXISTS physi_streak_rescues_pair_idx ON physi_streak_rescues (rescuer_id, rescued_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS physi_streak_rescues_rescued_idx ON physi_streak_rescues (rescued_id, created_at DESC);
 
+-- BEDROCK Phase 1: class rosters (invite-code bounded participation) + Founding marks.
+-- Roster = one class (e.g. "BIO 101") + term. Rotation = new invite_code on the
+-- same roster (kills all leaks at once). Membership gates posting/voting only
+-- when an event carries roster_id (nullable — legacy open events keep working).
+CREATE TABLE IF NOT EXISTS physi_rosters (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  class_code TEXT NOT NULL,
+  term TEXT NOT NULL DEFAULT '',
+  invite_code TEXT NOT NULL UNIQUE,
+  created_by UUID REFERENCES physi_users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS physi_roster_members (
+  roster_id UUID NOT NULL REFERENCES physi_rosters(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES physi_users(id) ON DELETE CASCADE,
+  enrolled_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (roster_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS physi_roster_members_user_idx ON physi_roster_members (user_id);
+ALTER TABLE physi_events ADD COLUMN IF NOT EXISTS roster_id UUID REFERENCES physi_rosters(id) ON DELETE SET NULL;
+-- Founding marks: pre-BEDROCK $PHY balances converted 1:1 into a permanent,
+-- non-spendable badge number. Nothing new can be earned into it; mining
+-- balances keep working underneath until the pilot decides the coin's fate.
+ALTER TABLE physi_users ADD COLUMN IF NOT EXISTS founding_mark NUMERIC(14,2);
+UPDATE physi_users SET founding_mark = mining_balance WHERE founding_mark IS NULL;
+
 

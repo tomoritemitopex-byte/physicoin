@@ -115,9 +115,11 @@ async function handleProfile(req: Request): Promise<Response> {
     const nick = url.searchParams.get("nickname");
     if (!id && !nick) return NextResponse.json({ ok: true, note: "GET ?id=UUID or ?nickname=str" });
     try {
+      // BEDROCK: explicit static column list — never SELECT * (would leak
+      // password_hash). founding_mark is the converted pre-BEDROCK balance.
       const rows = id
-        ? await sql`SELECT * FROM physi_users WHERE id = ${id} LIMIT 1`
-        : await sql`SELECT * FROM physi_users WHERE lower(nickname)=lower(${nick!}) LIMIT 1`;
+        ? await sql`SELECT id, full_name, nickname, programme, level, statuses, authority_base, authority_final, mining_balance, founding_mark, rep_ghost_sig, ghost_sig_updated_at, vote_count_total, vote_weight_cached, cohort_pattern_cached, cohort_pattern_updated_at, created_at, updated_at FROM physi_users WHERE id = ${id} LIMIT 1`
+        : await sql`SELECT id, full_name, nickname, programme, level, statuses, authority_base, authority_final, mining_balance, founding_mark, rep_ghost_sig, ghost_sig_updated_at, vote_count_total, vote_weight_cached, cohort_pattern_cached, cohort_pattern_updated_at, created_at, updated_at FROM physi_users WHERE lower(nickname)=lower(${nick!}) LIMIT 1`;
       if (!rows.length) return NextResponse.json({ ok: false, code: "NOT_FOUND", message: getErrorMessage("NOT_FOUND") }, { status: 404 });
       return NextResponse.json({ ok: true, user: rows[0] });
     } catch (e) {

@@ -35,6 +35,7 @@ import "./features/faucet";
 import "./features/health";
 import "./features/schools";
 import "./features/streak";
+import "./features/roster";
 
 // Generic registry factory for custom domains
 export * from "./error";

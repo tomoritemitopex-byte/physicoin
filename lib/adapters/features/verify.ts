@@ -195,12 +195,21 @@ async function handleVerify(req: Request): Promise<Response> {
         const ratio = total > 0 ? yesW / total : 0;
 
         // Fetch event row
-        let ev: { id: string; status: string; required_points: number } | null = null;
+        let ev: { id: string; status: string; required_points: number; roster_id?: string | null } | null = null;
         try {
-          const rows = await sql`SELECT id, status, required_points FROM physi_events WHERE id = ${b.event_id} LIMIT 1`;
+          const rows = await sql`SELECT id, status, required_points, roster_id FROM physi_events WHERE id = ${b.event_id} LIMIT 1`;
           if (rows.length) ev = rows[0] as any;
         } catch {}
         if (!ev) throw new Error("EVENT_NOT_FOUND");
+        // BEDROCK roster gate: roster-linked events accept votes from members only.
+        if ((ev as any)?.roster_id) {
+          try {
+            const { isRosterMember } = await import("./roster");
+            if (!(await isRosterMember(sql, String((ev as any).roster_id), String(b.verifier_id)))) {
+              return NextResponse.json({ ok:false, code:"ROSTER_ONLY", message:getErrorMessage("ROSTER_ONLY") }, { status:403 });
+            }
+          } catch {}
+        }
 
         let required = Number((ev as any).required_points) || 0;
         if (!required) {
@@ -383,9 +392,17 @@ async function handleVerify(req: Request): Promise<Response> {
     const eid = url.searchParams.get("event_id");
     const vid = url.searchParams.get("verifier_id") || url.searchParams.get("user_id");
     const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "20",10)||20,50);
-    // proof receipts: fetch by verifier_id with join to events
+    // proof receipts: fetch by verifier_id with join to events.
+    // BEDROCK: your own receipts only — session must match, otherwise anyone
+    // could enumerate anybody's vote history. (Blind-until-locked below hides
+    // *who* voted while pending; this hides *how you* voted from others.)
     if (vid) {
       try {
+        const { getSessionUserId } = await import("@/lib/auth");
+        const self = getSessionUserId(req as Request);
+        if (!self || self !== vid) {
+          return NextResponse.json({ ok: false, code: "FORBIDDEN", message: "You can only view your own receipts." }, { status: 403 });
+        }
         const rows = await sql`
           SELECT v.*, e.title as event_title, e.venue as event_venue, e.event_date, e.event_time, e.severity as event_severity
           FROM physi_verifications v
@@ -426,7 +443,17 @@ async function handleVerify(req: Request): Promise<Response> {
         promoted: yesW >= required && ratio >= 0.66 && total >= 3,
         demoted: ev.status === "verified" && noW > 0 && ratio < 0.66,
         status: ev.status,
+        // BEDROCK blind-until-locked: while pending, counts are public but
+        // identities are not (stops spontaneous conformity pressure +
+        // real-time collusion watching). Names reveal on lock.
+        locked: ev.status === "verified",
       };
+      const masked = quorum.locked
+        ? vRows
+        : (vRows as any[]).map((v: any) => {
+            const { verifier_id: _v, ...rest } = v as Record<string, unknown>;
+            return rest;
+          });
       // Satoshi Test 2: chain verification — verify checks prev_hash chain, not one block alone.
       // Recompute header chain tip for the event's date.
       let chain_valid: boolean|null = null;
@@ -443,7 +470,7 @@ async function handleVerify(req: Request): Promise<Response> {
           chain_valid = ok; chain_len = hdrs.length;
         } else if (hdrs.length===1) { chain_valid = true; chain_len=1; }
       } catch { chain_valid = null; }
-      return NextResponse.json({ ok: true, event: ev, verifications: vRows, quorum, chain: { valid: chain_valid, len: chain_len } });
+      return NextResponse.json({ ok: true, event: ev, verifications: masked, quorum, chain: { valid: chain_valid, len: chain_len } });
     } catch (e) {
       logError("VERIFY_FETCH_FAILED", e, { route: "/api/verify", method: "GET" });
       return NextResponse.json({ ok: false, code: "VERIFY_FETCH_FAILED", message: getErrorMessage("VERIFY_FETCH_FAILED") }, { status: 500 });

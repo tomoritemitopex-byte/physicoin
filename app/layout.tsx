@@ -41,9 +41,8 @@ export const viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  // Inverted-audit P2 (K-D5): browser chrome matches runtime navy
-  // (was Dawn coral residue #ff6b6b — see manifest.json).
-  themeColor: '#07111f',
+  // BEDROCK void skin: browser chrome matches true-black runtime.
+  themeColor: '#000000',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -58,7 +57,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="icon" href="/icon-192.png" sizes="192x192" type="image/png" />
         <link rel="apple-touch-icon" href="/icon-512.png" sizes="512x512" />
         <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="#07111f" />
+        <meta name="theme-color" content="#000000" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-title" content="PhysiCoin" />
         <meta name="mobile-web-app-capable" content="yes" />

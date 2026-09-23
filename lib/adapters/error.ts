@@ -60,6 +60,9 @@ const ERROR_MESSAGES: Record<string, string> = {
   SELF_RESCUE: "Can't rescue your own streak — ask a course mate.",
   RESCUE_TOO_SOON: "Already rescued them recently — one rescue per pair every 14 days.",
   RESCUE_NO_GAP: "Their streak is still active — rescue is for missed days.",
+  // BEDROCK rosters
+  ROSTER_ONLY: "This vote is roster-only — join with the class invite code first.",
+  ROSTER_NOT_FOUND: "No class found for that invite code. Check the code and try again.",
 };
 
 export function getErrorMessage(code: string): string {
