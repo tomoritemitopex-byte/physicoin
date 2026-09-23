@@ -14,6 +14,28 @@ import { BEDROCK_V5, tallyBucket } from "@/lib/bedrock";
 // per 60s per slot so `needed` can't be watched ticking down live.
 // (Per-instance memory; staleness ≤60s is the accepted tradeoff.)
 const tallyCache = new Map<string, { text: string; at: number }>();
+
+// Dormancy-aware expiry: low-traffic windows get longer to reach quorum.
+// Fri PM / Sat / Sun → extends to Monday 23:59 local-ish, preventing
+// weekend-created events from dying before anyone sees them.
+function dormancyAwareExpiry(now = new Date()): Date {
+  const d = new Date(now);
+  const day = d.getDay();
+  const h = d.getHours();
+  const expiry = new Date(d);
+  expiry.setMinutes(expiry.getMinutes() + 24 * 60);
+  if (day === 5 && h >= 14) {
+    expiry.setDate(expiry.getDate() + ((8 - expiry.getDay()) % 7 || 7));
+    expiry.setHours(23, 59, 0, 0);
+  } else if (day === 6) {
+    expiry.setDate(expiry.getDate() + ((8 - expiry.getDay()) % 7 || 7));
+    expiry.setHours(23, 59, 0, 0);
+  } else if (day === 0) {
+    expiry.setDate(expiry.getDate() + 1);
+    expiry.setHours(23, 59, 0, 0);
+  }
+  return expiry;
+}
 function bucketedTally(slotKey: string, yes: number, required: number, verified: boolean): string {
   if (!BEDROCK_V5.quantizedTally) {
     const needs = Math.max(0, Math.ceil(required - yes));
@@ -257,9 +279,10 @@ async function handleTimetable(req: Request): Promise<Response> {
       try {
         const { slotKey } = await import("@/lib/mempool");
         const sk2 = slotKey({ scope_value: (b.scope_value as string) ?? null, event_date: String(b.event_date), event_time: String(b.event_time), title: String(b.title) });
+        const expiryAt = dormancyAwareExpiry();
         const r = await sql`\
         INSERT INTO physi_events (title, venue, event_date, event_time, scope_type, scope_value, status, authority_points, required_points, created_by, severity, prev_venue, prev_event_time, prev_event_date, is_zk_attested, prof_name, expires_at, slot_key, roster_id)
-        VALUES (${String(b.title)}, ${String(b.venue)}, ${String(b.event_date)}, ${String(b.event_time)}, ${String(b.scope_type)}, ${(b.scope_value as string) ?? null}, ${status}, ${authority_points}, ${required_points}, ${(b.created_by as string) ?? null}, ${sev}, ${prevVenue}, ${prevTime}, ${prevDate}, ${isZkAttested}, ${profName}, NOW() + INTERVAL '24 hours', ${sk2}, ${rosterId})
+        VALUES (${String(b.title)}, ${String(b.venue)}, ${String(b.event_date)}, ${String(b.event_time)}, ${String(b.scope_type)}, ${(b.scope_value as string) ?? null}, ${status}, ${authority_points}, ${required_points}, ${(b.created_by as string) ?? null}, ${sev}, ${prevVenue}, ${prevTime}, ${prevDate}, ${isZkAttested}, ${profName}, ${expiryAt.toISOString()}, ${sk2}, ${rosterId})
         RETURNING *`;
         // also create initial slot claim for this event
         try { await sql`INSERT INTO physi_slot_claims (slot_key, event_id, claimer_id, venue, event_time, title) VALUES (${sk2}, ${r[0].id}, ${(b.created_by as string) ?? null}, ${String(b.venue)}, ${String(b.event_time).slice(0,5)}, ${String(b.title)}) ON CONFLICT DO NOTHING`; } catch {}

@@ -451,7 +451,7 @@ CREATE TABLE IF NOT EXISTS physi_truth_rewards (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES physi_users(id) ON DELETE CASCADE,
   event_id UUID REFERENCES physi_events(id) ON DELETE SET NULL,
-  kind TEXT NOT NULL CHECK (kind IN ('truth_poster','truth_voter','faucet')),
+  kind TEXT NOT NULL CHECK (kind IN ('truth_poster','truth_voter','faucet','debate_host')),
   amount NUMERIC(14,2) NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

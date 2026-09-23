@@ -152,31 +152,31 @@ export async function POST(req: NextRequest) {
         const ghostQueries = prepareGhostChainQueries(tx, String(b.voter_id), ghostAction, ghostBuild.prev, ghostBuild.newSig, ghostBuild.timestamp);
         queries.push(...ghostQueries);
 
-        // 3. Resolution — ON CONFLICT DO NOTHING so only first tipper wins (race fix)
-        if (quorumYes) {
-          const resQ = tx`
-            INSERT INTO physi_scope_resolution (scope_a, scope_b, merged_into, resolution)
-            VALUES (${sa}, ${sb}, ${sa}, 'merged')
-            ON CONFLICT (scope_a, scope_b) DO NOTHING
-            RETURNING *
-          `;
-          queries.push(resQ);
-        } else if (quorumNo) {
-          const resQ = tx`
-            INSERT INTO physi_scope_resolution (scope_a, scope_b, resolution)
-            VALUES (${sa}, ${sb}, NULL, 'separate')
-            ON CONFLICT (scope_a, scope_b) DO NOTHING
-            RETURNING *
-          `;
-          queries.push(resQ);
-        }
+      // 3. Resolution — ON CONFLICT DO NOTHING so only first tipper wins (race fix)
+      // Use weightedStatus (not raw quorum) so resolution matches the displayed status.
+      if (weightedStatus === "merged") {
+        const resQ = tx`
+          INSERT INTO physi_scope_resolution (scope_a, scope_b, merged_into, resolution)
+          VALUES (${sa}, ${sb}, ${sa}, 'merged')
+          ON CONFLICT (scope_a, scope_b) DO NOTHING
+          RETURNING *
+        `;
+        queries.push(resQ);
+      } else if (weightedStatus === "separate") {
+        const resQ = tx`
+          INSERT INTO physi_scope_resolution (scope_a, scope_b, resolution)
+          VALUES (${sa}, ${sb}, NULL, 'separate')
+          ON CONFLICT (scope_a, scope_b) DO NOTHING
+          RETURNING *
+        `;
+        queries.push(resQ);
+      }
         return queries;
       });
 
       // Determine if we were the tipper (resolution insert returned row)
       let wasTipper = false;
       try {
-        // resolution result is last element if quorum attempted
         if (shouldAttemptResolution && Array.isArray(txResults) && txResults.length >= 3) {
           const resRet = txResults[txResults.length - 1];
           if (Array.isArray(resRet) && resRet.length > 0) wasTipper = true;

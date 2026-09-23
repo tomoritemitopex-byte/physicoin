@@ -195,8 +195,17 @@ async function handleVerify(req: Request): Promise<Response> {
         if (b.vote === "CANCEL") w = 0;
 
         const isWitness = b?.is_witness === true || b?.isWitness === true || false;
-        // Awards are server-fixed (never client-set): witness 1.0, else 0.3.
-        const award = isWitness ? 1.0 : 0.3;
+        const WITNESS_WEIGHT = 1.0;
+        const REGULAR_AWARD = 0.3;
+        const MAX_WITNESS_YES = 2;
+        let award = isWitness ? WITNESS_WEIGHT : REGULAR_AWARD;
+        if (isWitness && b.vote === "YES") {
+          try {
+            const wRows: any[] = await sql`SELECT COUNT(*)::int AS c FROM physi_verifications WHERE event_id=${b.event_id} AND vote='YES' AND is_witness=true` as any;
+            const existingWitnessYes = Number((wRows[0] as any)?.c || 0);
+            if (existingWitnessYes >= MAX_WITNESS_YES) award = REGULAR_AWARD;
+          } catch {}
+        }
 
         const act = b.vote === "YES" ? GHOST_ACTIONS.VERIFY_YES : b.vote === "NO" ? GHOST_ACTIONS.VERIFY_NO : GHOST_ACTIONS.VERIFY_CANCEL;
         const prevSig = (u as any).rep_ghost_sig ?? null;

@@ -7,6 +7,7 @@ import { isMissingTable } from "./adapters/error";
 
 export const VOTE_STAKE = 1.0;
 export const MINING_BALANCE_CAP = 10000;
+export const BOND_RECYCLE_RATE = 0.5;
 
 export type StakeResult = { ok: true; stake: number } | { ok: false; code: string; message: string };
 
@@ -106,6 +107,8 @@ export async function stakeForVote(sql: any, userId: string, eventId: string, co
 export async function resolveBonds(sql: any, eventId: string, majorityVote: "YES" | "NO"): Promise<void> {
   try {
     const rows: any[] = await sql`SELECT b.verifier_id, b.stake, v.vote FROM physi_vote_bonds b JOIN physi_verifications v ON v.verifier_id=b.verifier_id AND v.event_id=b.event_id WHERE b.event_id=${eventId} AND b.status='held'` as any;
+    const creatorRows: any[] = await sql`SELECT created_by FROM physi_events WHERE id=${eventId} LIMIT 1` as any;
+    const creatorId = creatorRows[0]?.created_by || null;
     for (const r of rows) {
       const isWinner = String(r.vote) === majorityVote;
       if (isWinner) {
@@ -114,7 +117,19 @@ export async function resolveBonds(sql: any, eventId: string, majorityVote: "YES
           await sql`UPDATE physi_users SET mining_balance = LEAST(${MINING_BALANCE_CAP}, mining_balance + ${Number(r.stake)}) WHERE id=${r.verifier_id}`;
         } catch {}
       } else {
-        try { await sql`UPDATE physi_vote_bonds SET status='burned' WHERE verifier_id=${r.verifier_id} AND event_id=${eventId}`; } catch {}
+        try {
+          await sql`UPDATE physi_vote_bonds SET status='burned' WHERE verifier_id=${r.verifier_id} AND event_id=${eventId}`;
+        } catch {}
+        // Deflation fix: recycle half of burned bond back to event creator as hosting fee
+        if (creatorId) {
+          const recycle = Number(r.stake) * BOND_RECYCLE_RATE;
+          if (recycle > 0) {
+            try {
+              await sql`UPDATE physi_users SET mining_balance = LEAST(${MINING_BALANCE_CAP}, mining_balance + ${recycle}) WHERE id=${creatorId}`;
+              await sql`INSERT INTO physi_truth_rewards (user_id, event_id, kind, amount) VALUES (${creatorId}, ${eventId}, 'debate_host', ${recycle})`;
+            } catch {}
+          }
+        }
       }
     }
     try { await sql`UPDATE physi_vote_bonds SET status='burned' WHERE event_id=${eventId} AND status='held'`; } catch {}
