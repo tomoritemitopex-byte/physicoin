@@ -9,6 +9,7 @@ import { registerApiAdapter } from "../api";
 import { registerFeature } from "../features";
 import { logError, getErrorMessage, isMissingTable } from "../error";
 import { GHOST_ACTIONS, prepareGhostChainQueries, buildGhostChainSigs } from "@/lib/ghostWitness";
+import { BEDROCK_V5, tallyBucket, computeBadge } from "@/lib/bedrock";
 // NOTE (inverted-audit P1 K-P3): no ZK import on purpose — see timetable.ts note.
 
 export const verifyFeature = {
@@ -104,6 +105,41 @@ function preparePromotionQueries(
   return queries;
 }
 
+/**
+ * BEDROCK v5.0: flag/counter/unflag actions. One row per (event, member);
+ * flag-then-counter flips the row kind. Blind to the crowd (counts only in
+ * badge payloads); named to the roster creator via GET ?flags=1.
+ */
+async function handleFlagAction(sql: any, eventId: string, userId: string, action: string): Promise<Response> {
+  if (!BEDROCK_V5.blindFlags) {
+    return NextResponse.json({ ok: false, code: "FLAGS_OFF", message: "Flagging is temporarily disabled." }, { status: 503 });
+  }
+  if (!eventId) return NextResponse.json({ ok: false, code: "BAD_INPUT", message: getErrorMessage("BAD_INPUT") }, { status: 400 });
+  try {
+    const er: any[] = await sql`SELECT id, roster_id FROM physi_events WHERE id=${eventId} LIMIT 1` as any;
+    if (!er.length) return NextResponse.json({ ok: false, code: "NOT_FOUND", message: getErrorMessage("NOT_FOUND") }, { status: 404 });
+    const rid = (er[0] as any)?.roster_id;
+    if (rid) {
+      const { isRosterMember } = await import("./roster");
+      if (!(await isRosterMember(sql, String(rid), userId))) {
+        return NextResponse.json({ ok: false, code: "ROSTER_ONLY", message: getErrorMessage("ROSTER_ONLY") }, { status: 403 });
+      }
+    }
+    if (action === "unflag") {
+      await sql`DELETE FROM physi_tick_flags WHERE event_id=${eventId} AND flagger_id=${userId}`;
+      return NextResponse.json({ ok: true, removed: true });
+    }
+    await sql`INSERT INTO physi_tick_flags (event_id, flagger_id, kind) VALUES (${eventId}, ${userId}, ${action}) ON CONFLICT (event_id, flagger_id) DO UPDATE SET kind=${action}, created_at=NOW()`;
+    return NextResponse.json({ ok: true, flagged: action });
+  } catch (e) {
+    if (isMissingTable(e)) {
+      return NextResponse.json({ ok: false, code: "TABLE_NOT_READY", message: "Flag tables not ready — redeploy to run migration." }, { status: 503 });
+    }
+    logError("FLAG_FAILED", e, { route: "/api/verify", eventId });
+    return NextResponse.json({ ok: false, code: "INTERNAL", message: getErrorMessage("INTERNAL") }, { status: 500 });
+  }
+}
+
 async function handleVerify(req: Request): Promise<Response> {
   try {
     const sql = getSql();
@@ -120,6 +156,12 @@ async function handleVerify(req: Request): Promise<Response> {
        if (!authUid) return NextResponse.json({ ok:false, code:"UNAUTHORIZED", message:getErrorMessage("UNAUTHORIZED") }, { status:401 });
       // override body verifier_id with authenticated id
       if (b) b.verifier_id = authUid;
+      // BEDROCK v5.0: flag/counter/unflag actions ride POST (auth + event,
+      // no vote needed). Blind to the crowd, named to the roster creator.
+      const flagAction = String((b as any)?.action ?? "").toLowerCase();
+      if (flagAction === "flag" || flagAction === "counter" || flagAction === "unflag") {
+        return handleFlagAction(sql, String((b as any)?.event_id ?? ""), String(authUid), flagAction);
+      }
       if (!b?.verifier_id || !b?.event_id || !b?.vote) {
         return NextResponse.json({ ok: false, code: "BAD_INPUT", message: getErrorMessage("BAD_INPUT") }, { status: 400 });
       }
@@ -298,7 +340,12 @@ async function handleVerify(req: Request): Promise<Response> {
           }
           throw e;
         }
-        const quorum = { promoted: promote, demoted: demote, yesW, noW, total, ratio };
+        const needed = Math.max(0, Math.ceil(required - yesW));
+        // BEDROCK v5.0: POST receipts are redacted like GET — the voter knows
+        // their own weight; everyone else's stays server-side until lock.
+        const quorum = promote || demote || (ev as any).status === "verified"
+          ? { promoted: promote, demoted: demote, yesW, noW, total, ratio, locked: true }
+          : { promoted: false, demoted: false, required, needed, bucket: tallyBucket(needed), locked: false };
         const result = { verification, quorum };
 
         // Header recompute: after canonical_log INSERT, rebuild header for event's date
@@ -392,6 +439,32 @@ async function handleVerify(req: Request): Promise<Response> {
     const eid = url.searchParams.get("event_id");
     const vid = url.searchParams.get("verifier_id") || url.searchParams.get("user_id");
     const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "20",10)||20,50);
+    // BEDROCK v5.0: creator-only flagger list (flags blind to crowd, named to
+    // roster creator — retaliation-proof visibility for adjudication).
+    if (eid && url.searchParams.get("flags") === "1") {
+      try {
+        const { getAuthUserId } = await import("@/lib/auth");
+        const uid = getAuthUserId(req as Request);
+        if (!uid) return NextResponse.json({ ok: false, code: "UNAUTHORIZED", message: getErrorMessage("UNAUTHORIZED") }, { status: 401 });
+        const er: any[] = await sql`SELECT id, roster_id, created_by FROM physi_events WHERE id=${eid} LIMIT 1` as any;
+        if (!er.length) return NextResponse.json({ ok: false, code: "NOT_FOUND", message: getErrorMessage("NOT_FOUND") }, { status: 404 });
+        const rid = (er[0] as any)?.roster_id;
+        let allowed = false;
+        if (rid) {
+          const rr: any[] = await sql`SELECT created_by FROM physi_rosters WHERE id=${rid} LIMIT 1` as any;
+          allowed = rr.length > 0 && String((rr[0] as any).created_by) === String(uid);
+        } else {
+          allowed = String((er[0] as any).created_by) === String(uid);
+        }
+        if (!allowed) return NextResponse.json({ ok: false, code: "FORBIDDEN", message: "Flag details are visible to the roster creator only." }, { status: 403 });
+        const flags = await sql`SELECT f.kind, f.created_at, u.nickname FROM physi_tick_flags f JOIN physi_users u ON u.id=f.flagger_id WHERE f.event_id=${eid} ORDER BY f.created_at ASC`;
+        return NextResponse.json({ ok: true, flags });
+      } catch (e) {
+        if (isMissingTable(e)) return NextResponse.json({ ok: false, code: "TABLE_NOT_READY", message: "Flag tables not ready — redeploy to run migration." }, { status: 503 });
+        logError("FLAGS_FETCH_FAILED", e, { route: "/api/verify" });
+        return NextResponse.json({ ok: false, code: "INTERNAL", message: getErrorMessage("INTERNAL") }, { status: 500 });
+      }
+    }
     // proof receipts: fetch by verifier_id with join to events.
     // BEDROCK: your own receipts only — session must match, otherwise anyone
     // could enumerate anybody's vote history. (Blind-until-locked below hides
@@ -438,22 +511,50 @@ async function handleVerify(req: Request): Promise<Response> {
           required = Math.max(3, Math.min(12, Math.round(isFinite(raw3) && raw3>0 ? raw3 : GENESIS_REQUIRED)));
         } catch { required = GENESIS_REQUIRED; }
       }
-      const quorum = {
-        yesW, noW, total, ratio, required,
-        promoted: yesW >= required && ratio >= 0.66 && total >= 3,
-        demoted: ev.status === "verified" && noW > 0 && ratio < 0.66,
-        status: ev.status,
-        // BEDROCK blind-until-locked: while pending, counts are public but
-        // identities are not (stops spontaneous conformity pressure +
-        // real-time collusion watching). Names reveal on lock.
-        locked: ev.status === "verified",
-      };
-      const masked = quorum.locked
+      const locked = ev.status === "verified";
+      const needed = Math.max(0, Math.ceil(required - yesW));
+      // BEDROCK v5.0 (spoil fix): pending payload carries bucket ONLY.
+      // yesW/noW/total/ratio join exclusively on lock — the exact `needed`
+      // integer never leaves the server (it was a live vote-ticker).
+      let badge = { struck: false, flags: 0, counters: 0, threshold: 4 };
+      if (BEDROCK_V5.blindFlags) {
+        try {
+          const frows = await sql`SELECT kind, COUNT(*)::int AS c FROM physi_tick_flags WHERE event_id=${eid} GROUP BY kind` as any[];
+          let f = 0, c = 0;
+          for (const r of frows) {
+            if (String(r.kind) === "flag") f = Number(r.c) || 0;
+            else if (String(r.kind) === "counter") c = Number(r.c) || 0;
+          }
+          let members: number | null = null;
+          try {
+            const er: any[] = await sql`SELECT roster_id FROM physi_events WHERE id=${eid} LIMIT 1` as any;
+            const rid = (er[0] as any)?.roster_id;
+            if (rid) {
+              const m: any[] = await sql`SELECT COUNT(*)::int AS c FROM physi_roster_members WHERE roster_id=${rid}` as any;
+              members = Number((m[0] as any)?.c ?? 0);
+            }
+          } catch {}
+          badge = computeBadge(f, c, members);
+        } catch (e) {
+          if (!isMissingTable(e)) logError("BADGE_FAILED", e, { route: "/api/verify", eventId: eid });
+        }
+      }
+      const quorum = locked
+        ? {
+            yesW, noW, total, ratio, required,
+            promoted: yesW >= required && ratio >= 0.66 && total >= 3,
+            demoted: ev.status === "verified" && noW > 0 && ratio < 0.66,
+            status: ev.status, locked, needed: 0, bucket: "Locked", badge,
+          }
+        : {
+            required, bucket: tallyBucket(needed), locked,
+            promoted: false, demoted: false, status: ev.status, badge,
+          };
+      // Blind-until-locked, v5.0 final: pending rows are vote-only (weights
+      // fingerprint voters: 1.00 vs 1.10 is an ID card). Full rows on lock.
+      const masked = locked
         ? vRows
-        : (vRows as any[]).map((v: any) => {
-            const { verifier_id: _v, ...rest } = v as Record<string, unknown>;
-            return rest;
-          });
+        : (vRows as any[]).map((v: any) => ({ vote: (v as any).vote }));
       // Satoshi Test 2: chain verification — verify checks prev_hash chain, not one block alone.
       // Recompute header chain tip for the event's date.
       let chain_valid: boolean|null = null;

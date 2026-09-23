@@ -856,6 +856,42 @@ export async function ensureRosters(): Promise<void> {
 }
 
 /**
+ * BEDROCK v5.0: disputed-badge flags + succession petitions. Mirrors
+ * database/schema.physi.sql. Safety net only — build-time migrate is primary.
+ */
+export async function ensureBedrockV5(): Promise<void> {
+  const c = getSql() ?? sql;
+  if (!c) return;
+  await c`
+    CREATE TABLE IF NOT EXISTS physi_tick_flags (
+      event_id UUID NOT NULL REFERENCES physi_events(id) ON DELETE CASCADE,
+      flagger_id UUID NOT NULL REFERENCES physi_users(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL CHECK (kind IN ('flag','counter')),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (event_id, flagger_id)
+    )`;
+  await c`CREATE INDEX IF NOT EXISTS physi_tick_flags_event_idx ON physi_tick_flags (event_id)`;
+  await c`
+    CREATE TABLE IF NOT EXISTS physi_roster_petitions (
+      roster_id UUID NOT NULL REFERENCES physi_rosters(id) ON DELETE CASCADE,
+      petitioner_id UUID NOT NULL REFERENCES physi_users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (roster_id, petitioner_id)
+    )`;
+  // One roster per class per term — conditional (see schema.physi.sql: skips
+  // when duplicates exist instead of throwing).
+  try {
+    const idx = await c`SELECT 1 FROM pg_indexes WHERE indexname = 'physi_rosters_class_term_uidx' LIMIT 1` as any[];
+    if (!idx.length) {
+      const dupes = await c`SELECT 1 FROM physi_rosters GROUP BY lower(class_code), term HAVING COUNT(*) > 1 LIMIT 1` as any[];
+      if (!dupes.length && typeof (c as any).unsafe === "function") {
+        await (c as any).unsafe(`CREATE UNIQUE INDEX physi_rosters_class_term_uidx ON physi_rosters (lower(class_code), term)`);
+      }
+    }
+  } catch {}
+}
+
+/**
  * DEPRECATED — DDL moved to build-time migration.
  * Runtime DDL is forbidden on hot path (Vercel Edge timeout / Neon DDL locks).
  * Run `node scripts/migrate.mjs` locally or at build.

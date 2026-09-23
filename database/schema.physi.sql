@@ -557,4 +557,40 @@ ALTER TABLE physi_events ADD COLUMN IF NOT EXISTS roster_id UUID REFERENCES phys
 ALTER TABLE physi_users ADD COLUMN IF NOT EXISTS founding_mark NUMERIC(14,2);
 UPDATE physi_users SET founding_mark = mining_balance WHERE founding_mark IS NULL;
 
+-- BEDROCK v5.0: disputed-badge flags + succession petitions.
+-- Flags are blind to the crowd (count only), named to the roster creator.
+-- kind='flag' disputes a tick; kind='counter' defends it (symmetric, no judges).
+CREATE TABLE IF NOT EXISTS physi_tick_flags (
+  event_id UUID NOT NULL REFERENCES physi_events(id) ON DELETE CASCADE,
+  flagger_id UUID NOT NULL REFERENCES physi_users(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK (kind IN ('flag','counter')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (event_id, flagger_id)
+);
+CREATE INDEX IF NOT EXISTS physi_tick_flags_event_idx ON physi_tick_flags (event_id);
+-- Succession petitions: 8 co-signed members transfer creatorship (blind until
+-- threshold, then public). Covers absentee AND abusive creators — heartbeats
+-- (check-ins) explicitly don't count; petitions do.
+CREATE TABLE IF NOT EXISTS physi_roster_petitions (
+  roster_id UUID NOT NULL REFERENCES physi_rosters(id) ON DELETE CASCADE,
+  petitioner_id UUID NOT NULL REFERENCES physi_users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (roster_id, petitioner_id)
+);
+-- One roster per class per term (first creator wins; duplicates join it).
+-- Conditional: pre-existing duplicate rows must be resolved by hand first —
+-- aborting migrate over them would wedge every deploy, so skip with a warning.
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'physi_rosters_class_term_uidx') THEN
+    IF NOT EXISTS (
+      SELECT lower(class_code), term FROM physi_rosters
+      GROUP BY lower(class_code), term HAVING COUNT(*) > 1
+    ) THEN
+      CREATE UNIQUE INDEX physi_rosters_class_term_uidx ON physi_rosters (lower(class_code), term);
+    ELSE
+      RAISE NOTICE '[migrate] skipping physi_rosters_class_term_uidx: duplicate class rosters exist — resolve manually';
+    END IF;
+  END IF;
+END $$;
+
 

@@ -8,6 +8,26 @@ import { getSql, isDbConfigured, dbNotConfigured, } from "@/lib/db";
 import { registerApiAdapter } from "../api";
 import { registerFeature } from "../features";
 import { logError, getErrorMessage, getErrorHint, isMissingTable } from "../error";
+import { BEDROCK_V5, tallyBucket } from "@/lib/bedrock";
+
+// BEDROCK v5.0: bucketed tally cache — recompute display text at most once
+// per 60s per slot so `needed` can't be watched ticking down live.
+// (Per-instance memory; staleness ≤60s is the accepted tradeoff.)
+const tallyCache = new Map<string, { text: string; at: number }>();
+function bucketedTally(slotKey: string, yes: number, required: number, verified: boolean): string {
+  if (!BEDROCK_V5.quantizedTally) {
+    const needs = Math.max(0, Math.ceil(required - yes));
+    return yes >= required ? `✓ Confirmed — ${yes} of ${required} said yes` : `${yes} of ${required} said yes — needs ${needs} more`;
+  }
+  if (verified) return `✓ Confirmed`;
+  const now = Date.now();
+  const hit = tallyCache.get(slotKey);
+  if (hit && now - hit.at < 60000) return hit.text;
+  if (tallyCache.size > 2000) tallyCache.clear();
+  const text = tallyBucket(Math.max(0, Math.ceil(required - yes)));
+  tallyCache.set(slotKey, { text, at: now });
+  return text;
+}
 // NOTE (inverted-audit P1 K-P3): no ZK import on purpose — is_zk_attested is
 // recorded, but requiresZkAttestation() gating is declared future work
 // (see lib/zkAuthority.ts), not an enforced check. Importing the checker
@@ -378,8 +398,7 @@ async function handleTimetable(req: Request): Promise<Response> {
             const e:any = group[0];
             const yes = Number(e.vote_weight_yes||0);
             const required = Number(e.required_points||3);
-            const needs = Math.max(0, Math.ceil(required - yes));
-            e.tally_text = yes >= required ? `\u2713 Confirmed \u2014 ${yes} of ${required} said yes` : `${yes} of ${required} said yes \u2014 needs ${needs} more`;
+            e.tally_text = bucketedTally(sk, yes, required, e.status === "verified" || yes >= required);
             e.progress_pct = required ? Math.min(100, Math.round((yes/required)*100)) : (e.status==='verified'?100:0);
             e.venue_options = [e.venue];
             e.contenders = [];
@@ -393,8 +412,7 @@ async function handleTimetable(req: Request): Promise<Response> {
             const contenders:any[] = picked ? picked.contenders : group.slice(1);
             const yes = Number(tip.vote_weight_yes||0);
             const required = Number(tip.required_points||3);
-            const needs = Math.max(0, Math.ceil(required - yes));
-            const tally_text = yes >= required ? `\u2713 Confirmed \u2014 ${yes} of ${required} said yes` : `${yes} of ${required} said yes \u2014 needs ${needs} more`;
+            const tally_text = bucketedTally(sk, yes, required, yes >= required);
             tip.tally_text = tally_text;
             tip.progress_pct = required ? Math.min(100, Math.round((yes/required)*100)) : 0;
             tip.venue_options = group.map((g:any)=> g.venue);

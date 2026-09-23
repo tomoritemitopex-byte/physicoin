@@ -224,3 +224,29 @@ no DB.
   `SELECT *` — was leaking `password_hash`).
 - Void skin (step 1): true-black tokens, black physi-card, unified PWA chrome.
   Font/component purge is follow-up, not this phase.
+
+## BEDROCK v5.0 (shipped)
+
+Update rails: `lib/bedrock.ts` kill-switches (`quantizedTally`, `blindFlags`,
+`petitionSuccession`) — per-item rollback = flip + redeploy, no surgery.
+- Quantized distance-to-lock: pending quorum payload is `{required, bucket,
+  locked:false}` — `yesW/noW/total/ratio` and the exact `needed` integer never
+  leave the server until lock. Timetable tallies bucketed ("4+ to go" /
+  "Closing in" / "Final push") via 60s per-slot server throttle.
+  Residual (accepted): event-row weights still update live — determined
+  pollers can infer motion, but never identity.
+- Blind flags: `physi_tick_flags(event, member, flag|counter)`; masked rows cut
+  to vote-only (weights fingerprint: 1.00 vs 1.10 is an ID card). Badge =
+  struck iff flags ≥ max(4, 10% enrolled) AND flags > counters (symmetric
+  unstrike, no judges). Flaggers named to roster creator only
+  (`GET /api/verify?event_id=&flags=1`); crowd sees counts.
+- Canonical rosters: conditional unique index (skips with notice on dupes, never
+  aborts migrate); idempotent create returns the ONE roster, invite_code
+  redacted for non-members. Creator-only rotate; new transfer / remove /
+  petition actions; 8 blind co-signs auto-transfer to oldest petitioner
+  (mandate consumed). Check-ins explicitly don't count toward succession.
+- Membership privacy: member lists require membership; `?user_id=` requires a
+  matching session (was world-readable enumeration).
+- Trust boundary, stated: timetable + verify = gated, tick-moving;
+  notes/bunk/squad/scopes = open, labeled untrusted-by-design (UI copy
+  follow-up, not this build).
