@@ -123,15 +123,15 @@ no DB.
 - K-C2. Apply the cheap `total>=3` minimum while calling it 8-vote consensus. Evidence: `verify.ts:273` (`promote = yesW >= required && ratio >= 0.66 && total >= 3`) vs `docs/satoshi-three-intuitions.md` (8 votes / 70%) and `WindingRoad.tsx:321` (`needs 3 votes min`).
 - K-C3. Drift dynamic quorum (`required 3..12` from 7-day average, `verify.ts:266-272`) away from the documented 8/5 constants with no UI explanation.
 - K-C4. Half-weight No (`w*0.5`, `verify.ts:211-212`) lets a coordinated minority be out-voiced without students understanding why.
-- K-C5. Ship a `/app/verify` nav target with no page (dead-end trust flow). Evidence: `verifyFeature.nav.href=/app/verify` vs missing `app/app/verify/page.tsx` (only timetable/roadmap/mining/profile/admin exist).
+- K-C5. ~~Ship a `/app/verify` nav target with no page~~ — RESOLVED: `verifyFeature.nav.href` points to `/app/timetable` (real voting surface); `BottomNavClient` renders Road/Feed only. Voting happens on timetable cards.
 - K-C6. Swallow promotion side-effect failures. Evidence: `verify.ts` post-tx `Promise.all(q.catch(()=>null))` pattern (promotion/`rebuildHeader`/`resolveBonds` failures invisible).
 
 ### Inverted proposals
 ### P0 — Reconcile `total>=3` with the 8-vote promise: either enforce 8 for `verified` or relabel 3-vote state honestly
 - Prevents: K-C2. Evidence: `verify.ts:273`. Effort: S (decision) + S (copy). Inverted rationale: the tick can never mean less than students were told. Verify: SQL check `verified` events all have `total>=8` (or UI shows "needs N more" with N derived from 8).
 
-### P1 — Create `app/app/verify/page.tsx` or remove the nav entry
-- Prevents: K-C5. Evidence: `verifyFeature` nav href. Effort: S. Inverted rationale: every trust action has a reachable surface. Verify: click Verify in `BottomNavClient` → real page, no 404.
+### P1 — Verify nav points to real voting surface (`/app/timetable`) — APPLIED
+- Prevents: K-C5. Evidence: `verify.ts:21` (`nav.href="/app/timetable"`). Inverted rationale: every trust action has a reachable surface. Verify: click Verify in `BottomNavClient` → real page, no 404.
 
 ### P1 — Surface dynamic `required` in the UI ("needs N more" already does — bind it to the same variable)
 - Prevents: K-C3/K-C4. Evidence: `verify.ts:266-275`; `WindingRoad.tsx:321`. Effort: S. Inverted rationale: students see the real number, so dynamic quorum can't feel rigged. Verify: N in UI === `required` in DB for the same event. Keep jargon ban (`satoshi-student-intuitions.md:123`).

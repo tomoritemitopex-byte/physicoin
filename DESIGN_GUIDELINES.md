@@ -51,8 +51,10 @@
 
 ## Implementation Notes
 
-1. Theme is now controlled by `NEXT_PUBLIC_THEME` env var
-2. Dawn is default, forest available via `NEXT_PUBLIC_THEME=forest`
+1. Runtime theme is single-truth dark navy (`app/globals.css :root`).
+2. `NEXT_PUBLIC_THEME` was a proposal; not wired into the app — removed from
+   active code to avoid confusion. See `lib/adapters/theme.ts` for the
+   registered themes (not used at runtime today).
 3. Icons generated: `scripts/generate-pwa-icons.py`
 4. See `:skills:physi-design-system` for full design system
 

@@ -16,6 +16,7 @@
  */
 
 import { createRegistry } from "./registry";
+import { getSql } from "@/lib/db";
 
 // ---------------------------------------------------------------------------
 // User-friendly message map — never leaks stack / raw error.
@@ -197,6 +198,27 @@ async function postGitHubIssue(code: string, message: string, context?: Record<s
 }
 
 // ---------------------------------------------------------------------------
+// DB persistence (primary) — inverted-audit P1 (K-A8)
+// ---------------------------------------------------------------------------
+function persistErrorToDb(code: string, message: string, context?: Record<string, unknown>, stack?: string): void {
+  const c = getSql();
+  if (!c) return;
+  try {
+    // Fire-and-forget: don't await, don't block response
+    (async () => {
+      await c`
+        INSERT INTO physi_logs (ts, level, message, code, meta)
+        VALUES (${new Date().toISOString()}, 'error', ${message.slice(0, 800)}, ${code}, ${context ? { ...context, stack: stack?.slice(0, 1000) } : null})
+      `;
+    })().catch(() => {
+      // DB write failed — file fallback below still runs
+    });
+  } catch {
+    // ignore
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Server / client logging
 // ---------------------------------------------------------------------------
 export function logError(
@@ -211,6 +233,9 @@ export function logError(
     stack: err.stack,
     ...context,
   });
+
+  // Primary: DB (fire-and-forget)
+  void persistErrorToDb(code, err.message, context, err.stack);
 
   // GitHub-visible logging: files + optional Issue via API (fire-and-forget)
   try {

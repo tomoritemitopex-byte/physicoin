@@ -1,29 +1,29 @@
 /**
  * lib/adapters/realtime.ts — RealtimeAdapter (observability)
  *
- * In-memory ring buffer + console.log with timestamps.
- * Every API request logs via logEvent({ method, path, duration, status }).
- * Errors forward here via logError() so /api/logs shows both.
- * Exposes GET /api/logs (adapter-driven) returning recent 100 events (dev only).
+ * DB-first logging with file/in-memory fallback. Every API request logs via
+ * logEvent({ method, path, duration, status }). Errors forward here via
+ * logError() so /api/logs shows both.
  *
- * GitHub-visible: also appends to logs/realtime.log (all events) and
- * logs/errors.log (errors only) — both git-tracked so dev can see in repo.
- *
- * Modular: plug-in via registry like every other adapter. Zero core edits.
+ * Inverted-audit P1 (K-A8): primary persistence is `physi_logs` (Neon table),
+ * not filesystem. File logging is kept as dev-only fallback when DB is
+ * unavailable. In-memory ring remains as secondary cache.
  */
 
 import { createRegistry } from "./registry";
 import { registerApiAdapter } from "./api";
+import { getSql, isDbConfigured, ensureLogs } from "@/lib/db";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 export interface RealtimeLog {
-  ts: string; // ISO timestamp
+  id?: string;
+  ts: string;
   level: "info" | "error" | "warn";
   method?: string;
   path?: string;
-  duration?: number; // ms
+  duration?: number;
   status?: number;
   message?: string;
   code?: string;
@@ -39,16 +39,14 @@ export interface RealtimeLogEventInput {
 }
 
 // ---------------------------------------------------------------------------
-// Ring buffer (in-memory, process-local — fine for dev observability)
+// In-memory ring buffer (secondary cache — survives process restart only
+// when DB is unavailable)
 // ---------------------------------------------------------------------------
-const MAX_BUFFER = 200; // keep 200, expose 100 via getRecentLogs default
+const MAX_BUFFER = 200;
 const buffer: RealtimeLog[] = [];
 
 // ---------------------------------------------------------------------------
-// GitHub-visible file logging: logs/realtime.log + logs/errors.log
-// fs/path are server-only — loaded lazily to avoid bundling in client.
-// Webpack config in next.config.mjs sets fs/path fallbacks to false.
-
+// File fallback (dev-only — skipped on Vercel / read-only fs)
 // ---------------------------------------------------------------------------
 function getFs(): typeof import("fs") | null {
   if (typeof window !== "undefined") return null;
@@ -68,33 +66,19 @@ function getPath(): typeof import("path") | null {
     return null;
   }
 }
-function ensureLogsDir(): string | null {
-  if (typeof window !== "undefined") return null;
-  try {
-    const fs = getFs();
-    const path = getPath();
-    if (!fs || !path) return null;
-    const dir = path.join(process.cwd(), "logs");
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    return dir;
-  } catch {
-    return null;
-  }
-}
 
 function appendToFile(filePath: string, entry: RealtimeLog): void {
   if (typeof window !== "undefined") return;
+  if (process.env.VERCEL) return;
   try {
     const fs = getFs();
     const path = getPath();
     if (!fs || !path) return;
-    const dir = ensureLogsDir();
-    if (!dir) return;
+    const dir = path.join(process.cwd(), "logs");
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     const fp = path.join(dir, filePath);
-    // JSON line for machine parsable + easy to read in GitHub
     const line = JSON.stringify(entry) + "\n";
     fs.appendFileSync(fp, line);
-    // trim file to ~1000 lines max to avoid unbounded growth
     try {
       const content = fs.readFileSync(fp, "utf8");
       const lines = content.split("\n").filter(Boolean);
@@ -110,39 +94,34 @@ function appendToFile(filePath: string, entry: RealtimeLog): void {
   }
 }
 
-function readLogsFromFile(limit: number): RealtimeLog[] | null {
-  if (typeof window !== "undefined") return null;
+// ---------------------------------------------------------------------------
+// DB persistence (primary) — inverted-audit P1 (K-A8)
+// ---------------------------------------------------------------------------
+function persistLogToDb(entry: RealtimeLog): void {
+  const c = getSql();
+  if (!c) return;
   try {
-    const fs = getFs();
-    const path = getPath();
-    if (!fs || !path) return null;
-    const fp = path.join(process.cwd(), "logs", "realtime.log");
-    if (!fs.existsSync(fp)) return null;
-    const content = fs.readFileSync(fp, "utf8").trim();
-    if (!content) return null;
-    const lines = content.split("\n").filter(Boolean);
-    const slice = lines.slice(-Math.min(limit, 1000));
-    const parsed: RealtimeLog[] = [];
-    for (const line of slice) {
-      try {
-        // each line is JSON; older text-format lines fallback to raw
-        const obj = JSON.parse(line);
-        if (obj && typeof obj.ts === "string") parsed.push(obj as RealtimeLog);
-      } catch {
-        // fallback: treat as raw text log
-        parsed.push({ ts: new Date().toISOString(), level: "info", message: line.slice(0, 800) });
-      }
-    }
-    return parsed.reverse(); // newest first
+    // Fire-and-forget: don't await, don't block response
+    (async () => {
+      await c`
+        INSERT INTO physi_logs (ts, level, method, path, duration, status, message, code, meta)
+        VALUES (${entry.ts}, ${entry.level}, ${entry.method ?? null}, ${entry.path ?? null},
+                ${entry.duration ?? null}, ${entry.status ?? null}, ${entry.message ?? null},
+                ${entry.code ?? null}, ${entry.meta ?? null})
+      `;
+    })().catch(() => {
+      // DB write failed — file fallback below still runs
+    });
   } catch {
-    return null;
+    // ignore
   }
 }
 
+// ---------------------------------------------------------------------------
+// Push (primary = DB, secondary = file + buffer)
+// ---------------------------------------------------------------------------
 function push(entry: RealtimeLog): void {
-  buffer.push(entry);
-  if (buffer.length > MAX_BUFFER) buffer.shift();
-  // console.log with timestamp — visible in server logs (Vercel / dev)
+  // Console output
   const tag = entry.level === "error" ? "ERROR" : entry.level === "warn" ? "WARN" : "EVENT";
   const line =
     entry.level === "error"
@@ -151,8 +130,14 @@ function push(entry: RealtimeLog): void {
   if (entry.level === "error") console.error(line);
   else console.log(line);
 
-  // Persist to git-tracked files for GitHub visibility
-  // All events -> logs/realtime.log ; errors additionally -> logs/errors.log
+  // Primary: DB (fire-and-forget)
+  persistLogToDb(entry);
+
+  // Secondary: in-memory ring
+  buffer.push(entry);
+  if (buffer.length > MAX_BUFFER) buffer.shift();
+
+  // Tertiary: file fallback (dev-only)
   if (entry.level === "error") {
     appendToFile("realtime.log", entry);
     appendToFile("errors.log", entry);
@@ -194,17 +179,81 @@ export function logError(code: string, error: unknown, context?: Record<string, 
   push(entry);
 }
 
-export function getRecentLogs(limit = 100): RealtimeLog[] {
+export async function getRecentLogs(limit = 100): Promise<RealtimeLog[]> {
   const n = Math.max(1, Math.min(limit, MAX_BUFFER));
-  // Prefer file-backed logs if available (persists across restarts, visible in GitHub)
-  const fromFile = readLogsFromFile(n);
-  if (fromFile && fromFile.length > 0) return fromFile.slice(0, n);
-  // fallback to in-memory
+
+  // Primary: DB
+  const c = getSql();
+  if (c) {
+    try {
+      const rows = await c`
+        SELECT id, ts, level, method, path, duration, status, message, code, meta
+        FROM physi_logs
+        ORDER BY ts DESC
+        LIMIT ${n}
+      ` as any[];
+      if (rows.length > 0) {
+        return rows.map((r: any) => ({
+          id: r.id,
+          ts: r.ts,
+          level: r.level,
+          method: r.method,
+          path: r.path,
+          duration: r.duration,
+          status: r.status,
+          message: r.message,
+          code: r.code,
+          meta: r.meta,
+        }));
+      }
+    } catch {
+      // DB read failed — fall back
+    }
+  }
+
+  // Secondary: file
+  try {
+    const fs = getFs();
+    const path = getPath();
+    if (fs && path) {
+      const fp = path.join(process.cwd(), "logs", "realtime.log");
+      if (fs.existsSync(fp)) {
+        const content = fs.readFileSync(fp, "utf8").trim();
+        if (content) {
+          const lines = content.split("\n").filter(Boolean);
+          const slice = lines.slice(-Math.min(n, 1000));
+          const parsed: RealtimeLog[] = [];
+          for (const line of slice) {
+            try {
+              const obj = JSON.parse(line);
+              if (obj && typeof obj.ts === "string") parsed.push(obj as RealtimeLog);
+            } catch {
+              parsed.push({ ts: new Date().toISOString(), level: "info", message: line.slice(0, 800) });
+            }
+          }
+          if (parsed.length > 0) return parsed.reverse();
+        }
+      }
+    }
+  } catch {
+    // file read failed
+  }
+
+  // Tertiary: in-memory
   return buffer.slice(-n).reverse();
 }
 
-export function clearLogs(): void {
+export async function clearLogs(): Promise<void> {
   buffer.length = 0;
+  // also clear DB logs
+  const c = getSql();
+  if (c) {
+    try {
+      await c`TRUNCATE TABLE physi_logs`;
+    } catch {
+      // ignore
+    }
+  }
   // also clear file (dev utility)
   if (typeof window === "undefined") {
     try {
@@ -258,9 +307,19 @@ async function handleLogs(req: Request): Promise<Response> {
   const url = new URL(req.url);
   const raw = url.searchParams.get("limit");
   const limit = raw ? Math.max(1, Math.min(parseInt(raw, 10) || 100, 200)) : 100;
-  // Read from file (git-visible) with fallback to buffer
-  const logs = getRecentLogs(limit);
-  return new Response(JSON.stringify({ ok: true, logs, count: logs.length, total: buffer.length }), { status: 200, headers: { "content-type": "application/json" } });
+  // Read from DB first, fallback to file/buffer
+  const logs = await getRecentLogs(limit);
+  const c = getSql();
+  let total = buffer.length;
+  if (c) {
+    try {
+      const row = await c`SELECT COUNT(*)::int AS c FROM physi_logs` as any[];
+      total = Number((row[0] as any)?.c ?? buffer.length);
+    } catch {
+      // ignore
+    }
+  }
+  return new Response(JSON.stringify({ ok: true, logs, count: logs.length, total }), { status: 200, headers: { "content-type": "application/json" } });
 }
 
 registerApiAdapter({

@@ -53,7 +53,6 @@ Do not standardize error shapes until that work lands.
 | `/api/squad/wave` | 1 | squad wave |
 | `/api/streak/heatmap` | 1 | streak heatmap |
 | `/api/vote-weight` | 2 | vote-weight badge |
-| `/api/zk` | 1 | ZK threshold check |
 
 ## Zero-client routes — confirm consumer before touching
 

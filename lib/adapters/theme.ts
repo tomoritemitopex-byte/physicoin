@@ -31,17 +31,8 @@ export const registerTheme = reg.registerAdapter;
 export const listThemes = reg.listAdapters;
 export const getTheme = reg.getAdapter;
 
-function getEnvTheme(): string | undefined {
-  if (typeof process !== 'undefined' && process.env) {
-    return process.env.NEXT_PUBLIC_THEME || process.env.THEME;
-  }
-  return undefined;
-}
-
 export function getDefaultTheme(): ThemeAdapter {
-  const envTheme = getEnvTheme();
-  const themeId = envTheme === "forest" ? "forest" : "campus";
-  return getTheme(themeId) ?? reg.listAdapters()[0]!;
+  return getTheme("campus") ?? reg.listAdapters()[0]!;
 }
 
 export function themeCssVars(id?: string): Record<string, string> {

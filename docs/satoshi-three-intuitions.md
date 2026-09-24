@@ -45,7 +45,7 @@ This doc covers Ghost Witness, Scope Mining, ZK Authority (Satoshi P2).
 
 **Hook:** `hooks/useScopeMining.ts`
 
-## 3. ZK-Proof Authority — Privacy Threshold Checks
+## 3. ZK-Proof Authority — Privacy Threshold Checks (not enforced)
 
 **DB:** `physi_events.is_zk_attested BOOLEAN DEFAULT false` + index
 
@@ -55,12 +55,9 @@ This doc covers Ghost Witness, Scope Mining, ZK Authority (Satoshi P2).
 - `requiresZkAttestation(scopeType)` — global/university/faculty need ZK
 - Cap via `clampAuthorityFinal` (max 1.10)
 
-**API:**
-- `GET/POST /api/zk?user_id=UUID&event_id=UUID` — threshold check
-- `POST /api/timetable` (via `/api/events`) accepts `is_zk_attested` boolean on create
-- Verify adapter imports `zkThresholdCheck` for future quorum gating
+**Status:** ZK utilities exist but are **not enforced** on any API route (inverted-audit P1 K-P3). The `/api/zk` endpoint was removed to avoid false confidence. `is_zk_attested` is recorded on events but not gated. Future work: wire `requiresZkAttestation()` into scope/timetable POST handlers when real ZK infrastructure is available.
 
-**Hook:** `hooks/useZkAuthority.ts`
+**Hook:** `hooks/useZkAuthority.ts` — returns disabled state (no API call).
 
 ## Migrations
 

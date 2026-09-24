@@ -593,4 +593,21 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+-- Persisted logs (inverted-audit P1 K-A8): replaces file/in-memory ring with
+-- a physi_* table so logs survive deploys and are queryable from /api/logs.
+CREATE TABLE IF NOT EXISTS physi_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  ts TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  level TEXT NOT NULL CHECK (level IN ('info','error','warn')),
+  method TEXT,
+  path TEXT,
+  duration INT,
+  status INT,
+  message TEXT,
+  code TEXT,
+  meta JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS physi_logs_ts_idx ON physi_logs (ts DESC);
+
 

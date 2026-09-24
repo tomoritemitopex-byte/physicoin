@@ -1,9 +1,12 @@
 /**
  * lib/zkAuthority.ts — ZK-Proof Authority (Satoshi Intuition #3)
- * Privacy-preserving credentials: threshold checks without revealing exact authority.
- * is_zk_attested on physi_events marks ZK-verified events.
- * Satoshi P2: zero officials — proofs are peer-verifiable, no trusted issuer.
+ *
+ * Inverted-audit P1 (K-P3): ZK attestation is NOT enforced. The helper
+ * functions below are retained for potential future use, but no API gate
+ * currently checks requiresZkAttestation(). Do not present these utilities
+ * as an active security control.
  */
+
 import { clampAuthorityFinal, MAX_AUTHORITY_FINAL } from "./authority";
 
 // --- DB column helper ---
@@ -18,6 +21,7 @@ export type ZkAttestedEvent = {
 // --- Threshold check (ZK-style) ---
 // Returns only boolean (above/below), never leaks exact authority.
 // This is a simulated ZK proof: hash(authority + salt) >= threshold without revealing authority.
+// NOTE: NOT ENFORCED — retained as utility only.
 
 export function zkThresholdCheck(
   authorityFinal: number,
@@ -49,10 +53,8 @@ export function zkVerifyAuthority(
 }
 
 /** Check if event requires ZK attestation (helper for API)
- * Inverted-audit P1 (K-P3): DECLARED FUTURE GATE — no caller enforces this
- * yet. Recording is_zk_attested without gating is intentional (advisory
- * signal); do not present ZK as an enforced control until a caller gates
- * global/university/faculty writes on it. */
+ * Inverted-audit P1 (K-P3): NOT ENFORCED — no caller gates on this.
+ * Retained as a policy constant for future ZK infrastructure. */
 export function requiresZkAttestation(scopeType: string): boolean {
   const t = String(scopeType).toLowerCase();
   return ["global","university","faculty"].includes(t);
@@ -71,5 +73,5 @@ export function zkProofLabel(passed: boolean): string {
 export const ZK_AUTHORITY_CONFIG = {
   maxAuthority: MAX_AUTHORITY_FINAL,
   baseThreshold: 5,
-  zkBonusNote: "ZK attestation hides exact authority; threshold check is boolean only",
+  zkBonusNote: "ZK attestation hides exact authority; threshold check is boolean only (NOT ENFORCED — see inverted-audit P1 K-P3)",
 } as const;

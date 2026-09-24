@@ -356,7 +356,6 @@ async function handleVerify(req: Request): Promise<Response> {
           ? { promoted: promote, demoted: demote, yesW, noW, total, ratio, locked: true }
           : { promoted: false, demoted: false, required, needed, bucket: tallyBucket(needed), locked: false };
         const result = { verification, quorum };
-
         // Header recompute: after canonical_log INSERT, rebuild header for event's date
         if (promote || demote) {
           try {
@@ -366,9 +365,13 @@ async function handleVerify(req: Request): Promise<Response> {
             try {
               const dRows: any[] = await sql`SELECT event_date::text as d FROM physi_events WHERE id=${b.event_id} LIMIT 1` as any;
               hdrDate = dRows[0]?.d ? String(dRows[0].d).slice(0,10) : null;
-            } catch {}
+            } catch (e) {
+              logError("VERIFY_HEADER_DATE_FAILED", e, { route: "/api/verify", eventId: b.event_id });
+            }
             if (hdrDate) await rebuildHeader(hdrDate);
-          } catch {}
+          } catch (e) {
+            logError("VERIFY_HEADER_REBUILD_FAILED", e, { route: "/api/verify", eventId: b.event_id });
+          }
         }
 
         // Stake-to-vote settlement: on quorum reached, settle bonds
@@ -378,7 +381,9 @@ async function handleVerify(req: Request): Promise<Response> {
             // demotion means NO majority broke ratio — burn YES losers, refund NO winners
             const { resolveBonds } = await import("@/lib/voteBond");
             await resolveBonds(sql, String(b.event_id), majority);
-          } catch {}
+          } catch (e) {
+            logError("VERIFY_BOND_RESOLVE_FAILED", e, { route: "/api/verify", eventId: b.event_id, promote, demote });
+          }
         } else if (!promote && !demote && (b.vote === "YES" || b.vote === "NO")) {
           // No quorum yet — stake stays held; nothing to do
         }
@@ -391,14 +396,16 @@ async function handleVerify(req: Request): Promise<Response> {
           const st = evSlotRows[0]?.status;
           if (sk && st === 'pending') {
             if (b.vote === 'YES') {
-              try { await sql`UPDATE physi_slot_claims SET vote_weight_yes = vote_weight_yes + ${w} WHERE slot_key=${sk} AND lower(venue)=lower(${venue})`; } catch {}
-              try { await sql`UPDATE physi_slot_claims SET vote_weight_yes = vote_weight_yes + ${w} WHERE event_id=${b.event_id}`; } catch {}
+              try { await sql`UPDATE physi_slot_claims SET vote_weight_yes = vote_weight_yes + ${w} WHERE slot_key=${sk} AND lower(venue)=lower(${venue})`; } catch (e) { logError("VERIFY_SLOT_CLAIM_YES_FAILED", e, { route: "/api/verify", slotKey: sk, venue }); }
+              try { await sql`UPDATE physi_slot_claims SET vote_weight_yes = vote_weight_yes + ${w} WHERE event_id=${b.event_id}`; } catch (e) { logError("VERIFY_SLOT_CLAIM_YES_EVENT_FAILED", e, { route: "/api/verify", eventId: b.event_id }); }
             } else if (b.vote === 'NO') {
-              try { await sql`UPDATE physi_slot_claims SET vote_weight_no = vote_weight_no + ${w} WHERE slot_key=${sk} AND lower(venue)=lower(${venue})`; } catch {}
-              try { await sql`UPDATE physi_slot_claims SET vote_weight_no = vote_weight_no + ${w} WHERE event_id=${b.event_id}`; } catch {}
+              try { await sql`UPDATE physi_slot_claims SET vote_weight_no = vote_weight_no + ${w} WHERE slot_key=${sk} AND lower(venue)=lower(${venue})`; } catch (e) { logError("VERIFY_SLOT_CLAIM_NO_FAILED", e, { route: "/api/verify", slotKey: sk, venue }); }
+              try { await sql`UPDATE physi_slot_claims SET vote_weight_no = vote_weight_no + ${w} WHERE event_id=${b.event_id}`; } catch (e) { logError("VERIFY_SLOT_CLAIM_NO_EVENT_FAILED", e, { route: "/api/verify", eventId: b.event_id }); }
             }
           }
-        } catch {}
+        } catch (e) {
+          logError("VERIFY_SLOT_CLAIM_OUTER_FAILED", e, { route: "/api/verify", eventId: b.event_id });
+        }
 
         // fire-and-forget notify on promotion (never blocks response)
         if (result.quorum.promoted) {

@@ -39,6 +39,8 @@
 .ghost-row { display: flex; align-items: center; gap: 4px; }
 /* RoadmapShell daylight wrapper — positioning context for sticky/scroll-snap children. */
 .campus-day { position: relative; }
+.building-node { position: absolute; border: none; background: transparent; cursor: pointer; padding: 0; }
+.building-node.active { z-index: 20; }
 @media (prefers-reduced-motion: reduce) { .ghost-drift, .ghost-enter { animation: none; } }
 
 html { scroll-behavior: smooth; -webkit-font-smoothing: antialiased; }

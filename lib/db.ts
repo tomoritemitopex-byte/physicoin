@@ -74,7 +74,7 @@ export const sql: any = _getSql();
 const hasDbEnv = () => !!(process.env.DATABASE_URL || process.env.DATABASE_URLS);
 if (!hasDbEnv()) console.warn("[db] DATABASE_URL/DATABASE_URLS unset — /api/* → 503");
 
-export const isDbConfigured = (): boolean => hasDbEnv() && !!sql;
+export const isDbConfigured = (): boolean => hasDbEnv() && !!getSql();
 
 export function dbNotConfigured() {
   return {
@@ -87,7 +87,7 @@ export function dbNotConfigured() {
 
 // pgcrypto: needs no superuser failure. Guard via pg_extension first.
 async function ensurePgcrypto(): Promise<void> {
-  const c = getSql() ?? sql;
+  const c = getSql();
   if (!c) return;
   try {
     const hit = await c`SELECT 1 AS ok FROM pg_extension WHERE extname='pgcrypto' LIMIT 1`;
@@ -101,7 +101,7 @@ async function ensurePgcrypto(): Promise<void> {
 }
 
 export async function ensureUsers(): Promise<void> {
-  const c = getSql() ?? sql;
+  const c = getSql();
   if (!c) return;
   await ensurePgcrypto();
   await c`
@@ -127,7 +127,7 @@ export async function ensureUsers(): Promise<void> {
 }
 
 export async function ensureEvents(): Promise<void> {
-  const c = getSql() ?? sql;
+  const c = getSql();
   if (!c) return;
   await ensureUsers();
   await c`
@@ -162,7 +162,7 @@ export async function ensureEvents(): Promise<void> {
 }
 
 export async function ensureVerifications(): Promise<void> {
-  const c = getSql() ?? sql;
+  const c = getSql();
   if (!c) return;
   await c`
     CREATE TABLE IF NOT EXISTS physi_verifications (
@@ -183,7 +183,7 @@ export async function ensureVerifications(): Promise<void> {
 }
 
 export async function ensureMiningLogs(): Promise<void> {
-  const c = getSql() ?? sql;
+  const c = getSql();
   if (!c) return;
   await ensureUsers();
   await c`
@@ -199,7 +199,7 @@ export async function ensureMiningLogs(): Promise<void> {
 }
 
 export async function ensureCanonicalLog(): Promise<void> {
-  const c = getSql() ?? sql;
+  const c = getSql();
   if (!c) return;
   await c`
     CREATE TABLE IF NOT EXISTS physi_canonical_log (
@@ -216,7 +216,7 @@ export async function ensureCanonicalLog(): Promise<void> {
 
 // Scope Merge Protocol Functions (Satoshi's Peer Resolution)
 export async function ensureScopeVotes(): Promise<void> {
-  const c = getSql() ?? sql;
+  const c = getSql();
   if (!c) return;
   await c`
     CREATE TABLE IF NOT EXISTS physi_scope_votes (
@@ -233,7 +233,7 @@ export async function ensureScopeVotes(): Promise<void> {
 }
 
 export async function ensureScopeResolution(): Promise<void> {
-  const c = getSql() ?? sql;
+  const c = getSql();
   if (!c) return;
   await c`
     CREATE TABLE IF NOT EXISTS physi_scope_resolution (
@@ -247,7 +247,7 @@ export async function ensureScopeResolution(): Promise<void> {
 }
 
 export async function ensureHallAliases(): Promise<void> {
-  const c = getSql() ?? sql;
+  const c = getSql();
   if (!c) return;
   await c`
     CREATE TABLE IF NOT EXISTS physi_hall_aliases (
@@ -291,7 +291,7 @@ export async function ensureHallAliases(): Promise<void> {
 }
 
 export async function ensureProfAliases(): Promise<void> {
-  const c = getSql() ?? sql;
+  const c = getSql();
   if (!c) return;
   await c`
     CREATE TABLE IF NOT EXISTS physi_prof_aliases (
@@ -327,7 +327,7 @@ export async function ensureProfAliases(): Promise<void> {
 }
 
 export async function ensureGhostWitness(): Promise<void> {
-  const c = getSql() ?? sql;
+  const c = getSql();
   if (!c) return;
   await ensureUsers();
   // rep_ghost_sig column on users
@@ -347,14 +347,14 @@ export async function ensureGhostWitness(): Promise<void> {
 }
 
 export async function ensureScopeMiningColumns(): Promise<void> {
-  const c = getSql() ?? sql;
+  const c = getSql();
   if (!c) return;
   await ensureScopeVotes();
   try { await c`ALTER TABLE physi_scope_votes ADD COLUMN IF NOT EXISTS rep_earned NUMERIC(5,2) NOT NULL DEFAULT 0`; } catch {}
 }
 
 export async function ensureZkAuthority(): Promise<void> {
-  const c = getSql() ?? sql;
+  const c = getSql();
   if (!c) return;
   await ensureEvents();
   try { await c`ALTER TABLE physi_events ADD COLUMN IF NOT EXISTS is_zk_attested BOOLEAN NOT NULL DEFAULT false`; } catch {}
@@ -362,7 +362,7 @@ export async function ensureZkAuthority(): Promise<void> {
 }
 
 export async function ensureSchools(): Promise<void> {
-  const c = getSql() ?? sql;
+  const c = getSql();
   if (!c) return;
   await ensureUsers();
   await c`
@@ -385,7 +385,7 @@ export async function ensureSchools(): Promise<void> {
 }
 
 export async function ensureSchoolDepartments(): Promise<void> {
-  const c = getSql() ?? sql;
+  const c = getSql();
   if (!c) return;
   await ensureSchools();
   await c`
@@ -411,7 +411,7 @@ export async function ensureSchoolDepartments(): Promise<void> {
 }
 
 export async function ensureSchoolDisputes(): Promise<void> {
-  const c = getSql() ?? sql;
+  const c = getSql();
   if (!c) return;
   await ensureSchools();
   await c`
@@ -435,7 +435,7 @@ export async function ensureSchoolDisputes(): Promise<void> {
 }
 
 export async function ensureCoinsBurned(): Promise<void> {
-  const c = getSql() ?? sql;
+  const c = getSql();
   if (!c) return;
   await ensureSchoolDisputes();
   await c`
@@ -456,7 +456,7 @@ export async function ensureCoinsBurned(): Promise<void> {
 }
 
 export async function ensureSchoolEventCounts(): Promise<void> {
-  const c = getSql() ?? sql;
+  const c = getSql();
   if (!c) return;
   await ensureSchools();
   await ensureSchoolDepartments();
@@ -471,7 +471,7 @@ export async function ensureSchoolEventCounts(): Promise<void> {
 
 // ── Vine autopilot: school/dept aggregation + vote + auto-archive ──
 export async function ensureSchoolVotes(): Promise<void> {
-  const c = getSql() ?? sql;
+  const c = getSql();
   if (!c) return;
   await ensureSchools();
   await ensureSchoolDepartments();
@@ -503,7 +503,7 @@ export async function ensureSchoolVotes(): Promise<void> {
 }
 
 export async function ensureSchoolArchiveColumns(): Promise<void> {
-  const c = getSql() ?? sql;
+  const c = getSql();
   if (!c) return;
   await ensureSchools();
   await ensureSchoolDepartments();
@@ -530,7 +530,7 @@ export async function ensureSchoolArchiveColumns(): Promise<void> {
 
 // Auto-archive extinct departments (0 events for 90 days) — called lazily from adapters
 export async function archiveExtinctDepartments(): Promise<{ archivedSchools: number; archivedDepts: number }> {
-  const c = getSql() ?? sql;
+  const c = getSql();
   if (!c) return { archivedSchools: 0, archivedDepts: 0 };
   try { await ensureSchoolArchiveColumns(); } catch {}
   let archivedDepts = 0;
@@ -573,7 +573,7 @@ export async function archiveExtinctDepartments(): Promise<{ archivedSchools: nu
 
 // ── Student intuitions: Find My People (squad locator), Bunk Radar, Notes Drop ──
 export async function ensureSquadTables(): Promise<void> {
-  const c = getSql() ?? sql;
+  const c = getSql();
   if (!c) return;
   await ensureUsers();
   await ensureGhostWitness();
@@ -608,7 +608,7 @@ export async function ensureSquadTables(): Promise<void> {
 }
 
 export async function ensureBunkTables(): Promise<void> {
-  const c = getSql() ?? sql;
+  const c = getSql();
   if (!c) return;
   await ensureUsers();
   await ensureEvents();
@@ -626,7 +626,7 @@ export async function ensureBunkTables(): Promise<void> {
 }
 
 export async function ensureNotesTables(): Promise<void> {
-  const c = getSql() ?? sql;
+  const c = getSql();
   if (!c) return;
   await ensureUsers();
   await ensureGhostWitness();
@@ -662,7 +662,7 @@ export async function ensureNotesTables(): Promise<void> {
 }
 
 export async function ensureEventHistory(): Promise<void> {
-  const c = getSql() ?? sql;
+  const c = getSql();
   if (!c) return;
   await ensureEvents();
   await c`
@@ -682,7 +682,7 @@ export async function ensureEventHistory(): Promise<void> {
 }
 
 export async function ensureSlotClaims(): Promise<void> {
-  const c = getSql() ?? sql;
+  const c = getSql();
   if (!c) return;
   await ensureEvents();
   await c`
@@ -707,7 +707,7 @@ export async function ensureSlotClaims(): Promise<void> {
 }
 
 export async function ensureHeaders(): Promise<void> {
-  const c = getSql() ?? sql;
+  const c = getSql();
   if (!c) return;
   await c`
     CREATE TABLE IF NOT EXISTS physi_headers (
@@ -723,7 +723,7 @@ export async function ensureHeaders(): Promise<void> {
 }
 
 export async function ensureVoteBonds(): Promise<void> {
-  const c = getSql() ?? sql;
+  const c = getSql();
   if (!c) return;
   await c`
     CREATE TABLE IF NOT EXISTS physi_vote_bonds (
@@ -740,7 +740,7 @@ export async function ensureVoteBonds(): Promise<void> {
 }
 
 export async function ensureRevokedTokens(): Promise<void> {
-  const c = getSql() ?? sql;
+  const c = getSql();
   if (!c) return;
   await c`
     CREATE TABLE IF NOT EXISTS physi_revoked_tokens (
@@ -753,7 +753,7 @@ export async function ensureRevokedTokens(): Promise<void> {
 }
 
 export async function ensureAuthColumns(): Promise<void> {
-  const c = getSql() ?? sql;
+  const c = getSql();
   if (!c) return;
   await ensureUsers();
   try { await c`ALTER TABLE physi_users ADD COLUMN IF NOT EXISTS password_hash TEXT`; } catch {}
@@ -778,7 +778,7 @@ export async function ensureAuthColumns(): Promise<void> {
 }
 
 export async function ensureTruthRewards(): Promise<void> {
-  const c = getSql() ?? sql;
+  const c = getSql();
   if (!c) return;
   await c`
     CREATE TABLE IF NOT EXISTS physi_truth_rewards (
@@ -793,7 +793,7 @@ export async function ensureTruthRewards(): Promise<void> {
 }
 
 export async function ensureFaucetDrips(): Promise<void> {
-  const c = getSql() ?? sql;
+  const c = getSql();
   if (!c) return;
   await c`
     CREATE TABLE IF NOT EXISTS physi_faucet_drips (
@@ -811,7 +811,7 @@ export async function ensureFaucetDrips(): Promise<void> {
  * constant enforced by query in POST /api/streak/rescue, not by constraint.
  */
 export async function ensureStreakRescues(): Promise<void> {
-  const c = getSql() ?? sql;
+  const c = getSql();
   if (!c) return;
   await c`
     CREATE TABLE IF NOT EXISTS physi_streak_rescues (
@@ -831,7 +831,7 @@ export async function ensureStreakRescues(): Promise<void> {
  * is primary; never call on hot paths.
  */
 export async function ensureRosters(): Promise<void> {
-  const c = getSql() ?? sql;
+  const c = getSql();
   if (!c) return;
   await c`
     CREATE TABLE IF NOT EXISTS physi_rosters (
@@ -860,7 +860,7 @@ export async function ensureRosters(): Promise<void> {
  * database/schema.physi.sql. Safety net only — build-time migrate is primary.
  */
 export async function ensureBedrockV5(): Promise<void> {
-  const c = getSql() ?? sql;
+  const c = getSql();
   if (!c) return;
   await c`
     CREATE TABLE IF NOT EXISTS physi_tick_flags (
@@ -889,6 +889,30 @@ export async function ensureBedrockV5(): Promise<void> {
       }
     }
   } catch {}
+}
+
+/**
+ * Inverted-audit P1 (K-A8): persisted logs table. Runtime safety net only —
+ * build-time migrate is primary. Logs survive deploys and are queryable.
+ */
+export async function ensureLogs(): Promise<void> {
+  const c = getSql();
+  if (!c) return;
+  await c`
+    CREATE TABLE IF NOT EXISTS physi_logs (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      ts TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      level TEXT NOT NULL CHECK (level IN ('info','error','warn')),
+      method TEXT,
+      path TEXT,
+      duration INT,
+      status INT,
+      message TEXT,
+      code TEXT,
+      meta JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`;
+  await c`CREATE INDEX IF NOT EXISTS physi_logs_ts_idx ON physi_logs (ts DESC)`;
 }
 
 /**
@@ -922,4 +946,5 @@ export const ensureSquadTablesTable = ensureSquadTables;
 export const ensureBunkTablesTable = ensureBunkTables;
 export const ensureNotesTablesTable = ensureNotesTables;
 export const ensureTables = ensureAllTables;
+export const ensureLogsTable = ensureLogs;
 export const dbUnavailableResponse = dbNotConfigured;
